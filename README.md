@@ -35,7 +35,7 @@ clang-16 --version
 **Running and Compiling Workflow**
 ```
 # 1. Generate the llvm bitcode (or IR) from your source file
-./build/my_compiler ./example/hello.mylang
+./build/cscript ./example/hello.csc
 
 # 2. Compile the generated LLVM IR (.ll) to an object file (.o)
 llc -filetype=obj -relocation-model=pic output.ll -o output.o

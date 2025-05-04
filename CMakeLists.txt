@@ -6,7 +6,7 @@
 # configure cmake project and build
 # rm -rf build/ && cmake -B build && cmake --build build
 # generate the llvm bitcode
-# ./build/my_compiler ./example/hello.mylang
+# ./build/cscript ./example/hello.csc
 # llc -filetype=obj -relocation-model=pic output.ll -o output.o
 # clang output.o -o my_program
 # ./my_program
@@ -15,7 +15,7 @@
 cmake_minimum_required(VERSION 3.15) # LLVM often needs a reasonably recent CMake
 
 # Project Name
-project(MyLangCompiler LANGUAGES C CXX)
+project(Cypescript LANGUAGES C CXX)
 
 # Set C++ Standard (LLVM typically requires C++17 or newer)
 set(CMAKE_CXX_STANDARD 17)
@@ -39,7 +39,7 @@ include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
 # --- Our Compiler Executable ---
-add_executable(my_compiler
+add_executable(cscript
     src/main.cpp
     src/Lexer.cpp
     src/Parser.cpp
@@ -59,7 +59,7 @@ set(LLVM_COMPONENTS Core Support AsmPrinter)
 llvm_map_components_to_libnames(LLVM_LIBS ${LLVM_COMPONENTS})
 
 # Link our compiler executable against the LLVM libraries
-target_link_libraries(my_compiler PRIVATE ${LLVM_LIBS})
+target_link_libraries(cscript PRIVATE ${LLVM_LIBS})
 
 # Add flags required by LLVM (handles RTTI, Exceptions based on LLVM build)
 # Note: Check LLVM documentation or examples for the most current way,
@@ -74,7 +74,7 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 # --- Output ---
-message(STATUS "Compiler Target: my_compiler")
+message(STATUS "Compiler Target: cscript")
 message(STATUS "LLVM Include Dirs: ${LLVM_INCLUDE_DIRS}")
 message(STATUS "LLVM Library Dirs: ${LLVM_LIBRARY_DIRS}") # Might be empty if using imported targets
 message(STATUS "Linking against LLVM Components: ${LLVM_COMPONENTS}")
