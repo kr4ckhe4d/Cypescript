@@ -6,8 +6,6 @@ A simple compiler for the MyLang language, built as a learning project using C++
 
 These instructions assume a Debian/Ubuntu-based Linux system. Adapt package names for other distributions (e.g., `llvm-devel`, `clang-devel` on Fedora/CentOS; `llvm` via Homebrew on macOS).
 
-**1. Choose LLVM Version:**
-
 ## Update package lists
 ```sudo apt update```
 
