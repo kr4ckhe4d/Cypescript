@@ -39,6 +39,7 @@ clang-16 --version
 
 # 2. Compile the generated LLVM IR (.ll) to an object file (.o)
 llc -filetype=obj -relocation-model=pic output.ll -o output.o
+**For Raspberry pi: llc --opaque-pointers -filetype=obj -relocation-model=pic output.ll -o output.o**
 
 # 3. Link the object file (.o) into a final executable
 clang output.o -o my_program
