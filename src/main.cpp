@@ -46,9 +46,6 @@ int main(int argc, char **argv) {
     do {
         token = lexer.getNextToken();
         tokens.push_back(token);
-        // Optional: Can comment out the token printing for cleaner output now
-        // llvm::outs() << "Token { Type: " << tokenTypeToString(token.type)
-        //              << ", Value: \"" << token.value << "\" }\n";
     } while (token.type != TOK_EOF);
     llvm::outs() << "--- Lexing Complete ---\n";
 
