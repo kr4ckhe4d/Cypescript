@@ -6,7 +6,7 @@ A simple compiler for the MyLang language, built as a learning project using C++
 
 These instructions assume a Debian/Ubuntu-based Linux system. Adapt package names for other distributions (e.g., `llvm-devel`, `clang-devel` on Fedora/CentOS; `llvm` via Homebrew on macOS).
 
-## Update package lists
+**Update package lists**
 ```sudo apt update```
 
 ```
@@ -17,22 +17,22 @@ These instructions assume a Debian/Ubuntu-based Linux system. Adapt package name
 sudo apt install llvm-16-dev clang-16 lld-16 # Install dev files and tools
 ```
 
-## Install LLVM runtime command-line tools (e.g., llc) matching the version
+**Install LLVM runtime command-line tools (e.g., llc) matching the version**
 ```sudo apt install llvm```
 
-## (Optional) Install other potential LLVM dependencies
+**(Optional) Install other potential LLVM dependencies**
 ```sudo apt install libzstd-dev```
 
-## Check the installed LLVM tool (llc) version
+**Check the installed LLVM tool (llc) version**
 ```llc-$LLVM_VERSION --version```
 
-## Check the installed Clang version
+**Check the installed Clang version**
 ```clang-$LLVM_VERSION --version```
 
-## Configure cmake project and build
+**Configure cmake project and build**
 ```rm -rf build/ && cmake -B build && cmake --build build```
 
-## Running and Compiling Workflow
+**Running and Compiling Workflow**
 ```
 # 1. Generate the llvm bitcode (or IR) from your source file
 #    (Note: ensure path like ./example/hello.mylang is correct)
