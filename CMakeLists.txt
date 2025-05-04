@@ -1,5 +1,15 @@
 # sudo apt install libzstd-dev
 # sudo apt install llvm-16-dev clang-16 lld-16 # Install dev files and tools
+# sudo apt install llvm
+# sudo apt install clang
+
+# configure cmake project and build
+# rm -rf build/ && cmake -B build && cmake --build build
+# generate the llvm bitcode
+# ./build/my_compiler ./example/hello.mylang
+# llc -filetype=obj -relocation-model=pic output.ll -o output.o
+# clang output.o -o my_program
+# ./my_program
 
 # Minimum CMake version required
 cmake_minimum_required(VERSION 3.15) # LLVM often needs a reasonably recent CMake
