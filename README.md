@@ -11,11 +11,13 @@ These instructions assume a Debian/Ubuntu-based Linux system. Adapt package name
 # Update package lists
 ```sudo apt update```
 
+```
 # Install core LLVM/Clang development files and tools
 # - llvm-X-dev: Essential C++ headers and libraries for LLVM API
 # - clang-X: C/C++ compiler (use this for linking for best compatibility)
 # - lld-X: LLVM's linker (optional, clang/gcc use system 'ld' by default)
-```sudo apt install llvm-16-dev clang-16 lld-16 # Install dev files and tools```
+sudo apt install llvm-16-dev clang-16 lld-16 # Install dev files and tools
+```
 
 # Install LLVM runtime command-line tools (e.g., llc) matching the version
 ```sudo apt install llvm```
