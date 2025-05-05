@@ -105,13 +105,13 @@ llvm::Value* CodeGen::visit(StringLiteralNode* node) {
 
 
 void CodeGen::visit(FunctionCallNode* node) {
-    // Remove or comment out any previous DEBUG print lines we added
     if (node->functionName == "print") {
         if (node->arguments.size() != 1) {
             std::cerr << "Codegen Error: 'print' expects exactly one argument.\n";
             return;
         }
 
+        // Argument must be a string literal for MVP
         auto* argExpr = node->arguments[0].get();
         auto* strNode = dynamic_cast<StringLiteralNode*>(argExpr);
         if (!strNode) {
@@ -119,34 +119,16 @@ void CodeGen::visit(FunctionCallNode* node) {
             return;
         }
 
-        // --- Explicit Global String and BitCast ---
-        // 1. Create the LLVM constant string data
-        //    (Ensure null terminator is included if puts needs it, getString does this by default)
-        llvm::Constant* strConstant = llvm::ConstantDataArray::getString(m_context, strNode->value, true);
+        // Use CreateGlobalStringPtr - it returns the correct Constant* (i8*)
+        // This is the standard, simpler way.
+        llvm::Value* strPtr = m_builder.CreateGlobalStringPtr(strNode->value, ".str");
 
-        // 2. Create the global variable to hold the string constant
-        auto* globalVar = new llvm::GlobalVariable(
-            *m_module,                    // Module
-            strConstant->getType(),       // Type: [N x i8]
-            true,                         // isConstant
-            llvm::GlobalValue::PrivateLinkage, // Linkage
-            strConstant,                  // Initializer
-            ".str"                        // Name hint
-        );
-        globalVar->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
-        globalVar->setAlignment(llvm::MaybeAlign(1));
+        // Get the 'puts' function (declared as i32(i8*))
+        llvm::FunctionCallee putsFunc = getOrDeclarePuts();
 
-        // 3. Explicitly BitCast the pointer to the global array ([N x i8]*) to i8*
-        llvm::Type* i8PtrTy = llvm::Type::getInt8PtrTy(m_context); // Target type: i8*
-        // globalVar itself is the pointer -> type [N x i8]* (or ptr in opaque)
-        llvm::Value* castedStrPtr = m_builder.CreateBitCast(globalVar, i8PtrTy, "str_casted"); // Name hint
-
-        // 4. Get the 'puts' function (declared as i32(i8*))
-        llvm::FunctionCallee putsFunc = getOrDeclarePuts(); // Ensure this uses i8*
-
-        // 5. Create the call instruction using the EXPLICITLY CASTED pointer
-        m_builder.CreateCall(putsFunc, castedStrPtr, "putsCall");
-        // --- End Explicit Global String and BitCast ---
+        // Create the call instruction
+        // Pass the i8* pointer obtained from CreateGlobalStringPtr
+        m_builder.CreateCall(putsFunc, strPtr, "putsCall");
 
     } else {
         std::cerr << "Codegen Error: Unsupported function call '" << node->functionName << "'.\n";

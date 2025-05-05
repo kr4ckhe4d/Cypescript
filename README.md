@@ -38,7 +38,7 @@ clang-16 --version
 ./build/cscript ./example/hello.csc
 
 # 2. Compile the generated LLVM IR (.ll) to an object file (.o)
-llc -filetype=obj -relocation-model=pic output.ll -o output.o
+llc-16 -filetype=obj -relocation-model=pic output.ll -o output.o
 **For llc versions below 15: llc --opaque-pointers -filetype=obj -relocation-model=pic output.ll -o output.o**
 
 # 3. Link the object file (.o) into a final executable
