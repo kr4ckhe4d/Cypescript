@@ -19,6 +19,7 @@ private:
     void skipWhitespace();    // Skips spaces, tabs, newlines
     Token makeIdentifier();
     Token makeStringLiteral();
+    Token makeIntegerLiteral();
     Token makeToken(TokenType type, const char* start, size_t length);
     Token errorToken(const char* message);
 

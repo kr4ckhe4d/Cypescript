@@ -1,6 +1,6 @@
 // src/Lexer.cpp
 #include "Lexer.h"
-#include <cctype>   // For isspace, isalpha, isalnum
+#include <cctype>   // For isspace, isalpha, isalnum, isdigit
 #include <string>   // For creating string in Token value
 #include <iostream> // For potential debug messages (optional)
 
@@ -33,12 +33,12 @@ void Lexer::skipWhitespace() {
         if (std::isspace(c)) {
             advance();
         }
-        // Basic single-line comment support (optional, can be added later)
-        // else if (c == '/' && m_currentPos + 1 < m_source.length() && m_source[m_currentPos + 1] == '/') {
-        //     while (peek() != '\n' && !isAtEnd()) {
-        //         advance();
-        //     }
-        // }
+        // Basic single-line comment support (can be expanded)
+        else if (c == '/' && m_currentPos + 1 < m_source.length() && m_source[m_currentPos + 1] == '/') {
+            while (peek() != '\n' && !isAtEnd()) {
+                advance();
+            }
+        }
         else {
             // Not whitespace or comment start, stop skipping
             return;
@@ -49,14 +49,14 @@ void Lexer::skipWhitespace() {
 Token Lexer::makeIdentifier() {
     // Assumes the current character (peek()) is the start of the identifier
     const size_t startPos = m_currentPos;
-    while (std::isalnum(peek()) || peek() == '_') {
+    while (std::isalnum(peek()) || peek() == '_') { // Identifiers can have numbers (not at start) and underscores
         advance();
     }
     std::string_view value = m_source.substr(startPos, m_currentPos - startPos);
 
-    // Basic keyword check can be added later:
-    // if (value == "print") return Token(TOK_KEYWORD_PRINT, std::string(value));
-    // ... other keywords
+    // Keyword check
+    if (value == "let") return Token(TOK_LET, std::string(value));
+    // Add other keywords here like "if", "else", "fn", "return", etc.
 
     return Token(TOK_IDENTIFIER, std::string(value));
 }
@@ -68,6 +68,9 @@ Token Lexer::makeStringLiteral() {
     const size_t startPos = m_currentPos;
     while (peek() != '"' && !isAtEnd()) {
         // Add escape sequence handling later (e.g., \", \\, \n)
+        if (peek() == '\\' && m_currentPos + 1 < m_source.length()) {
+            advance(); // Consume backslash, then consume the escaped char
+        }
         advance();
     }
 
@@ -83,6 +86,17 @@ Token Lexer::makeStringLiteral() {
     return Token(TOK_STRING_LITERAL, std::string(value)); // Value excludes quotes
 }
 
+Token Lexer::makeIntegerLiteral() {
+    // Assumes the current character (peek()) is a digit
+    const size_t startPos = m_currentPos;
+    while (std::isdigit(peek())) {
+        advance();
+    }
+    std::string_view value = m_source.substr(startPos, m_currentPos - startPos);
+    return Token(TOK_INT_LITERAL, std::string(value));
+}
+
+
 // --- Public Method ---
 
 Token Lexer::getNextToken() {
@@ -94,9 +108,14 @@ Token Lexer::getNextToken() {
 
     char c = peek();
 
-    // Check for identifiers or keywords
+    // Check for identifiers or keywords (must start with letter or underscore)
     if (std::isalpha(c) || c == '_') {
         return makeIdentifier();
+    }
+
+    // Check for integer literals
+    if (std::isdigit(c)) {
+        return makeIntegerLiteral();
     }
 
     // Check for string literals
@@ -112,6 +131,8 @@ Token Lexer::getNextToken() {
         case '(': type = TOK_LPAREN; break;
         case ')': type = TOK_RPAREN; break;
         case ';': type = TOK_SEMICOLON; break;
+        case ':': type = TOK_COLON; break;
+        case '=': type = TOK_EQUAL; break;
         // Add other single-char tokens later: {, }, [, ], ,, ., +, -, *, /, etc.
     }
 
@@ -121,6 +142,7 @@ Token Lexer::getNextToken() {
     if (type == TOK_UNKNOWN) {
         // Keep the value as the unrecognized character
         // Optionally add error message? "Unexpected character: " + value
+        std::cerr << "Warning: Lexer encountered unknown character: " << value << std::endl;
     }
 
     return Token(type, value);

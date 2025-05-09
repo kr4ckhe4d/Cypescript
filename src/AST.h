@@ -6,67 +6,82 @@
 #include <vector>
 #include <memory> // For smart pointers (good practice for AST nodes)
 
-// Forward Declarations (if needed, maybe not for this simple MVP)
+// Forward Declarations
 class StringLiteralNode;
+class IntegerLiteralNode; // New
+class VariableExpressionNode; // New
 class FunctionCallNode;
-class StatementNode; // Base for statements
-class ExpressionNode; // Base for expressions
+class VariableDeclarationNode; // New
+class StatementNode;
+class ExpressionNode;
+class ProgramNode;
 
 
-// --- Base Node Types (Optional but recommended for structure) ---
+// --- Base Node Types ---
 
-// Base class for all AST nodes (can add common stuff like position later)
 class ASTNode {
 public:
-    virtual ~ASTNode() = default; // Virtual destructor is important for base classes
-    // We could add methods for things like pretty-printing the AST later
-    // virtual void print(int indent = 0) const = 0;
+    virtual ~ASTNode() = default;
+    // virtual void print(int indent = 0) const = 0; // For AST debugging
 };
 
-// Base class for anything that can be an expression (evaluates to a value)
 class ExpressionNode : public ASTNode {
 public:
-    // virtual void print(int indent = 0) const override = 0;
+    // Type information can be added here later during semantic analysis
+    // virtual llvm::Type* type;
 };
 
-// Base class for anything that can be a statement (performs an action)
 class StatementNode : public ASTNode {
 public:
-    // virtual void print(int indent = 0) const override = 0;
 };
 
 
-// --- Concrete Node Types for MVP ---
+// --- Concrete Expression Node Types ---
 
-// Represents a string literal expression, e.g., "Hello, World!"
 class StringLiteralNode : public ExpressionNode {
 public:
-    std::string value; // The content of the string (quotes removed)
-
+    std::string value;
     explicit StringLiteralNode(std::string val) : value(std::move(val)) {}
-
-    // void print(int indent = 0) const override { /* Print logic */ }
 };
 
-// Represents a function call expression/statement, e.g., print(...)
-// For MVP, we'll treat the print call as a Statement
-class FunctionCallNode : public StatementNode { // Can be ExpressionNode too if fn returns value
+class IntegerLiteralNode : public ExpressionNode {
+public:
+    long long value; // Using long long for flexibility
+    explicit IntegerLiteralNode(long long val) : value(val) {}
+};
+
+class VariableExpressionNode : public ExpressionNode {
+public:
+    std::string name;
+    explicit VariableExpressionNode(std::string varName) : name(std::move(varName)) {}
+};
+
+
+// --- Concrete Statement Node Types ---
+
+class FunctionCallNode : public StatementNode { // Could also be an ExpressionNode if functions return values
 public:
     std::string functionName;
-    // Arguments are expressions. Using unique_ptr to manage memory.
     std::vector<std::unique_ptr<ExpressionNode>> arguments;
-
     explicit FunctionCallNode(std::string name) : functionName(std::move(name)) {}
-
-    // void print(int indent = 0) const override { /* Print logic */ }
 };
 
-// Represents the whole program or a block of statements
+class VariableDeclarationNode : public StatementNode {
+public:
+    std::string variableName;
+    std::string typeName; // e.g., "string", "i32". Could be a TypeNode later.
+    std::unique_ptr<ExpressionNode> initializer; // The expression on the RHS of '='
+
+    VariableDeclarationNode(std::string varName, std::string type, std::unique_ptr<ExpressionNode> init)
+        : variableName(std::move(varName)), typeName(std::move(type)), initializer(std::move(init)) {}
+};
+
+
+// --- Program Node ---
+
 class ProgramNode : public ASTNode {
 public:
     std::vector<std::unique_ptr<StatementNode>> statements;
-
-    // void print(int indent = 0) const override { /* Print logic */ }
 };
 
 

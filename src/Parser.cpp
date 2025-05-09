@@ -1,140 +1,222 @@
 // src/Parser.cpp
 #include "Parser.h"
-#include "Token.h" // Include Token definitions
-#include "AST.h"   // Include AST node definitions
+#include "Token.h"
+#include "AST.h"
 #include <vector>
-#include <memory>   // For std::make_unique
-#include <stdexcept> // For reporting errors (can refine later)
-#include <iostream>  // For error messages
+#include <memory>
+#include <stdexcept>
+#include <iostream>
 
 // --- Constructor ---
-Parser::Parser(const std::vector<Token>& tokens) : m_tokens(tokens), m_currentPos(0) {}
+Parser::Parser(const std::vector<Token> &tokens) : m_tokens(tokens), m_currentPos(0) {}
 
 // --- Private Helper Methods ---
 
-// Look at the token at the current position + offset, without consuming
-const Token& Parser::peek(int offset) const {
-    // Static EOF token to return if index is out of bounds
+const Token &Parser::peek(int offset) const
+{
     static Token eofToken(TOK_EOF, "");
-
     size_t index = m_currentPos + offset;
-    if (index >= m_tokens.size()) {
-        return eofToken; // Return the static EOF if out of bounds
+    if (index >= m_tokens.size())
+    {
+        return eofToken;
     }
     return m_tokens[index];
 }
 
-// Consume the current token and advance position
-const Token& Parser::advance() {
-    if (!isAtEnd()) {
+const Token &Parser::advance()
+{
+    if (!isAtEnd())
+    {
         m_currentPos++;
     }
-    return peek(-1); // Return the token *before* the new currentPos (the one consumed)
+    return peek(-1);
 }
 
-// Check if we've consumed all tokens (except potentially the final EOF)
-bool Parser::isAtEnd() const {
-    // We consider EOF as a token, so end is when current token is EOF
+bool Parser::isAtEnd() const
+{
     return peek().type == TOK_EOF;
 }
 
-// Check if the current token matches the expected type
-bool Parser::match(TokenType expectedType) {
-    if (isAtEnd()) return false;
-    if (peek().type == expectedType) {
-        advance(); // Consume the token if it matches
-        return true;
+bool Parser::match(TokenType expectedType)
+{
+    if (isAtEnd() || peek().type != expectedType)
+    {
+        return false;
     }
-    return false;
+    advance();
+    return true;
 }
 
-// Consume the next token if it matches, otherwise report error
-const Token& Parser::consume(TokenType expectedType, const std::string& errorMessage) {
-    if (peek().type == expectedType) {
-        return advance(); // Consume and return the matched token
+const Token &Parser::consume(TokenType expectedType, const std::string &errorMessage)
+{
+    if (peek().type == expectedType)
+    {
+        return advance();
     }
-    // Error: Unexpected token
-    // More sophisticated error handling needed later (line/col numbers)
-    std::cerr << "Parse Error: " << errorMessage << ". Found "
-              << tokenTypeToString(peek().type) << " ('" << peek().value << "') instead.\n";
-    // For now, throw an exception to halt parsing. Refine later.
-    throw std::runtime_error("Parsing failed: " + errorMessage);
+    std::string errorMsg = "Parse Error: " + errorMessage + ". Found " +
+                           tokenTypeToString(peek().type) + " ('" + peek().value + "') instead.";
+    std::cerr << errorMsg << std::endl;
+    // Ideally, add line/column info here from the token
+    throw std::runtime_error(errorMsg);
 }
 
 // --- Parsing Methods for Grammar Rules ---
 
-// Parse the entire program (currently just one statement)
-std::unique_ptr<ProgramNode> Parser::parseProgram() {
+std::unique_ptr<ProgramNode> Parser::parseProgram()
+{
     auto programNode = std::make_unique<ProgramNode>();
-    while (!isAtEnd()) {
+    while (!isAtEnd())
+    {
         programNode->statements.push_back(parseStatement());
     }
     return programNode;
 }
 
-// Parse a single statement (currently only function calls like print(...))
-std::unique_ptr<StatementNode> Parser::parseStatement() {
-    // For MVP, we only expect 'print' function call statement
-    if (peek().type == TOK_IDENTIFIER && peek().value == "print") {
+std::unique_ptr<StatementNode> Parser::parseStatement()
+{
+    if (peek().type == TOK_LET)
+    {
+        return parseVariableDeclarationStatement();
+    }
+    else if (peek().type == TOK_IDENTIFIER && peek().value == "print")
+    { // Assuming print is not a general expression start
         return parseFunctionCallStatement();
-    } else {
-        // Error: Unexpected token at start of statement
-        throw std::runtime_error("Parsing failed: Expected 'print' statement.");
+    }
+    // Add other statement types here (if, while, return, expression statements etc.)
+    else
+    {
+        // Corrected string concatenation
+        std::string errorMsg = std::string("Parsing failed: Unexpected token at start of statement: ") +
+                               tokenTypeToString(peek().type) + " ('" + peek().value + "')";
+        std::cerr << errorMsg << std::endl;
+        throw std::runtime_error(errorMsg);
     }
 }
 
-// Parse the specific print("..."); statement
-std::unique_ptr<FunctionCallNode> Parser::parseFunctionCallStatement() {
-    // Assumes current token is IDENTIFIER("print")
-    std::string functionName = advance().value; // Consume identifier
-    auto callNode = std::make_unique<FunctionCallNode>(functionName);
+std::unique_ptr<VariableDeclarationNode> Parser::parseVariableDeclarationStatement()
+{
+    consume(TOK_LET, "Expected 'let' keyword");
+
+    const Token &varNameToken = consume(TOK_IDENTIFIER, "Expected variable name after 'let'");
+    std::string varName = varNameToken.value;
+
+    consume(TOK_COLON, "Expected ':' after variable name for type annotation");
+
+    // For now, type names are just identifiers (e.g., "string", "i32")
+    const Token &typeNameToken = consume(TOK_IDENTIFIER, "Expected type name after ':'");
+    std::string typeName = typeNameToken.value;
+
+    consume(TOK_EQUAL, "Expected '=' for variable initialization");
+
+    std::unique_ptr<ExpressionNode> initializer = parseExpression();
+
+    consume(TOK_SEMICOLON, "Expected ';' after variable declaration statement");
+
+    return std::make_unique<VariableDeclarationNode>(varName, typeName, std::move(initializer));
+}
+
+std::unique_ptr<FunctionCallNode> Parser::parseFunctionCallStatement()
+{
+    const Token &funcNameToken = consume(TOK_IDENTIFIER, "Expected function name"); // e.g. "print"
+    auto callNode = std::make_unique<FunctionCallNode>(funcNameToken.value);
 
     consume(TOK_LPAREN, "Expected '(' after function name");
 
-    // Parse arguments (only one string literal for MVP)
-    if (peek().type != TOK_RPAREN) { // Check if there are arguments
-         // Currently, only expect a string literal
-         if (peek().type == TOK_STRING_LITERAL) {
-             callNode->arguments.push_back(parseStringLiteral());
-         } else {
-              throw std::runtime_error("Parsing failed: Expected string literal argument for 'print'.");
-         }
-         // Add logic for more arguments later (e.g., comma separation)
-    } // else: no arguments between () - handle later if needed
-
+    if (peek().type != TOK_RPAREN)
+    { // If there are arguments
+        // For now, only one argument
+        callNode->arguments.push_back(parseExpression());
+        // Later, handle multiple comma-separated arguments:
+        // while (peek().type != TOK_RPAREN) {
+        //     callNode->arguments.push_back(parseExpression());
+        //     if (!match(TOK_COMMA)) break;
+        // }
+    }
 
     consume(TOK_RPAREN, "Expected ')' after function arguments");
-    consume(TOK_SEMICOLON, "Expected ';' after statement");
+    consume(TOK_SEMICOLON, "Expected ';' after function call statement");
 
     return callNode;
 }
 
-// Parse an expression (only string literals for MVP)
-std::unique_ptr<ExpressionNode> Parser::parseExpression() {
-    if (peek().type == TOK_STRING_LITERAL) {
+// Expression Parsing (currently very simple, will need operator precedence later)
+std::unique_ptr<ExpressionNode> Parser::parseExpression()
+{
+    // For now, our expressions are just primary expressions (literals or identifiers)
+    // This will be expanded for arithmetic, logical ops, etc.
+    return parsePrimaryExpression();
+}
+
+std::unique_ptr<ExpressionNode> Parser::parsePrimaryExpression()
+{
+    if (peek().type == TOK_STRING_LITERAL)
+    {
         return parseStringLiteral();
-    } else {
-        throw std::runtime_error("Parsing failed: Expected an expression (only string literals supported).");
+    }
+    else if (peek().type == TOK_INT_LITERAL)
+    {
+        return parseIntegerLiteral();
+    }
+    else if (peek().type == TOK_IDENTIFIER)
+    {
+        return parseVariableExpression();
+    }
+    // Add other primary expressions: ( expression ), function calls if they are expressions, etc.
+    else
+    {
+        // Corrected string concatenation
+        std::string errorMsg = std::string("Parsing failed: Expected an expression (literal or identifier), found ") +
+                               tokenTypeToString(peek().type) + " ('" + peek().value + "')";
+        std::cerr << errorMsg << std::endl;
+        throw std::runtime_error(errorMsg);
     }
 }
 
-// Parse a string literal token into a StringLiteralNode
-std::unique_ptr<StringLiteralNode> Parser::parseStringLiteral() {
-    // Assumes current token is TOK_STRING_LITERAL
-    const Token& stringToken = consume(TOK_STRING_LITERAL, "Expected string literal.");
+std::unique_ptr<StringLiteralNode> Parser::parseStringLiteral()
+{
+    const Token &stringToken = consume(TOK_STRING_LITERAL, "Expected string literal.");
     return std::make_unique<StringLiteralNode>(stringToken.value);
 }
 
+std::unique_ptr<IntegerLiteralNode> Parser::parseIntegerLiteral()
+{
+    const Token &intToken = consume(TOK_INT_LITERAL, "Expected integer literal.");
+    try
+    {
+        long long val = std::stoll(intToken.value); // string to long long
+        return std::make_unique<IntegerLiteralNode>(val);
+    }
+    catch (const std::out_of_range &oor)
+    {
+        std::string errorMsg = "Parse Error: Integer literal out of range: " + intToken.value;
+        std::cerr << errorMsg << std::endl;
+        throw std::runtime_error(errorMsg);
+    }
+    catch (const std::invalid_argument &ia)
+    {
+        std::string errorMsg = "Parse Error: Invalid integer literal: " + intToken.value;
+        std::cerr << errorMsg << std::endl;
+        throw std::runtime_error(errorMsg);
+    }
+}
+
+std::unique_ptr<VariableExpressionNode> Parser::parseVariableExpression()
+{
+    const Token &varToken = consume(TOK_IDENTIFIER, "Expected variable name.");
+    return std::make_unique<VariableExpressionNode>(varToken.value);
+}
 
 // --- Public Main Parsing Method ---
-
-// Start the parsing process
-std::unique_ptr<ProgramNode> Parser::parse() {
-    try {
+std::unique_ptr<ProgramNode> Parser::parse()
+{
+    try
+    {
         return parseProgram();
-    } catch (const std::runtime_error& e) {
-        // Basic error catching
-        std::cerr << "Caught parsing exception: " << e.what() << std::endl;
+    }
+    catch (const std::runtime_error &e)
+    {
+        // Error already printed by consume() or other parse methods
+        // std::cerr << "Caught parsing exception: " << e.what() << std::endl;
         return nullptr; // Indicate failure
     }
 }

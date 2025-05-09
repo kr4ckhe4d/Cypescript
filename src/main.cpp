@@ -3,21 +3,23 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
-#include <memory> // Include for unique_ptr
+#include <memory>
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/FileSystem.h" // Include for file output stream
+#include "llvm/Support/FileSystem.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "Lexer.h"
 #include "Token.h"
-#include "Parser.h" // Include Parser
-#include "AST.h"    // Include AST
+#include "Parser.h"
+#include "AST.h"
 #include "CodeGen.h"
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     llvm::outs() << "MyLangCompiler starting...\n";
 
-    if (argc < 2) {
+    if (argc < 2)
+    {
         llvm::errs() << "Error: No input file provided.\n";
         return 1;
     }
@@ -25,9 +27,9 @@ int main(int argc, char **argv) {
     std::string inputFileName = argv[1];
     llvm::outs() << "Input file: " << inputFileName << "\n";
 
-    // --- Read Input File ---
     std::ifstream inputFile(inputFileName);
-    if (!inputFile) {
+    if (!inputFile)
+    {
         llvm::errs() << "Error: Could not open file: " << inputFileName << "\n";
         return 1;
     }
@@ -37,64 +39,71 @@ int main(int argc, char **argv) {
     inputFile.close();
 
     llvm::outs() << "Source code read successfully.\n";
+    // llvm::outs() << "Source Code:\n<<<<\n" << sourceCode << "\n>>>>\n"; // Optional: print source
 
     // --- Lexing Stage ---
     llvm::outs() << "--- Lexing ---\n";
     Lexer lexer(sourceCode);
-    std::vector<Token> tokens; // Store tokens
+    std::vector<Token> tokens;
     Token token;
-    do {
+    do
+    {
         token = lexer.getNextToken();
         tokens.push_back(token);
+        // Print tokens for debugging
+        llvm::outs() << "Token { Type: " << tokenTypeToString(token.type)
+                     << ", Value: \"" << token.value << "\" }\n";
     } while (token.type != TOK_EOF);
     llvm::outs() << "--- Lexing Complete ---\n";
 
     // --- Parsing Stage ---
     llvm::outs() << "--- Parsing ---\n";
     Parser parser(tokens);
-    std::unique_ptr<ProgramNode> astRoot = parser.parse(); // Run the parser
+    std::unique_ptr<ProgramNode> astRoot = parser.parse();
 
-    if (astRoot) {
+    if (astRoot)
+    {
         llvm::outs() << "--- Parsing Complete (AST generated) ---\n";
-        // Later: We can add code here to print/visualize the AST
-        // Later: Pass astRoot to the Semantic Analyzer or Code Generator
-    } else {
+    }
+    else
+    {
         llvm::errs() << "--- Parsing Failed ---\n";
-        return 1; // Exit if parsing failed
+        return 1;
     }
 
     // --- Code Generation Stage ---
     llvm::outs() << "--- Code Generation ---\n";
-    llvm::LLVMContext context; // Create LLVM Context
-    CodeGen codeGenerator(context); // Create Code Generator
+    llvm::LLVMContext context;
+    CodeGen codeGenerator(context);
+    llvm::Module *module = codeGenerator.generate(astRoot.get());
 
-    // Generate LLVM IR Module from AST
-    llvm::Module* module = codeGenerator.generate(astRoot.get());
-
-    if (module) {
+    if (module)
+    {
         llvm::outs() << "--- Code Generation Complete (LLVM IR generated) ---\n";
         std::string outputFilename = "output.ll";
         std::error_code EC;
         llvm::raw_fd_ostream dest(outputFilename, EC, llvm::sys::fs::OF_None);
 
-        if (EC) {
+        if (EC)
+        {
             llvm::errs() << "Could not open file: " << EC.message() << "\n";
             return 1;
         }
         llvm::outs() << "Writing LLVM IR to " << outputFilename << "...\n";
-        module->print(dest, nullptr); // Print IR to the file stream
-        dest.flush(); // Ensure it's written
+        module->print(dest, nullptr);
+        dest.flush();
         llvm::outs() << "LLVM IR written successfully.\n";
-
-    } else {
+    }
+    else
+    {
         llvm::errs() << "--- Code Generation Failed ---\n";
-        return 1; // Exit if code generation failed
+        return 1;
     }
 
     llvm::outs() << "MyLangCompiler finished.\n";
     llvm::outs() << "\nTo compile the generated IR, run:\n";
-    llvm::outs() << "  llc output.ll -o output.o\n";
-    llvm::outs() << "  clang output.o -o my_program\n"; // or gcc output.o -o my_program
+    llvm::outs() << "  llc -filetype=obj -relocation-model=pic output.ll -o output.o\n"; // Added flags
+    llvm::outs() << "  clang output.o -o my_program\n";
     llvm::outs() << "Then run the program:\n";
     llvm::outs() << "  ./my_program\n";
 

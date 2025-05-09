@@ -2,46 +2,61 @@
 #ifndef CODEGEN_H
 #define CODEGEN_H
 
-#include "AST.h" // Need AST node definitions
+#include "AST.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/IRBuilder.h"
-#include <memory> // For unique_ptr from AST
+#include "llvm/IR/Value.h"        // For llvm::Value
+#include "llvm/IR/Type.h"         // For llvm::Type
+#include "llvm/IR/DerivedTypes.h" // For llvm::FunctionType etc.
+#include "llvm/IR/Instructions.h" // For llvm::AllocaInst
+
+#include <memory>
+#include <string>
+#include <map> // For symbol table
 
 // Forward declare AST node types we'll visit
 class ProgramNode;
 class StatementNode;
+class ExpressionNode; // For the general expression visitor
 class FunctionCallNode;
 class StringLiteralNode;
-// Add others as the language grows
+class IntegerLiteralNode;      // New
+class VariableExpressionNode;  // New
+class VariableDeclarationNode; // New
 
-class CodeGen {
+class CodeGen
+{
 private:
-    llvm::LLVMContext& m_context;
-    std::unique_ptr<llvm::Module> m_module; // Generator owns the Module
+    llvm::LLVMContext &m_context;
+    std::unique_ptr<llvm::Module> m_module;
     llvm::IRBuilder<> m_builder;
 
+    // Symbol Table: Maps variable names to their allocated memory location (AllocaInst)
+    // This will need to be enhanced for scopes later.
+    std::map<std::string, llvm::AllocaInst *> namedValues;
+
+    // Helper to get LLVM type from our string type names
+    llvm::Type *getLLVMType(const std::string &typeName);
+
     // Visitor methods for different AST node types
-    // Return llvm::Value* for expressions, void for statements (or refine later)
-    void visit(ProgramNode* node);
-    void visit(StatementNode* node);
-    void visit(FunctionCallNode* node);
-    llvm::Value* visit(ExpressionNode* node); // Dispatches to specific expressions
-    llvm::Value* visit(StringLiteralNode* node);
+    void visit(ProgramNode *node);
+    void visit(StatementNode *node);           // Dispatcher
+    void visit(VariableDeclarationNode *node); // New
+    void visit(FunctionCallNode *node);
 
-    // Helper to get or declare the 'puts' function
+    llvm::Value *visit(ExpressionNode *node); // Dispatcher
+    llvm::Value *visit(StringLiteralNode *node);
+    llvm::Value *visit(IntegerLiteralNode *node);     // New
+    llvm::Value *visit(VariableExpressionNode *node); // New
+
+    // Helper to get or declare the 'puts' function (for strings)
     llvm::FunctionCallee getOrDeclarePuts();
-
+    // We might need a printf for integers later, or a custom printInt function.
 
 public:
-    // Constructor takes context and ownership of the AST root (or just a ref?)
-    // Let's pass AST by reference/pointer, generator doesn't own it.
-    CodeGen(llvm::LLVMContext& context);
-
-    // Main function to generate code for the given AST
-    // Returns the generated Module (caller can take ownership or just use it)
-    llvm::Module* generate(ProgramNode* astRoot);
-
+    CodeGen(llvm::LLVMContext &context);
+    llvm::Module *generate(ProgramNode *astRoot);
 };
 
 #endif // CODEGEN_H
