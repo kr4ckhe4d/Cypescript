@@ -4,86 +4,174 @@
 
 #include <string>
 #include <vector>
-#include <memory> // For smart pointers (good practice for AST nodes)
+#include <memory>                     // For smart pointers
+#include <iostream>                   // For std::ostream
+#include <iomanip>                    // For std::setw, std::left (used by llvm::raw_ostream formatting)
+#include "llvm/Support/raw_ostream.h" // For llvm::outs()
 
 // Forward Declarations
 class StringLiteralNode;
-class IntegerLiteralNode; // New
-class VariableExpressionNode; // New
+class IntegerLiteralNode;
+class VariableExpressionNode;
 class FunctionCallNode;
-class VariableDeclarationNode; // New
+class VariableDeclarationNode;
 class StatementNode;
 class ExpressionNode;
 class ProgramNode;
 
+// Helper for indentation
+inline void printIndent(llvm::raw_ostream &os, int indent)
+{
+    for (int i = 0; i < indent; ++i)
+    {
+        os << "  "; // Two spaces per indent level
+    }
+}
 
 // --- Base Node Types ---
 
-class ASTNode {
+class ASTNode
+{
 public:
     virtual ~ASTNode() = default;
-    // virtual void print(int indent = 0) const = 0; // For AST debugging
+    // Pure virtual function for printing the node
+    virtual void printNode(llvm::raw_ostream &os, int indent = 0) const = 0;
 };
 
-class ExpressionNode : public ASTNode {
+class ExpressionNode : public ASTNode
+{
 public:
-    // Type information can be added here later during semantic analysis
-    // virtual llvm::Type* type;
+    // Inherits printNode
 };
 
-class StatementNode : public ASTNode {
+class StatementNode : public ASTNode
+{
 public:
+    // Inherits printNode
 };
-
 
 // --- Concrete Expression Node Types ---
 
-class StringLiteralNode : public ExpressionNode {
+class StringLiteralNode : public ExpressionNode
+{
 public:
     std::string value;
     explicit StringLiteralNode(std::string val) : value(std::move(val)) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "StringLiteralNode: \"" << value << "\"\n";
+    }
 };
 
-class IntegerLiteralNode : public ExpressionNode {
+class IntegerLiteralNode : public ExpressionNode
+{
 public:
-    long long value; // Using long long for flexibility
+    long long value;
     explicit IntegerLiteralNode(long long val) : value(val) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "IntegerLiteralNode: " << value << "\n";
+    }
 };
 
-class VariableExpressionNode : public ExpressionNode {
+class VariableExpressionNode : public ExpressionNode
+{
 public:
     std::string name;
     explicit VariableExpressionNode(std::string varName) : name(std::move(varName)) {}
-};
 
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "VariableExpressionNode: " << name << "\n";
+    }
+};
 
 // --- Concrete Statement Node Types ---
 
-class FunctionCallNode : public StatementNode { // Could also be an ExpressionNode if functions return values
+class FunctionCallNode : public StatementNode
+{
 public:
     std::string functionName;
     std::vector<std::unique_ptr<ExpressionNode>> arguments;
     explicit FunctionCallNode(std::string name) : functionName(std::move(name)) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "FunctionCallNode: " << functionName << "(\n";
+        for (const auto &arg : arguments)
+        {
+            if (arg)
+            {
+                arg->printNode(os, indent + 1);
+            }
+            else
+            {
+                printIndent(os, indent + 1);
+                os << "NullArgumentNode\n";
+            }
+        }
+        printIndent(os, indent);
+        os << ")\n";
+    }
 };
 
-class VariableDeclarationNode : public StatementNode {
+class VariableDeclarationNode : public StatementNode
+{
 public:
     std::string variableName;
-    std::string typeName; // e.g., "string", "i32". Could be a TypeNode later.
-    std::unique_ptr<ExpressionNode> initializer; // The expression on the RHS of '='
+    std::string typeName;
+    std::unique_ptr<ExpressionNode> initializer;
 
     VariableDeclarationNode(std::string varName, std::string type, std::unique_ptr<ExpressionNode> init)
         : variableName(std::move(varName)), typeName(std::move(type)), initializer(std::move(init)) {}
-};
 
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "VariableDeclarationNode: " << variableName << " : " << typeName << " =\n";
+        if (initializer)
+        {
+            initializer->printNode(os, indent + 1);
+        }
+        else
+        {
+            printIndent(os, indent + 1);
+            os << "NullInitializerNode\n";
+        }
+    }
+};
 
 // --- Program Node ---
 
-class ProgramNode : public ASTNode {
+class ProgramNode : public ASTNode
+{
 public:
     std::vector<std::unique_ptr<StatementNode>> statements;
-};
 
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "ProgramNode:\n";
+        for (const auto &stmt : statements)
+        {
+            if (stmt)
+            {
+                stmt->printNode(os, indent + 1);
+            }
+            else
+            {
+                printIndent(os, indent + 1);
+                os << "NullStatementNode\n";
+            }
+        }
+    }
+};
 
 #endif // AST_H
 

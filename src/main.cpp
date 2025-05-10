@@ -64,6 +64,11 @@ int main(int argc, char **argv)
     if (astRoot)
     {
         llvm::outs() << "--- Parsing Complete (AST generated) ---\n";
+        // --- Print the AST ---
+        llvm::outs() << "\n--- Abstract Syntax Tree (AST) ---\n";
+        astRoot->printNode(llvm::outs()); // Call the printNode method
+        llvm::outs() << "--- End of AST ---\n\n";
+        // --- End Print the AST ---
     }
     else
     {
