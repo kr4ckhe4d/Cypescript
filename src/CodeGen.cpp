@@ -37,7 +37,7 @@ llvm::Type *CodeGen::getLLVMType(const std::string &typeName)
     }
     // Add other types like "f64", "bool", custom types, etc.
     std::cerr << "Codegen Error: Unknown type name '" << typeName << "'\n";
-    return nullptr; // Or throw
+    throw std::runtime_error("Unknown type name in getLLVMType: " + typeName);
 }
 
 llvm::FunctionCallee CodeGen::getOrDeclarePuts()
@@ -51,6 +51,24 @@ llvm::FunctionCallee CodeGen::getOrDeclarePuts()
     llvm::FunctionType *funcType = llvm::FunctionType::get(returnType, argType, false);
     llvm::Function *func = llvm::Function::Create(
         funcType, llvm::Function::ExternalLinkage, "puts", m_module.get());
+    return llvm::FunctionCallee(funcType, func);
+}
+
+// New helper function to declare printf
+llvm::FunctionCallee CodeGen::getOrDeclarePrintf()
+{
+    if (auto *func = m_module->getFunction("printf"))
+    {
+        return llvm::FunctionCallee(func->getFunctionType(), func);
+    }
+    // printf signature: int printf(const char* format, ...);
+    // LLVM type: i32 (i8*, ...) - note the 'true' for vararg
+    llvm::Type *returnType = llvm::Type::getInt32Ty(m_context);
+    llvm::Type *formatArgType = llvm::Type::getInt8PtrTy(m_context);
+    llvm::FunctionType *funcType = llvm::FunctionType::get(returnType, formatArgType, true); // true for vararg
+
+    llvm::Function *func = llvm::Function::Create(
+        funcType, llvm::Function::ExternalLinkage, "printf", m_module.get());
     return llvm::FunctionCallee(funcType, func);
 }
 
@@ -94,28 +112,20 @@ void CodeGen::visit(StatementNode *node)
     else
     {
         std::cerr << "Codegen Error: Unsupported statement type.\n";
+        throw std::runtime_error("Unsupported statement type in codegen.");
     }
 }
 
 void CodeGen::visit(VariableDeclarationNode *node)
 {
     llvm::Type *varLLVMType = getLLVMType(node->typeName);
-    if (!varLLVMType)
-    {
-        throw std::runtime_error("Codegen Error: Invalid type for variable declaration: " + node->typeName);
-    }
-
-    // Create an alloca instruction in the entry block of the current function.
-    // For simplicity, assuming all variables are declared at the top of 'main'.
-    // A more robust approach would find the current function's entry block.
+    // CreateAlloca is usually placed at the beginning of the function for clarity and correctness
     llvm::Function *currentFunction = m_builder.GetInsertBlock()->getParent();
     llvm::IRBuilder<> TmpB(&currentFunction->getEntryBlock(), currentFunction->getEntryBlock().begin());
     llvm::AllocaInst *allocaInst = TmpB.CreateAlloca(varLLVMType, nullptr, node->variableName);
 
-    // Store the alloca in the symbol table
     namedValues[node->variableName] = allocaInst;
 
-    // Generate code for the initializer and store its value if it exists
     if (node->initializer)
     {
         llvm::Value *initVal = visit(node->initializer.get());
@@ -123,9 +133,29 @@ void CodeGen::visit(VariableDeclarationNode *node)
         {
             throw std::runtime_error("Codegen Error: Failed to generate initializer for variable " + node->variableName);
         }
-        // Check if types are compatible before storing (simplified for now)
-        // e.g. if varLLVMType is i8* and initVal is a global string (which is i8*), it's fine.
-        // if varLLVMType is i32 and initVal is an i32 ConstantInt, it's fine.
+        // Basic type check for assignment (can be more sophisticated)
+        if (initVal->getType() != varLLVMType)
+        {
+            // Allow storing i8* (from string literal) to an i8* alloca.
+            // Allow storing i32 (from int literal) to an i32 alloca.
+            // Other cases might need explicit casts or are errors.
+            // For now, we rely on LLVM's verifier or later semantic checks.
+            // A common case is string literal (global i8*) to local string variable (alloca i8*).
+            if (!(varLLVMType->isPointerTy() && initVal->getType()->isPointerTy() &&
+                  varLLVMType->getContainedType(0)->isIntegerTy(8) &&
+                  initVal->getType()->getContainedType(0)->isIntegerTy(8)) &&          /* for string to string */
+                !(varLLVMType->isIntegerTy(32) && initVal->getType()->isIntegerTy(32)) /* for i32 to i32 */
+            )
+            {
+                std::cerr << "Codegen Warning: Type mismatch for variable '" << node->variableName
+                          << "'. Expected ";
+                varLLVMType->print(llvm::errs());
+                std::cerr << " but got ";
+                initVal->getType()->print(llvm::errs());
+                std::cerr << std::endl;
+                // Potentially throw an error here in a stricter compiler
+            }
+        }
         m_builder.CreateStore(initVal, allocaInst);
     }
 }
@@ -145,7 +175,7 @@ llvm::Value *CodeGen::visit(ExpressionNode *node)
         return visit(varNode);
     }
     std::cerr << "Codegen Error: Unsupported expression type in visit(ExpressionNode*).\n";
-    return nullptr;
+    throw std::runtime_error("Unsupported expression type in codegen.");
 }
 
 llvm::Value *CodeGen::visit(StringLiteralNode *node)
@@ -180,36 +210,46 @@ void CodeGen::visit(FunctionCallNode *node)
         if (node->arguments.size() != 1)
         {
             std::cerr << "Codegen Error: 'print' expects exactly one argument.\n";
-            return;
+            throw std::runtime_error("'print' expects one argument.");
         }
 
-        llvm::Value *argValue = visit(node->arguments[0].get()); // Generate code for the argument expression
+        llvm::Value *argValue = visit(node->arguments[0].get());
         if (!argValue)
         {
             std::cerr << "Codegen Error: Failed to generate code for 'print' argument.\n";
-            return;
+            throw std::runtime_error("Failed to generate code for 'print' argument.");
         }
 
-        // For MVP, 'print' uses 'puts' and thus expects an i8* (char*)
-        // If argValue is not i8*, we might need a cast or a different print function.
-        // Our StringLiteralNode returns i8*.
-        // Our VariableExpressionNode for a string variable (stored as i8*) will also load an i8*.
-        // If we try to print an i32, this will currently fail type checking in LLVM or at runtime.
-        if (argValue->getType() != llvm::Type::getInt8PtrTy(m_context))
+        llvm::Type *argType = argValue->getType();
+        llvm::Type *expectedStringLLVMType = llvm::Type::getInt8PtrTy(m_context);
+
+        if (argType == expectedStringLLVMType)
+        { // Direct comparison for i8*
+            // Argument is i8* (string)
+            llvm::FunctionCallee putsFunc = getOrDeclarePuts();
+            m_builder.CreateCall(putsFunc, argValue, "putsCall");
+        }
+        else if (argType->isIntegerTy(32))
         {
-            std::cerr << "Codegen Error: 'print' currently only supports string arguments. Argument type was: ";
-            argValue->getType()->print(llvm::errs());
-            llvm::errs() << "\n";
-            // For now, we'll let LLVM's verifier catch this if it's a problem, or it might misbehave.
-            // A proper solution involves type checking or different print functions.
+            // Argument is i32
+            llvm::FunctionCallee printfFunc = getOrDeclarePrintf();
+            // Create format string "%d\n" for printf
+            llvm::Value *formatStr = m_builder.CreateGlobalStringPtr("%d\n", ".format_int");
+            std::vector<llvm::Value *> printfArgs = {formatStr, argValue};
+            m_builder.CreateCall(printfFunc, printfArgs, "printfCall");
         }
-
-        llvm::FunctionCallee putsFunc = getOrDeclarePuts();
-        m_builder.CreateCall(putsFunc, argValue, "putsCall");
+        else
+        {
+            std::cerr << "Codegen Error: 'print' argument type not supported. Expected string (i8*) or i32. Got: ";
+            argType->print(llvm::errs());
+            llvm::errs() << "\n";
+            throw std::runtime_error("'print' argument type not supported.");
+        }
     }
     else
     {
         std::cerr << "Codegen Error: Unsupported function call '" << node->functionName << "'.\n";
+        throw std::runtime_error("Unsupported function call: " + node->functionName);
     }
 }
 
@@ -223,20 +263,17 @@ llvm::Module *CodeGen::generate(ProgramNode *astRoot)
     }
     try
     {
-        visit(astRoot); // This will populate m_module
+        visit(astRoot);
     }
     catch (const std::runtime_error &e)
     {
         std::cerr << "Caught codegen exception: " << e.what() << std::endl;
-        // Optionally print module state for debugging even on error
-        // m_module->print(llvm::errs(), nullptr);
-        return nullptr; // Indicate failure
+        return nullptr;
     }
 
     if (llvm::verifyModule(*m_module, &llvm::errs()))
     {
         std::cerr << "Error: LLVM module verification failed after generation!\n";
-        // m_module->print(llvm::errs(), nullptr); // Dump for debugging
         return nullptr;
     }
     return m_module.get();

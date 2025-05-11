@@ -50,9 +50,8 @@ private:
     llvm::Value *visit(IntegerLiteralNode *node);     // New
     llvm::Value *visit(VariableExpressionNode *node); // New
 
-    // Helper to get or declare the 'puts' function (for strings)
     llvm::FunctionCallee getOrDeclarePuts();
-    // We might need a printf for integers later, or a custom printInt function.
+    llvm::FunctionCallee getOrDeclarePrintf(); // New: For printf for integers
 
 public:
     CodeGen(llvm::LLVMContext &context);
