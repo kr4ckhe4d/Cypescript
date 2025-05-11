@@ -1,10 +1,10 @@
-let greeting: string = "Hello from a variable!";
-print(greeting);
+let message: string = "The magic number is: ";
+print(message); // You can test string printing too
 
-let x: string = "Second message.";
-print(x);
+let magic_number: i32 = 42;
+print(magic_number);
 
-// For now, integer variables can be declared but print won't handle them yet.
-// let x: i32 = 123;
-// let y: i32 = 456;
-// print(x); // This would currently cause a codegen error or misbehave
+let another_num: i32 = 123;
+print(another_num);
+
+print(789); // Printing an integer literal directly
