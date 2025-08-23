@@ -1,2 +1,113 @@
+# Build directories
 build/
-.vscode/settings.json
+cmake-build-*/
+out/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# Compiled binaries
+cscript
+*.exe
+*.out
+*.app
+
+# Object files and libraries
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+
+# LLVM IR output files
+*.ll
+*.bc
+
+# Assembly files
+*.s
+*.asm
+
+# Compiler generated files
+*.i
+*.ii
+*.s
+*.su
+
+# Debug files
+*.dSYM/
+*.pdb
+*.ilk
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Xcode (macOS)
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Test output files
+test_output*
+example_output*
+
+# Package managers
+node_modules/
+.npm
+.yarn/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Coverage reports
+*.gcov
+*.gcda
+*.gcno
+coverage/
+
+# Profiling data
+*.prof
+gmon.out
+
+# Core dumps
+core
+core.*
+
+# Backup files
+*.bak
+*.backup
+*.orig
+
+# Compressed files (unless intentional)
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
