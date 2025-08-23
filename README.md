@@ -464,16 +464,21 @@ Cypescript/
 │   ├── Token.h       # Token definitions
 │   └── cypescript_stdlib.cpp # C++ standard library
 ├── example/
-│   ├── hello.csc     # Basic example
-│   ├── arithmetic.csc # Arithmetic operations
-│   ├── control_flow.csc # If/else statements
-│   ├── while_loop.csc # While loops
-│   ├── all_loops.csc # All loop types
-│   ├── arrays_test.csc # Array parsing test
-│   ├── complex_data_structures.csc # E-commerce system
-│   ├── game_system.csc # RPG management system
-│   ├── comprehensive.csc # Complex algorithms
-│   └── cpp_integration_basic.csc # C++ integration demo
+│   ├── README.md     # Example organization guide
+│   ├── basic/        # Basic examples (./compile-run.sh)
+│   │   ├── hello.csc # Basic variables and printing
+│   │   ├── arithmetic.csc # Arithmetic operations
+│   │   ├── control_flow.csc # If/else statements
+│   │   ├── all_loops.csc # All loop types
+│   │   ├── array_length_test.csc # Array operations
+│   │   └── comprehensive.csc # Complex algorithms
+│   ├── cpp-integration/ # C++ integration examples (./compile-with-cpp.sh)
+│   │   ├── cpp_integration_basic.csc # Comprehensive C++ demo
+│   │   ├── cpp_integration_simple.csc # Simple C++ demo
+│   │   └── cpp_integration_test.csc # C++ function test suite
+│   └── browser-only/ # Browser interpreter examples (./launch-docs.sh)
+│       ├── game_system.csc # RPG management system
+│       └── complex_data_structures.csc # E-commerce system
 ├── docs/             # Web documentation
 │   ├── index.html    # Interactive docs
 │   ├── styles.css    # Documentation styling
@@ -483,6 +488,7 @@ Cypescript/
 ├── test.sh           # Test script
 ├── setup-macos.sh    # macOS setup script
 ├── launch-docs.sh    # Documentation launcher
+├── compile-run.sh    # Basic compilation script
 ├── compile-with-cpp.sh # C++ integration compiler
 └── CMakeLists.txt    # CMake configuration
 ```
