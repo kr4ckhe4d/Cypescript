@@ -1,42 +1,66 @@
-# sudo apt install libzstd-dev
-# sudo apt install llvm-16-dev clang-16 lld-16 # Install dev files and tools
-# sudo apt install llvm
-# sudo apt install clang
-
-# configure cmake project and build
-# rm -rf build/ && cmake -B build && cmake --build build
-# generate the llvm bitcode
-# ./build/cscript ./example/hello.csc
-# llc -filetype=obj -relocation-model=pic output.ll -o output.o
-# clang output.o -o my_program
-# ./my_program
-
+# Cypescript - A TypeScript-style language compiler built with C++ and LLVM
 # Minimum CMake version required
-cmake_minimum_required(VERSION 3.15) # LLVM often needs a reasonably recent CMake
+cmake_minimum_required(VERSION 3.15)
 
-# Project Name
-project(Cypescript LANGUAGES C CXX)
+# Project Name and Version - Enable both C and CXX for LLVM dependencies
+project(Cypescript 
+    VERSION 1.0.0
+    DESCRIPTION "A TypeScript-style language compiler"
+    LANGUAGES C CXX
+)
 
 # Set C++ Standard (LLVM typically requires C++17 or newer)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF) # Prefer explicit standard features
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Build type
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
+# Compiler-specific options
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    add_compile_options(-Wall -Wextra -Wpedantic)
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        add_compile_options(-g -O0)
+    else()
+        add_compile_options(-O3)
+    endif()
+endif()
 
 # --- Find LLVM ---
-# You might need to adjust the version number (e.g., 17, 16)
-# You might need to hint CMake where LLVM is if it's not in a standard path:
-# set(LLVM_DIR "/path/to/your/llvm/lib/cmake/llvm") # Example hint
+# On macOS with Homebrew, LLVM might be in /opt/homebrew/opt/llvm or /usr/local/opt/llvm
+if(APPLE)
+    # Try Homebrew paths first
+    set(LLVM_HINTS
+        /opt/homebrew/opt/llvm/lib/cmake/llvm
+        /usr/local/opt/llvm/lib/cmake/llvm
+    )
+    find_path(LLVM_CMAKE_DIR
+        NAMES LLVMConfig.cmake
+        PATHS ${LLVM_HINTS}
+        NO_DEFAULT_PATH
+    )
+    if(LLVM_CMAKE_DIR)
+        set(LLVM_DIR ${LLVM_CMAKE_DIR})
+        message(STATUS "Found LLVM CMake files at: ${LLVM_DIR}")
+    endif()
+endif()
 
-find_package(LLVM 16 REQUIRED CONFIG) # Adjust version (e.g. 16, 17) if needed
+# Find LLVM (try different versions)
+find_package(LLVM REQUIRED CONFIG)
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
+# Separate LLVM version components
+string(REGEX MATCH "^([0-9]+)" LLVM_VERSION_MAJOR ${LLVM_PACKAGE_VERSION})
+
 # --- Configure LLVM ---
-# Include LLVM header directories
 include_directories(${LLVM_INCLUDE_DIRS})
-# Add LLVM definitions (required by LLVM headers)
-add_definitions(${LLVM_DEFINITIONS})
+separate_arguments(LLVM_DEFINITIONS_LIST UNIX_COMMAND "${LLVM_DEFINITIONS}")
+add_definitions(${LLVM_DEFINITIONS_LIST})
 
 # --- Our Compiler Executable ---
 add_executable(cscript
@@ -44,38 +68,61 @@ add_executable(cscript
     src/Lexer.cpp
     src/Parser.cpp
     src/CodeGen.cpp
-    # Add other .cpp files here later (AST.cpp if needed)
+)
+
+# Set target properties
+set_target_properties(cscript PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    OUTPUT_NAME "cscript"
 )
 
 # --- Link against LLVM Libraries ---
-# List the LLVM components you need. Start minimal.
-# Core: Basic LLVM data structures.
-# Support: Helper utilities (file handling, error handling, etc.).
-# IR: Core Intermediate Representation classes.
-# AsmPrinter: For printing LLVM IR text. (Useful for debugging)
-# We'll add more like CodeGen, Target, MC later.
-set(LLVM_COMPONENTS Core Support AsmPrinter)
+# LLVM components we need (simplified for compatibility)
+set(LLVM_COMPONENTS 
+    Core 
+    Support 
+    AsmPrinter
+    BitWriter
+    Analysis
+    Target
+    MC
+)
 
+# Map components to library names
 llvm_map_components_to_libnames(LLVM_LIBS ${LLVM_COMPONENTS})
 
 # Link our compiler executable against the LLVM libraries
 target_link_libraries(cscript PRIVATE ${LLVM_LIBS})
 
-# Add flags required by LLVM (handles RTTI, Exceptions based on LLVM build)
-# Note: Check LLVM documentation or examples for the most current way,
-# but this often works. Adapt if needed.
-string(APPEND CMAKE_CXX_FLAGS " ${LLVM_CXX_FLAGS}")
-string(APPEND CMAKE_SHARED_LINKER_FLAGS " ${LLVM_LDFLAGS}")
-string(APPEND CMAKE_EXE_LINKER_FLAGS " ${LLVM_LDFLAGS}")
-
-# Optional: Ensure assertions are enabled in Debug builds for LLVM
-if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-  add_compile_definitions(_DEBUG NDEBUG=0)
+# Add LLVM compile flags if available
+if(LLVM_CXXFLAGS)
+    target_compile_options(cscript PRIVATE ${LLVM_CXXFLAGS})
 endif()
 
-# --- Output ---
-message(STATUS "Compiler Target: cscript")
+# Handle LLVM link flags
+if(LLVM_LDFLAGS)
+    set_target_properties(cscript PROPERTIES LINK_FLAGS ${LLVM_LDFLAGS})
+endif()
+
+# --- Platform-specific settings ---
+if(APPLE)
+    # macOS specific settings
+    target_link_libraries(cscript PRIVATE "-framework CoreFoundation")
+endif()
+
+# --- Debug Information ---
+message(STATUS "=== Cypescript Build Configuration ===")
+message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
+message(STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+message(STATUS "LLVM Version: ${LLVM_PACKAGE_VERSION}")
 message(STATUS "LLVM Include Dirs: ${LLVM_INCLUDE_DIRS}")
-message(STATUS "LLVM Library Dirs: ${LLVM_LIBRARY_DIRS}") # Might be empty if using imported targets
-message(STATUS "Linking against LLVM Components: ${LLVM_COMPONENTS}")
-message(STATUS "LLVM Libs Variable: ${LLVM_LIBS}") # Shows the actual library names found
+message(STATUS "LLVM Components: ${LLVM_COMPONENTS}")
+message(STATUS "Target: cscript")
+message(STATUS "=====================================")
+
+# --- Install target (optional) ---
+install(TARGETS cscript
+    RUNTIME DESTINATION bin
+)

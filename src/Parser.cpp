@@ -102,9 +102,26 @@ std::unique_ptr<VariableDeclarationNode> Parser::parseVariableDeclarationStateme
 
     consume(TOK_COLON, "Expected ':' after variable name for type annotation");
 
-    // For now, type names are just identifiers (e.g., "string", "i32")
-    const Token &typeNameToken = consume(TOK_IDENTIFIER, "Expected type name after ':'");
-    std::string typeName = typeNameToken.value;
+    // Handle both old identifier-based types and new specific type tokens
+    std::string typeName;
+    TokenType currentType = peek().type;
+    
+    if (currentType == TOK_TYPE_STRING || currentType == TOK_TYPE_I32 || 
+        currentType == TOK_TYPE_F64 || currentType == TOK_TYPE_BOOLEAN ||
+        currentType == TOK_TYPE_NUMBER) {
+        // New specific type tokens
+        const Token &typeToken = advance();
+        typeName = typeToken.value;
+    } else if (currentType == TOK_IDENTIFIER) {
+        // Legacy identifier-based types (for backward compatibility)
+        const Token &typeNameToken = consume(TOK_IDENTIFIER, "Expected type name after ':'");
+        typeName = typeNameToken.value;
+    } else {
+        std::string errorMsg = "Expected type name after ':'. Found " + 
+                              std::string(tokenTypeToString(peek().type)) + " ('" + peek().value + "') instead.";
+        std::cerr << errorMsg << std::endl;
+        throw std::runtime_error(errorMsg);
+    }
 
     consume(TOK_EQUAL, "Expected '=' for variable initialization");
 
