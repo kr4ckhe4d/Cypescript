@@ -129,9 +129,9 @@ void CodeGen::visit(StatementNode *node)
     {
         visit(declNode);
     }
-    else if (auto *callNode = dynamic_cast<FunctionCallNode *>(node))
+    else if (auto *exprStmtNode = dynamic_cast<ExpressionStatementNode *>(node))
     {
-        visit(callNode);
+        visit(exprStmtNode);
     }
     else if (auto *ifNode = dynamic_cast<IfStatementNode *>(node))
     {
@@ -314,6 +314,10 @@ llvm::Value *CodeGen::visit(ExpressionNode *node)
     else if (auto *objAccNode = dynamic_cast<ObjectAccessNode *>(node))
     {
         return visit(objAccNode);
+    }
+    else if (auto *funcCallNode = dynamic_cast<FunctionCallNode *>(node))
+    {
+        return visit(funcCallNode);
     }
     
     std::cerr << "Codegen Error: Unsupported expression type in visit(ExpressionNode*).\n";
@@ -701,7 +705,14 @@ void CodeGen::visit(DoWhileStatementNode *node)
     m_builder.SetInsertPoint(exitBlock);
 }
 
-void CodeGen::visit(FunctionCallNode *node)
+void CodeGen::visit(ExpressionStatementNode *node)
+{
+    if (node->expression) {
+        visit(node->expression.get()); // Evaluate the expression (side effects like function calls)
+    }
+}
+
+llvm::Value *CodeGen::visit(FunctionCallNode *node)
 {
     if (node->functionName == "print" || node->functionName == "println")
     {
@@ -751,11 +762,23 @@ void CodeGen::visit(FunctionCallNode *node)
             std::cerr << "Codegen Error: '" << node->functionName << "' argument type not supported. Expected string or i32.\n";
             throw std::runtime_error("'" + node->functionName + "' argument type not supported.");
         }
+        
+        // print/println don't return values
+        return nullptr;
     }
     else
     {
-        std::cerr << "Codegen Error: Unsupported function call '" << node->functionName << "'.\n";
-        throw std::runtime_error("Unsupported function call: " + node->functionName);
+        // Handle external C++ functions
+        // First check if the function exists
+        llvm::FunctionCallee func = getOrDeclareExternalFunction(node->functionName);
+        if (!func) {
+            std::cerr << "Codegen Error: Unsupported function call '" << node->functionName << "'.\n";
+            throw std::runtime_error("Unsupported function call: " + node->functionName);
+        }
+        
+        // Function exists, generate the call
+        llvm::Value *result = generateExternalFunctionCall(node);
+        return result; // Can be nullptr for void functions, which is fine
     }
 }
 
@@ -946,4 +969,183 @@ llvm::Value *CodeGen::visit(ObjectAccessNode *node)
     
     // For other property access, object access is not yet supported
     throw std::runtime_error("Codegen Error: Object property access (other than array.length) is not yet supported in native compilation. Use the browser interpreter for full object support.");
+}
+
+// External function call support
+llvm::Value *CodeGen::generateExternalFunctionCall(FunctionCallNode *node)
+{
+    llvm::FunctionCallee func = getOrDeclareExternalFunction(node->functionName);
+    if (!func) {
+        return nullptr; // Function not found
+    }
+    
+    // Generate arguments
+    std::vector<llvm::Value*> args;
+    for (auto& arg : node->arguments) {
+        llvm::Value* argValue = visit(arg.get());
+        if (!argValue) {
+            throw std::runtime_error("Codegen Error: Failed to generate argument for function " + node->functionName);
+        }
+        args.push_back(argValue);
+    }
+    
+    // Check if the function returns void
+    llvm::Type* returnType = func.getFunctionType()->getReturnType();
+    if (returnType->isVoidTy()) {
+        // For void functions, don't assign a name to the call
+        m_builder.CreateCall(func, args);
+        return nullptr;
+    } else {
+        // For non-void functions, create the call with a name
+        return m_builder.CreateCall(func, args, node->functionName + "_call");
+    }
+}
+
+llvm::FunctionCallee CodeGen::getOrDeclareExternalFunction(const std::string& name)
+{
+    // Math functions
+    if (name == "math_sqrt") {
+        return m_module->getOrInsertFunction("math_sqrt",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context));
+    }
+    else if (name == "math_pow") {
+        return m_module->getOrInsertFunction("math_pow",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context));
+    }
+    else if (name == "math_abs_f64") {
+        return m_module->getOrInsertFunction("math_abs_f64",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context));
+    }
+    else if (name == "math_abs_i32") {
+        return m_module->getOrInsertFunction("math_abs_i32",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "math_sin") {
+        return m_module->getOrInsertFunction("math_sin",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context));
+    }
+    else if (name == "math_cos") {
+        return m_module->getOrInsertFunction("math_cos",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context));
+    }
+    else if (name == "math_tan") {
+        return m_module->getOrInsertFunction("math_tan",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context));
+    }
+    else if (name == "math_log") {
+        return m_module->getOrInsertFunction("math_log",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context));
+    }
+    else if (name == "math_exp") {
+        return m_module->getOrInsertFunction("math_exp",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context));
+    }
+    
+    // String functions
+    else if (name == "string_reverse") {
+        return m_module->getOrInsertFunction("string_reverse",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+    }
+    else if (name == "string_upper") {
+        return m_module->getOrInsertFunction("string_upper",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+    }
+    else if (name == "string_lower") {
+        return m_module->getOrInsertFunction("string_lower",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+    }
+    else if (name == "string_length") {
+        return m_module->getOrInsertFunction("string_length",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+    }
+    else if (name == "string_substring") {
+        return m_module->getOrInsertFunction("string_substring",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "string_find") {
+        return m_module->getOrInsertFunction("string_find",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+    }
+    else if (name == "string_concat") {
+        return m_module->getOrInsertFunction("string_concat",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+    }
+    
+    // Array functions
+    else if (name == "array_sum_i32") {
+        return m_module->getOrInsertFunction("array_sum_i32",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "array_max_i32") {
+        return m_module->getOrInsertFunction("array_max_i32",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "array_min_i32") {
+        return m_module->getOrInsertFunction("array_min_i32",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    
+    // File I/O functions
+    else if (name == "file_read") {
+        return m_module->getOrInsertFunction("file_read",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+    }
+    else if (name == "file_write") {
+        return m_module->getOrInsertFunction("file_write",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+    }
+    else if (name == "file_exists") {
+        return m_module->getOrInsertFunction("file_exists",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+    }
+    
+    // Utility functions
+    else if (name == "random_int") {
+        return m_module->getOrInsertFunction("random_int",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::Type::getInt32Ty(m_context),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "random_double") {
+        return m_module->getOrInsertFunction("random_double",
+            llvm::Type::getDoubleTy(m_context));
+    }
+    else if (name == "random_seed") {
+        return m_module->getOrInsertFunction("random_seed",
+            llvm::Type::getVoidTy(m_context),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    
+    return nullptr; // Function not found
 }

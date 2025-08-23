@@ -61,7 +61,8 @@ private:
     void visit(ProgramNode *node);
     void visit(StatementNode *node);           // Dispatcher
     void visit(VariableDeclarationNode *node); // New
-    void visit(FunctionCallNode *node);
+    void visit(ExpressionStatementNode *node); // For expressions used as statements
+    llvm::Value *visit(FunctionCallNode *node); // Now returns a value since it's an expression
     void visit(IfStatementNode *node);         // For if/else statements
     void visit(WhileStatementNode *node);      // For while loops
     void visit(ForStatementNode *node);        // For traditional for loops
@@ -81,6 +82,10 @@ private:
 
     llvm::FunctionCallee getOrDeclarePuts();
     llvm::FunctionCallee getOrDeclarePrintf(); // New: For printf for integers
+    
+    // External function support
+    llvm::Value *generateExternalFunctionCall(FunctionCallNode *node);
+    llvm::FunctionCallee getOrDeclareExternalFunction(const std::string& name);
 
 public:
     CodeGen(llvm::LLVMContext &context);

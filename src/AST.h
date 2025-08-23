@@ -359,7 +359,24 @@ public:
     }
 };
 
-class FunctionCallNode : public StatementNode
+// Expression Statement Node - for expressions used as statements (like function calls)
+class ExpressionStatementNode : public StatementNode
+{
+public:
+    std::unique_ptr<ExpressionNode> expression;
+    explicit ExpressionStatementNode(std::unique_ptr<ExpressionNode> expr) : expression(std::move(expr)) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "ExpressionStatementNode:\n";
+        if (expression) {
+            expression->printNode(os, indent + 1);
+        }
+    }
+};
+
+class FunctionCallNode : public ExpressionNode
 {
 public:
     std::string functionName;

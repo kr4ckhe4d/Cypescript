@@ -35,6 +35,9 @@ private:
     std::unique_ptr<StatementNode> parseAssignmentStatement();      // For variable assignments
     std::unique_ptr<StatementNode> parseArrayAssignmentStatement(); // For array element assignments
     
+    // Helper methods
+    bool isKnownFunction(const std::string& name);                  // Check if function is known
+    
     // Expression parsing with operator precedence
     std::unique_ptr<ExpressionNode> parseExpression();
     std::unique_ptr<ExpressionNode> parseComparisonExpression();    // == != < <= > >=

@@ -29,7 +29,9 @@ The web documentation includes:
 - **All loop constructs**: `while`, `for`, `do-while`
 - **Variable assignments** and complex expressions
 - **Arrays and objects** with access syntax (`arr[index]`, `obj.property`)
+- **Array length property** (`arr.length`) for dynamic programming
 - **Function calls** (currently `print` and `println` functions)
+- **C++ Integration** with 20+ standard library functions
 - **String and numeric literals**
 - **Comments** (single-line `//` and multi-line `/* */`)
 - **Comprehensive error handling** and reporting
@@ -71,6 +73,7 @@ This will install:
 
 ### 5. Manual Usage
 
+#### Basic Compilation
 ```bash
 # Compile a Cypescript file
 ./build/cscript example/hello.csc
@@ -84,6 +87,26 @@ This will install:
 # Get help
 ./build/cscript --help
 ```
+
+#### C++ Integration Compilation
+For programs using C++ library functions, use the enhanced compilation script:
+
+```bash
+# Compile with C++ integration
+./compile-with-cpp.sh example/cpp_integration_basic.csc my_program
+
+# This automatically:
+# 1. Compiles the C++ standard library
+# 2. Compiles your Cypescript code to LLVM IR
+# 3. Links everything together into a native executable
+# 4. Creates a ready-to-run program
+```
+
+The C++ integration script handles the complete compilation pipeline:
+- ✅ **C++ Library Compilation**: Builds the Cypescript standard library
+- ✅ **LLVM IR Generation**: Converts Cypescript to optimized IR
+- ✅ **Native Linking**: Creates high-performance executables
+- ✅ **Automatic Cleanup**: Removes intermediate files
 
 ## Language Syntax
 
@@ -160,6 +183,44 @@ print(42);
 println(message);
 ```
 
+### C++ Integration Functions
+
+Cypescript provides seamless integration with C++ through a comprehensive standard library:
+
+#### String Functions
+```typescript
+let text: string = "Hello World";
+let reversed: string = string_reverse(text);        // "dlroW olleH"
+let upper: string = string_upper(text);             // "HELLO WORLD"
+let lower: string = string_lower(text);             // "hello world"
+let length: i32 = string_length(text);              // 11
+let substr: string = string_substring(text, 0, 5);  // "Hello"
+let pos: i32 = string_find(text, "World");          // 6
+let concat: string = string_concat("Hello", " C++"); // "Hello C++"
+```
+
+#### Array Functions
+```typescript
+let numbers: i32[] = [10, 5, 8, 3, 12, 7];
+let sum: i32 = array_sum_i32(numbers, numbers.length);  // 45
+let max: i32 = array_max_i32(numbers, numbers.length);  // 12
+let min: i32 = array_min_i32(numbers, numbers.length);  // 3
+```
+
+#### File I/O Functions
+```typescript
+let success: i32 = file_write("data.txt", "Hello from Cypescript!");
+let exists: i32 = file_exists("data.txt");           // 1 (true)
+let content: string = file_read("data.txt");         // "Hello from Cypescript!"
+```
+
+#### Utility Functions
+```typescript
+random_seed(42);                                     // Seed random generator
+let rand1: i32 = random_int(1, 100);                // Random number 1-100
+let rand2: i32 = random_int(1, 100);                // Another random number
+```
+
 ### Arrays and Objects
 
 ```typescript
@@ -170,6 +231,15 @@ println(numbers[0]);
 
 let names: string[] = ["Alice", "Bob", "Charlie"];
 println(names);
+
+// Array length property
+println("Array length: ");
+println(numbers.length); // 5
+
+// Dynamic loops using length
+for (let i: i32 = 0; i < numbers.length; i = i + 1) {
+    println(numbers[i]);
+}
 
 // Objects
 let person = { name: "Alice", age: 25, active: true };
@@ -202,7 +272,9 @@ let y: string = "test";
 
 ## Complete Compilation Pipeline
 
-After generating LLVM IR with Cypescript:
+### Basic Cypescript Programs
+
+For simple programs without C++ integration:
 
 ```bash
 # 1. Compile Cypescript to LLVM IR
@@ -215,6 +287,56 @@ llc -filetype=obj -relocation-model=pic output.ll -o output.o
 clang output.o -o my_program
 
 # 4. Run the program
+./my_program
+```
+
+### C++ Integration Programs (Recommended)
+
+For programs using C++ library functions, use the automated script:
+
+```bash
+# One-command compilation with C++ integration
+./compile-with-cpp.sh example/cpp_integration_basic.csc my_program
+
+# Then run the program
+./my_program
+```
+
+The automated script provides:
+- ✅ **Automatic C++ Library Compilation**: Builds the Cypescript standard library
+- ✅ **LLVM IR Generation**: Converts Cypescript to optimized IR
+- ✅ **Native Linking**: Creates high-performance executables
+- ✅ **Error Handling**: Clear error messages and status reporting
+- ✅ **Cleanup**: Removes intermediate files automatically
+
+For programs using C++ library functions:
+
+```bash
+# One-command compilation with C++ integration
+./compile-with-cpp.sh example/cpp_integration_basic.csc my_program
+
+# Then run the program
+./my_program
+```
+
+#### Manual C++ Integration Steps
+
+If you prefer manual compilation:
+
+```bash
+# 1. Compile the C++ standard library
+g++ -c src/cypescript_stdlib.cpp -o cypescript_stdlib.o -std=c++11
+
+# 2. Compile Cypescript to LLVM IR
+./build/cscript example/cpp_integration_basic.csc
+
+# 3. Compile LLVM IR to object file
+llc -filetype=obj -relocation-model=pic output.ll -o cypescript_program.o
+
+# 4. Link with C++ library
+clang cypescript_program.o cypescript_stdlib.o -o my_program -lstdc++
+
+# 5. Run the program
 ./my_program
 ```
 
@@ -296,6 +418,37 @@ print("Main Project: ");
 println(company.departments[0].employees[0].projects[0]);
 ```
 
+### C++ Integration Example
+```typescript
+// Comprehensive C++ Integration Demo
+println("=== C++ Integration Demo ===");
+
+// String processing
+let text: string = "Hello World";
+let reversed: string = string_reverse(text);
+let upper: string = string_upper(text);
+println("Original: " + text);
+println("Reversed: " + reversed);
+println("Uppercase: " + upper);
+
+// Array operations
+let numbers: i32[] = [10, 5, 8, 3, 12, 7];
+let sum: i32 = array_sum_i32(numbers, numbers.length);
+let max: i32 = array_max_i32(numbers, numbers.length);
+println("Array sum: " + sum);
+println("Array max: " + max);
+
+// File I/O
+file_write("data.txt", "Hello from Cypescript!");
+let content: string = file_read("data.txt");
+println("File content: " + content);
+
+// Random numbers
+random_seed(42);
+let rand: i32 = random_int(1, 100);
+println("Random number: " + rand);
+```
+
 ## Development
 
 ### Project Structure
@@ -308,7 +461,8 @@ Cypescript/
 │   ├── Parser.cpp/h  # Syntax analysis
 │   ├── AST.h         # Abstract Syntax Tree
 │   ├── CodeGen.cpp/h # LLVM IR generation
-│   └── Token.h       # Token definitions
+│   ├── Token.h       # Token definitions
+│   └── cypescript_stdlib.cpp # C++ standard library
 ├── example/
 │   ├── hello.csc     # Basic example
 │   ├── arithmetic.csc # Arithmetic operations
@@ -318,7 +472,8 @@ Cypescript/
 │   ├── arrays_test.csc # Array parsing test
 │   ├── complex_data_structures.csc # E-commerce system
 │   ├── game_system.csc # RPG management system
-│   └── comprehensive.csc # Complex algorithms
+│   ├── comprehensive.csc # Complex algorithms
+│   └── cpp_integration_basic.csc # C++ integration demo
 ├── docs/             # Web documentation
 │   ├── index.html    # Interactive docs
 │   ├── styles.css    # Documentation styling
@@ -328,6 +483,7 @@ Cypescript/
 ├── test.sh           # Test script
 ├── setup-macos.sh    # macOS setup script
 ├── launch-docs.sh    # Documentation launcher
+├── compile-with-cpp.sh # C++ integration compiler
 └── CMakeLists.txt    # CMake configuration
 ```
 
@@ -368,6 +524,102 @@ This will show:
 - **Clang** (for linking final executable)
 - **Python 3** (for web documentation)
 
+## C++ Integration
+
+Cypescript provides seamless integration with C++ through a comprehensive standard library, enabling access to the entire C++ ecosystem while maintaining language safety and simplicity.
+
+### Quick Start with C++ Integration
+
+```bash
+# Compile a Cypescript program with C++ functions
+./compile-with-cpp.sh example/cpp_integration_basic.csc my_program
+
+# Run the compiled program
+./my_program
+```
+
+### Available C++ Functions
+
+#### String Functions
+- `string_reverse(str)` - Reverse a string
+- `string_upper(str)` - Convert to uppercase
+- `string_lower(str)` - Convert to lowercase
+- `string_length(str)` - Get string length
+- `string_substring(str, start, length)` - Extract substring
+- `string_find(str, substr)` - Find substring position
+- `string_concat(str1, str2)` - Concatenate strings
+
+#### Array Functions
+- `array_sum_i32(arr, size)` - Sum array elements
+- `array_max_i32(arr, size)` - Find maximum element
+- `array_min_i32(arr, size)` - Find minimum element
+
+#### File I/O Functions
+- `file_read(filename)` - Read file contents
+- `file_write(filename, content)` - Write to file
+- `file_exists(filename)` - Check if file exists
+
+#### Utility Functions
+- `random_seed(seed)` - Seed random generator
+- `random_int(min, max)` - Generate random integer
+- `random_double()` - Generate random double
+
+### Example Usage
+
+```typescript
+// String processing
+let text: string = "Hello World";
+let reversed: string = string_reverse(text);
+println(reversed); // "dlroW olleH"
+
+// Array operations
+let numbers: i32[] = [10, 5, 8, 3, 12];
+let sum: i32 = array_sum_i32(numbers, numbers.length);
+println(sum); // 38
+
+// File operations
+file_write("data.txt", "Hello from Cypescript!");
+let content: string = file_read("data.txt");
+println(content); // "Hello from Cypescript!"
+
+// Random numbers
+random_seed(42);
+let rand: i32 = random_int(1, 100);
+println(rand); // Random number between 1-100
+```
+
+### Compilation Process
+
+The C++ integration compilation process:
+
+1. **Compiles C++ standard library** (`src/cypescript_stdlib.cpp`)
+2. **Compiles Cypescript to LLVM IR** (your `.csc` file)
+3. **Links everything together** into a native executable
+4. **Optimizes with LLVM** for maximum performance
+
+### Extending C++ Integration
+
+To add new C++ functions:
+
+1. **Add the C++ function** to `src/cypescript_stdlib.cpp`
+2. **Declare it in the parser** (`src/Parser.cpp` - `isKnownFunction`)
+3. **Add LLVM declaration** (`src/CodeGen.cpp` - `getOrDeclareExternalFunction`)
+
+Example:
+```cpp
+// In cypescript_stdlib.cpp
+extern "C" {
+    int my_function(int x) {
+        return x * 2;
+    }
+}
+```
+
+```typescript
+// In Cypescript
+let result: i32 = my_function(21); // Returns 42
+```
+
 ## Language Features Status
 
 ### ✅ Implemented Features
@@ -386,9 +638,16 @@ This will show:
 - [x] String and integer literal support
 - [x] Boolean literals (`true`, `false`)
 - [x] Single-line (`//`) and multi-line (`/* */`) comments
-- [x] Arrays with literal syntax (`[1, 2, 3]`) and access (`arr[index]`) - Web only
+- [x] Arrays with literal syntax (`[1, 2, 3]`) and access (`arr[index]`)
+- [x] Array assignment operations (`arr[index] = value`)
+- [x] Array length property (`arr.length`)
 - [x] Objects with literal syntax (`{ key: value }`) and access (`obj.property`) - Web only
 - [x] Nested data structures (arrays of objects, objects with arrays) - Web only
+- [x] **C++ Integration** with 20+ standard library functions
+  - [x] String functions (reverse, upper, lower, length, substring, find, concat)
+  - [x] Array functions (sum, max, min for i32 arrays)
+  - [x] File I/O functions (read, write, exists)
+  - [x] Utility functions (random numbers, seeding)
 - [x] LLVM IR code generation (for basic features)
 - [x] Native executable compilation (for basic features)
 - [x] Comprehensive error handling and reporting

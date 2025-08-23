@@ -94,9 +94,11 @@ std::unique_ptr<StatementNode> Parser::parseStatement()
     {
         return parseDoWhileStatement();
     }
-    else if (peek().type == TOK_IDENTIFIER && (peek().value == "print" || peek().value == "println"))
-    { // Handle both print and println function calls
-        return parseFunctionCallStatement();
+    else if (peek().type == TOK_IDENTIFIER && isKnownFunction(peek().value))
+    { // Handle function calls as expression statements
+        auto expr = parseExpression(); // This will parse the function call
+        consume(TOK_SEMICOLON, "Expected ';' after function call");
+        return std::make_unique<ExpressionStatementNode>(std::move(expr));
     }
     else if (peek().type == TOK_IDENTIFIER)
     {
@@ -289,6 +291,47 @@ std::unique_ptr<StatementNode> Parser::parseArrayAssignmentStatement()
     consume(TOK_SEMICOLON, "Expected ';' after array assignment");
     
     return std::make_unique<ArrayAssignmentStatementNode>(std::move(arrayExpr), std::move(indexExpr), std::move(valueExpr));
+}
+
+bool Parser::isKnownFunction(const std::string& name)
+{
+    // Built-in functions
+    if (name == "print" || name == "println") {
+        return true;
+    }
+    
+    // External C++ functions - Math
+    if (name == "math_sqrt" || name == "math_pow" || name == "math_abs_f64" || name == "math_abs_i32" ||
+        name == "math_sin" || name == "math_cos" || name == "math_tan" || 
+        name == "math_log" || name == "math_exp") {
+        return true;
+    }
+    
+    // External C++ functions - String
+    if (name == "string_reverse" || name == "string_upper" || name == "string_lower" ||
+        name == "string_length" || name == "string_substring" || name == "string_find" ||
+        name == "string_concat") {
+        return true;
+    }
+    
+    // External C++ functions - Array
+    if (name == "array_sum_i32" || name == "array_max_i32" || name == "array_min_i32" ||
+        name == "array_sort_i32" || name == "array_reverse_i32") {
+        return true;
+    }
+    
+    // External C++ functions - File I/O
+    if (name == "file_read" || name == "file_write" || name == "file_exists") {
+        return true;
+    }
+    
+    // External C++ functions - Utility
+    if (name == "sleep_ms" || name == "random_int" || name == "random_double" || 
+        name == "random_seed" || name == "free_string") {
+        return true;
+    }
+    
+    return false;
 }
 
 std::unique_ptr<ForStatementNode> Parser::parseForStatement()
@@ -562,10 +605,38 @@ std::unique_ptr<IntegerLiteralNode> Parser::parseIntegerLiteral()
 std::unique_ptr<ExpressionNode> Parser::parseVariableExpression()
 {
     const Token &varToken = consume(TOK_IDENTIFIER, "Expected variable name.");
-    auto baseExpr = std::make_unique<VariableExpressionNode>(varToken.value);
     
-    // Check for array access [index] or object access .property
-    return parseArrayOrObjectAccess(std::move(baseExpr));
+    // Check if this is a function call
+    if (peek().type == TOK_LPAREN && isKnownFunction(varToken.value)) {
+        // This is a function call in an expression context
+        // Backtrack and parse as function call
+        m_currentPos--; // Go back to the identifier
+        
+        const Token &funcNameToken = consume(TOK_IDENTIFIER, "Expected function name");
+        auto callNode = std::make_unique<FunctionCallNode>(funcNameToken.value);
+        
+        consume(TOK_LPAREN, "Expected '(' after function name");
+        
+        // Parse arguments
+        while (peek().type != TOK_RPAREN) {
+            callNode->arguments.push_back(parseExpression());
+            
+            if (peek().type == TOK_COMMA) {
+                advance(); // consume ','
+            } else if (peek().type != TOK_RPAREN) {
+                throw std::runtime_error("Expected ',' or ')' in function call");
+            }
+        }
+        
+        consume(TOK_RPAREN, "Expected ')' after function arguments");
+        return callNode;
+    } else {
+        // This is a regular variable
+        auto baseExpr = std::make_unique<VariableExpressionNode>(varToken.value);
+        
+        // Check for array access [index] or object access .property
+        return parseArrayOrObjectAccess(std::move(baseExpr));
+    }
 }
 
 // --- Public Main Parsing Method ---
