@@ -5,11 +5,13 @@ let cities: string[] = ["New York", "London", "Tokyo"];
 println("=== String Array Test ===");
 
 // Test basic access
-println("First name: " + names[0]);
-println("Last name: " + names[4]);
+print("First name: ");
+println(names[0]);
+print("Last name: ");
+println(names[4]);
 
 // Test in loops
-println("\nAll names:");
+println("All names:");
 for (let i: i32 = 0; i < 5; i = i + 1) {
     print("Name ");
     print(i);
@@ -17,7 +19,7 @@ for (let i: i32 = 0; i < 5; i = i + 1) {
     println(names[i]);
 }
 
-println("\nAll cities:");
+println("All cities:");
 for (let j: i32 = 0; j < 3; j = j + 1) {
     print("City ");
     print(j);
@@ -27,11 +29,26 @@ for (let j: i32 = 0; j < 3; j = j + 1) {
 
 // Test in conditionals
 if (names[0] == "Alice") {
-    println("\n✓ String comparison works!");
+    println("String comparison works!");
 }
 
 if (cities[1] == "London") {
-    println("✓ Multiple arrays work!");
+    println("Multiple arrays work!");
 }
 
-println("\n=== Test Complete ===");
+// Test array length
+println("Names array length:");
+println(names.length);
+println("Cities array length:");
+println(cities.length);
+
+// Test more string comparisons
+if (names[2] == "Charlie") {
+    println("Third name is Charlie");
+}
+
+if (cities[0] != "Paris") {
+    println("First city is not Paris");
+}
+
+println("=== Test Complete ===");

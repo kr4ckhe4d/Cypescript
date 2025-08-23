@@ -310,6 +310,28 @@ function updateDiagnostics(document: vscode.TextDocument, collection: vscode.Dia
             diagnostic.code = 'float-literal';
             diagnostics.push(diagnostic);
         }
+
+        // String concatenation
+        if (line.includes('"') && line.includes(' + ') && !line.includes('//')) {
+            const diagnostic = new vscode.Diagnostic(
+                new vscode.Range(lineIndex, 0, lineIndex, line.length),
+                'String concatenation (+) is not supported in native compiler. Use separate print() calls or browser interpreter.',
+                vscode.DiagnosticSeverity.Warning
+            );
+            diagnostic.code = 'string-concatenation';
+            diagnostics.push(diagnostic);
+        }
+
+        // Escape sequences
+        if (line.includes('\\n') || line.includes('\\t') || line.includes('\\r')) {
+            const diagnostic = new vscode.Diagnostic(
+                new vscode.Range(lineIndex, 0, lineIndex, line.length),
+                'Escape sequences (\\n, \\t, etc.) are not supported in native compiler. Use separate println() calls.',
+                vscode.DiagnosticSeverity.Warning
+            );
+            diagnostic.code = 'escape-sequences';
+            diagnostics.push(diagnostic);
+        }
     });
 
     collection.set(document.uri, diagnostics);
