@@ -19,6 +19,7 @@ This extension provides comprehensive language support for **Cypescript** - a Ty
 ### 🔧 **Build Integration**
 - **Compile and Run** (`Ctrl+F5` / `Cmd+F5`)
 - **C++ Integration Compilation** (`Ctrl+Shift+F5` / `Cmd+Shift+F5`)
+- **Custom C++ Library Support** (via compilation scripts)
 - **Interactive Documentation** launcher
 - Integrated terminal execution
 
@@ -67,6 +68,7 @@ This extension provides comprehensive language support for **Cypescript** - a Ty
 - **Array functions**: `array_sum_i32()`, `array_max_i32()`, `array_min_i32()`
 - **File I/O**: `file_read()`, `file_write()`, `file_exists()`
 - **Utilities**: `random_int()`, `random_seed()`, `math_abs_i32()`
+- **Custom libraries**: Support for user-defined C++ functions
 
 ### 🌐 **Browser Interpreter Only**
 - Object literals: `{ key: value }`

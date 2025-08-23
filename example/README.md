@@ -49,7 +49,13 @@ Examples using **advanced features** only available in the browser.
 ./demo
 ```
 
-### 3. **Learning Complex Concepts?** Use Browser Examples
+### 3. **Need Custom Libraries?** Use Custom C++ Integration
+```bash
+./compile-with-custom-cpp.sh example/cpp-integration/custom_math_demo.csc demo src/custom_math_lib.cpp
+./demo
+```
+
+### 4. **Learning Complex Concepts?** Use Browser Examples
 ```bash
 ./launch-docs.sh
 # Copy code from browser-only/ examples into the playground
@@ -57,21 +63,22 @@ Examples using **advanced features** only available in the browser.
 
 ## 📊 Feature Compatibility Matrix
 
-| Feature | Basic | C++ Integration | Browser Only |
-|---------|-------|----------------|--------------|
-| Variables (`let`) | ✅ | ✅ | ✅ |
-| Basic types (`string`, `i32`) | ✅ | ✅ | ✅ |
-| Arithmetic (`+`, `-`, `*`, `/`, `%`) | ✅ | ✅ | ✅ |
-| Comparisons (`==`, `!=`, `<`, etc.) | ✅ | ✅ | ✅ |
-| Control flow (`if`/`else`) | ✅ | ✅ | ✅ |
-| Loops (`while`, `for`, `do-while`) | ✅ | ✅ | ✅ |
-| Arrays (`i32[]`, `string[]`) | ✅ | ✅ | ✅ |
-| Array operations (`.length`, `[index]`) | ✅ | ✅ | ✅ |
-| Built-in functions (`print`, `println`) | ✅ | ✅ | ✅ |
-| **C++ functions** (20+ functions) | ❌ | ✅ | ❌ |
-| **Object literals** (`{ key: value }`) | ❌ | ❌ | ✅ |
-| **Boolean literals** (`true`, `false`) | ❌ | ❌ | ✅ |
-| **Float literals** (`3.14`) | ❌ | ❌ | ✅ |
+| Feature | Basic | C++ Integration | Custom C++ | Browser Only |
+|---------|-------|----------------|------------|--------------|
+| Variables (`let`) | ✅ | ✅ | ✅ | ✅ |
+| Basic types (`string`, `i32`) | ✅ | ✅ | ✅ | ✅ |
+| Arithmetic (`+`, `-`, `*`, `/`, `%`) | ✅ | ✅ | ✅ | ✅ |
+| Comparisons (`==`, `!=`, `<`, etc.) | ✅ | ✅ | ✅ | ✅ |
+| Control flow (`if`/`else`) | ✅ | ✅ | ✅ | ✅ |
+| Loops (`while`, `for`, `do-while`) | ✅ | ✅ | ✅ | ✅ |
+| Arrays (`i32[]`, `string[]`) | ✅ | ✅ | ✅ | ✅ |
+| Array operations (`.length`, `[index]`) | ✅ | ✅ | ✅ | ✅ |
+| Built-in functions (`print`, `println`) | ✅ | ✅ | ✅ | ✅ |
+| **C++ functions** (20+ functions) | ❌ | ✅ | ✅ | ❌ |
+| **Custom C++ libraries** | ❌ | ❌ | ✅ | ❌ |
+| **Object literals** (`{ key: value }`) | ❌ | ❌ | ❌ | ✅ |
+| **Boolean literals** (`true`, `false`) | ❌ | ❌ | ❌ | ✅ |
+| **Float literals** (`3.14`) | ❌ | ❌ | ❌ | ✅ |
 
 ## 🏗️ Build Scripts Reference
 
@@ -86,6 +93,13 @@ Examples using **advanced features** only available in the browser.
 - **Output:** Native executable linked with C++ library
 - **Performance:** Maximum (native + zero-cost C++ interop)
 - **Dependencies:** LLVM, Clang, G++
+
+### `./compile-with-custom-cpp.sh` - Custom C++ Libraries
+- **Input:** `.csc` files + custom `.cpp` files
+- **Output:** Native executable with custom C++ integration
+- **Performance:** Maximum (native + custom libraries)
+- **Dependencies:** LLVM, Clang, G++
+- **Usage:** `./compile-with-custom-cpp.sh program.csc output lib1.cpp lib2.cpp`
 
 ### `./launch-docs.sh` - Browser Interpreter
 - **Input:** Any `.csc` code (full language support)

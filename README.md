@@ -32,10 +32,12 @@ The web documentation includes:
 - **Array length property** (`arr.length`) for dynamic programming
 - **Function calls** (currently `print` and `println` functions)
 - **C++ Integration** with 20+ standard library functions
+- **Custom C++ Libraries** - Import and use your own C++ code
 - **String and numeric literals**
 - **Comments** (single-line `//` and multi-line `/* */`)
 - **Comprehensive error handling** and reporting
 - **LLVM IR generation** for efficient native code compilation
+- **VSCode Extension** with syntax highlighting and IntelliSense
 
 ## Quick Start
 
@@ -82,10 +84,11 @@ cd vscode-extension/
 
 This provides:
 - **Syntax highlighting** for `.csc` files
-- **IntelliSense** with auto-completion
-- **Build integration** (`Ctrl+F5` to compile and run)
-- **Code snippets** for common patterns
+- **IntelliSense** with auto-completion for all language features
+- **Build integration** (`Ctrl+F5` to compile and run, `Ctrl+Shift+F5` for C++ integration)
+- **Code snippets** for common patterns and C++ functions
 - **Error diagnostics** and hover documentation
+- **Function support** (planned feature indicators)
 
 ### 6. Manual Usage
 
@@ -454,6 +457,12 @@ let max: i32 = array_max_i32(numbers, numbers.length);
 println("Array sum: " + sum);
 println("Array max: " + max);
 
+// Custom math functions (with custom C++ library)
+let gcd_result: i32 = math_gcd(48, 18);
+let fib_result: i32 = math_fibonacci(10);
+println("GCD(48,18): " + gcd_result);
+println("Fibonacci(10): " + fib_result);
+
 // File I/O
 file_write("data.txt", "Hello from Cypescript!");
 let content: string = file_read("data.txt");
@@ -491,10 +500,12 @@ Cypescript/
 │   ├── cpp-integration/ # C++ integration examples (./compile-with-cpp.sh)
 │   │   ├── cpp_integration_basic.csc # Comprehensive C++ demo
 │   │   ├── cpp_integration_simple.csc # Simple C++ demo
-│   │   └── cpp_integration_test.csc # C++ function test suite
+│   │   ├── cpp_integration_test.csc # C++ function test suite
+│   │   └── custom_math_demo.csc # Custom C++ library demo
 │   └── browser-only/ # Browser interpreter examples (./launch-docs.sh)
 │       ├── game_system.csc # RPG management system
-│       └── complex_data_structures.csc # E-commerce system
+│       ├── complex_data_structures.csc # E-commerce system
+│       └── functions_preview.csc # Preview of planned functions
 ├── docs/             # Web documentation
 │   ├── index.html    # Interactive docs
 │   ├── styles.css    # Documentation styling
@@ -506,6 +517,7 @@ Cypescript/
 ├── launch-docs.sh    # Documentation launcher
 ├── compile-run.sh    # Basic compilation script
 ├── compile-with-cpp.sh # C++ integration compiler
+├── compile-with-custom-cpp.sh # Custom C++ libraries compiler
 └── CMakeLists.txt    # CMake configuration
 ```
 
@@ -554,10 +566,51 @@ Cypescript provides seamless integration with C++ through a comprehensive standa
 
 ```bash
 # Compile a Cypescript program with C++ functions
-./compile-with-cpp.sh example/cpp_integration_basic.csc my_program
+./compile-with-cpp.sh example/cpp-integration/cpp_integration_basic.csc my_program
 
 # Run the compiled program
 ./my_program
+```
+
+### Custom C++ Libraries
+
+You can easily extend Cypescript with your own C++ libraries:
+
+```bash
+# Compile with custom C++ libraries
+./compile-with-custom-cpp.sh my_program.csc output src/my_custom_lib.cpp src/another_lib.cpp
+```
+
+**Example Custom Library:**
+```cpp
+// src/my_math_lib.cpp
+extern "C" {
+    int math_gcd(int a, int b) {
+        while (b != 0) {
+            int temp = b;
+            b = a % b;
+            a = temp;
+        }
+        return a;
+    }
+    
+    int math_fibonacci(int n) {
+        if (n <= 1) return n;
+        int a = 0, b = 1;
+        for (int i = 2; i <= n; i++) {
+            int temp = a + b;
+            a = b;
+            b = temp;
+        }
+        return b;
+    }
+}
+```
+
+**Use in Cypescript:**
+```typescript
+let gcd_result: i32 = math_gcd(48, 18);  // Returns 6
+let fib_10: i32 = math_fibonacci(10);    // Returns 55
 ```
 
 ### Available C++ Functions
@@ -619,17 +672,17 @@ The C++ integration compilation process:
 3. **Links everything together** into a native executable
 4. **Optimizes with LLVM** for maximum performance
 
-### Extending C++ Integration
+### Extending with New Functions
 
 To add new C++ functions:
 
-1. **Add the C++ function** to `src/cypescript_stdlib.cpp`
+1. **Add the C++ function** to `src/cypescript_stdlib.cpp` or create a custom library
 2. **Declare it in the parser** (`src/Parser.cpp` - `isKnownFunction`)
 3. **Add LLVM declaration** (`src/CodeGen.cpp` - `getOrDeclareExternalFunction`)
 
 Example:
 ```cpp
-// In cypescript_stdlib.cpp
+// In cypescript_stdlib.cpp or custom library
 extern "C" {
     int my_function(int x) {
         return x * 2;
@@ -641,6 +694,8 @@ extern "C" {
 // In Cypescript
 let result: i32 = my_function(21); // Returns 42
 ```
+
+**📚 For detailed custom C++ integration guide, see [`CUSTOM_CPP_INTEGRATION.md`](CUSTOM_CPP_INTEGRATION.md)**
 
 ## Language Features Status
 

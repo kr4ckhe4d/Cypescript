@@ -307,6 +307,23 @@ bool Parser::isKnownFunction(const std::string& name)
         return true;
     }
     
+    // Custom C++ functions - Advanced Math
+    if (name == "math_gcd" || name == "math_lcm" || name == "math_is_prime" ||
+        name == "math_fibonacci" || name == "math_factorial") {
+        return true;
+    }
+    
+    // Custom C++ functions - Statistics
+    if (name == "stats_mean" || name == "stats_median" || name == "stats_stddev") {
+        return true;
+    }
+    
+    // Custom C++ functions - Geometry
+    if (name == "geom_distance" || name == "geom_circle_area" || 
+        name == "geom_rectangle_area" || name == "geom_triangle_area") {
+        return true;
+    }
+    
     // External C++ functions - String
     if (name == "string_reverse" || name == "string_upper" || name == "string_lower" ||
         name == "string_length" || name == "string_substring" || name == "string_find" ||

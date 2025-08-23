@@ -1147,5 +1147,81 @@ llvm::FunctionCallee CodeGen::getOrDeclareExternalFunction(const std::string& na
             llvm::Type::getInt32Ty(m_context));
     }
     
+    // Custom Math functions - Advanced Math
+    else if (name == "math_gcd") {
+        return m_module->getOrInsertFunction("math_gcd",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::Type::getInt32Ty(m_context),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "math_lcm") {
+        return m_module->getOrInsertFunction("math_lcm",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::Type::getInt32Ty(m_context),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "math_is_prime") {
+        return m_module->getOrInsertFunction("math_is_prime",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "math_fibonacci") {
+        return m_module->getOrInsertFunction("math_fibonacci",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "math_factorial") {
+        return m_module->getOrInsertFunction("math_factorial",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    
+    // Custom Math functions - Statistics (return double, but we'll need f64 support)
+    else if (name == "stats_mean") {
+        return m_module->getOrInsertFunction("stats_mean",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "stats_median") {
+        return m_module->getOrInsertFunction("stats_median",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "stats_stddev") {
+        return m_module->getOrInsertFunction("stats_stddev",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    
+    // Custom Math functions - Geometry (return double, but we'll need f64 support)
+    else if (name == "geom_distance") {
+        return m_module->getOrInsertFunction("geom_distance",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context));
+    }
+    else if (name == "geom_circle_area") {
+        return m_module->getOrInsertFunction("geom_circle_area",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context));
+    }
+    else if (name == "geom_rectangle_area") {
+        return m_module->getOrInsertFunction("geom_rectangle_area",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context));
+    }
+    else if (name == "geom_triangle_area") {
+        return m_module->getOrInsertFunction("geom_triangle_area",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context));
+    }
+    
     return nullptr; // Function not found
 }

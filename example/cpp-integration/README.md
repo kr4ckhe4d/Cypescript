@@ -10,11 +10,18 @@ These examples demonstrate **C++ integration** capabilities using the enhanced c
 ./my_program
 ```
 
+**For custom C++ libraries:**
+```bash
+./compile-with-custom-cpp.sh example/cpp-integration/custom_math_demo.csc my_program src/custom_math_lib.cpp
+./my_program
+```
+
 This script automatically:
 1. ✅ Compiles the C++ standard library (`src/cypescript_stdlib.cpp`)
-2. ✅ Compiles Cypescript to LLVM IR
-3. ✅ Links everything into a native executable
-4. ✅ Cleans up intermediate files
+2. ✅ Compiles custom C++ libraries (if provided)
+3. ✅ Compiles Cypescript to LLVM IR
+4. ✅ Links everything into a native executable
+5. ✅ Cleans up intermediate files
 
 ## Available C++ Functions
 
@@ -42,11 +49,19 @@ This script automatically:
 - `random_int(min, max)` - Generate random integer
 - `random_double()` - Generate random double
 
+### Custom Math Functions (via custom libraries)
+- `math_gcd(a, b)` - Greatest common divisor
+- `math_lcm(a, b)` - Least common multiple
+- `math_is_prime(n)` - Prime number checking
+- `math_fibonacci(n)` - Nth Fibonacci number
+- `math_factorial(n)` - Factorial calculation
+
 ## Example Files
 
 - **`cpp_integration_basic.csc`** - Comprehensive demo of all C++ functions
 - **`cpp_integration_simple.csc`** - Simplified demo focusing on key functions
 - **`cpp_integration_test.csc`** - Complete test suite for all C++ integration features
+- **`custom_math_demo.csc`** - Demonstration of custom C++ library integration
 
 ## Example Usage
 
@@ -70,6 +85,13 @@ println(content); // "Hello from Cypescript!"
 random_seed(42);
 let rand: i32 = random_int(1, 100);
 println(rand); // Random number between 1-100
+
+// Custom math functions (requires custom C++ library)
+let gcd: i32 = math_gcd(48, 18);
+println(gcd); // 6
+
+let fib: i32 = math_fibonacci(10);
+println(fib); // 55
 ```
 
 ## Performance Benefits
@@ -99,3 +121,15 @@ Then use in Cypescript:
 ```typescript
 let result: i32 = my_function(21); // Returns 42
 ```
+
+## Custom C++ Libraries
+
+For advanced custom C++ integration, see the comprehensive guide:
+**📚 [`CUSTOM_CPP_INTEGRATION.md`](../../CUSTOM_CPP_INTEGRATION.md)**
+
+This covers:
+- Creating custom C++ libraries
+- Advanced type mapping
+- Memory management
+- Performance optimization
+- Real-world examples (networking, databases, image processing)
