@@ -1,0 +1,241 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Cypescript",
+  "scopeName": "source.cypescript",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#booleans"
+    },
+    {
+      "include": "#functions"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#punctuation"
+    },
+    {
+      "include": "#variables"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.cypescript",
+          "begin": "//",
+          "end": "$",
+          "captures": {
+            "0": {
+              "name": "punctuation.definition.comment.cypescript"
+            }
+          }
+        },
+        {
+          "name": "comment.block.cypescript",
+          "begin": "/\\*",
+          "end": "\\*/",
+          "captures": {
+            "0": {
+              "name": "punctuation.definition.comment.cypescript"
+            }
+          }
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.cypescript",
+          "match": "\\b(if|else|while|for|do|break|continue|return)\\b"
+        },
+        {
+          "name": "keyword.other.cypescript",
+          "match": "\\b(let|const|var)\\b"
+        },
+        {
+          "name": "keyword.operator.new.cypescript",
+          "match": "\\bnew\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.primitive.cypescript",
+          "match": "\\b(string|i32|f64|boolean|void)\\b"
+        },
+        {
+          "name": "storage.type.array.cypescript",
+          "match": "\\b(i32\\[\\]|string\\[\\]|f64\\[\\]|boolean\\[\\])\\b"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.cypescript",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.cypescript",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.cypescript",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.cypescript",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.cypescript",
+          "match": "\\b\\d+\\.\\d+([eE][+-]?\\d+)?\\b"
+        },
+        {
+          "name": "constant.numeric.integer.cypescript",
+          "match": "\\b\\d+\\b"
+        },
+        {
+          "name": "constant.numeric.hex.cypescript",
+          "match": "\\b0[xX][0-9a-fA-F]+\\b"
+        }
+      ]
+    },
+    "booleans": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.cypescript",
+          "match": "\\b(true|false)\\b"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "name": "entity.name.function.builtin.cypescript",
+          "match": "\\b(print|println)\\b"
+        },
+        {
+          "name": "entity.name.function.cpp.string.cypescript",
+          "match": "\\b(string_reverse|string_upper|string_lower|string_length|string_substring|string_find|string_concat)\\b"
+        },
+        {
+          "name": "entity.name.function.cpp.array.cypescript",
+          "match": "\\b(array_sum_i32|array_max_i32|array_min_i32)\\b"
+        },
+        {
+          "name": "entity.name.function.cpp.file.cypescript",
+          "match": "\\b(file_read|file_write|file_exists)\\b"
+        },
+        {
+          "name": "entity.name.function.cpp.utility.cypescript",
+          "match": "\\b(random_seed|random_int|random_double|math_abs_i32)\\b"
+        },
+        {
+          "name": "entity.name.function.cypescript",
+          "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*(?=\\s*\\()"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.arithmetic.cypescript",
+          "match": "\\+|\\-|\\*|\\/|\\%"
+        },
+        {
+          "name": "keyword.operator.comparison.cypescript",
+          "match": "==|!=|<=|>=|<|>"
+        },
+        {
+          "name": "keyword.operator.logical.cypescript",
+          "match": "&&|\\|\\||!"
+        },
+        {
+          "name": "keyword.operator.assignment.cypescript",
+          "match": "="
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.terminator.statement.cypescript",
+          "match": ";"
+        },
+        {
+          "name": "punctuation.separator.comma.cypescript",
+          "match": ","
+        },
+        {
+          "name": "punctuation.accessor.cypescript",
+          "match": "\\."
+        },
+        {
+          "name": "punctuation.definition.type.cypescript",
+          "match": ":"
+        },
+        {
+          "name": "punctuation.section.block.begin.cypescript",
+          "match": "\\{"
+        },
+        {
+          "name": "punctuation.section.block.end.cypescript",
+          "match": "\\}"
+        },
+        {
+          "name": "punctuation.section.array.begin.cypescript",
+          "match": "\\["
+        },
+        {
+          "name": "punctuation.section.array.end.cypescript",
+          "match": "\\]"
+        },
+        {
+          "name": "punctuation.section.parens.begin.cypescript",
+          "match": "\\("
+        },
+        {
+          "name": "punctuation.section.parens.end.cypescript",
+          "match": "\\)"
+        }
+      ]
+    },
+    "variables": {
+      "patterns": [
+        {
+          "name": "variable.other.cypescript",
+          "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
+        }
+      ]
+    }
+  }
+}

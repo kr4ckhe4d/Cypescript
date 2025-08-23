@@ -71,7 +71,23 @@ This will install:
 ./launch-docs.sh
 ```
 
-### 5. Manual Usage
+### 5. Install VSCode Extension (Optional)
+
+For the best development experience, install the Cypescript VSCode extension:
+
+```bash
+cd vscode-extension/
+./install.sh
+```
+
+This provides:
+- **Syntax highlighting** for `.csc` files
+- **IntelliSense** with auto-completion
+- **Build integration** (`Ctrl+F5` to compile and run)
+- **Code snippets** for common patterns
+- **Error diagnostics** and hover documentation
+
+### 6. Manual Usage
 
 #### Basic Compilation
 ```bash

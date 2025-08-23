@@ -1,0 +1,178 @@
+{
+  "Variable Declaration": {
+    "prefix": "let",
+    "body": [
+      "let ${1:variableName}: ${2|string,i32,f64,boolean|} = ${3:value};"
+    ],
+    "description": "Declare a variable with type annotation"
+  },
+  "Array Declaration": {
+    "prefix": "array",
+    "body": [
+      "let ${1:arrayName}: ${2|i32[],string[],f64[],boolean[]|} = [${3:values}];"
+    ],
+    "description": "Declare an array with type annotation"
+  },
+  "If Statement": {
+    "prefix": "if",
+    "body": [
+      "if (${1:condition}) {",
+      "\t${2:// code}",
+      "}"
+    ],
+    "description": "If statement"
+  },
+  "If-Else Statement": {
+    "prefix": "ifelse",
+    "body": [
+      "if (${1:condition}) {",
+      "\t${2:// if code}",
+      "} else {",
+      "\t${3:// else code}",
+      "}"
+    ],
+    "description": "If-else statement"
+  },
+  "While Loop": {
+    "prefix": "while",
+    "body": [
+      "while (${1:condition}) {",
+      "\t${2:// code}",
+      "}"
+    ],
+    "description": "While loop"
+  },
+  "For Loop": {
+    "prefix": "for",
+    "body": [
+      "for (let ${1:i}: i32 = ${2:0}; ${1:i} < ${3:length}; ${1:i} = ${1:i} + 1) {",
+      "\t${4:// code}",
+      "}"
+    ],
+    "description": "For loop"
+  },
+  "Do-While Loop": {
+    "prefix": "dowhile",
+    "body": [
+      "do {",
+      "\t${1:// code}",
+      "} while (${2:condition});"
+    ],
+    "description": "Do-while loop"
+  },
+  "Print Statement": {
+    "prefix": "print",
+    "body": [
+      "print(${1:value});"
+    ],
+    "description": "Print without newline"
+  },
+  "Println Statement": {
+    "prefix": "println",
+    "body": [
+      "println(${1:value});"
+    ],
+    "description": "Print with newline"
+  },
+  "String Reverse": {
+    "prefix": "strrev",
+    "body": [
+      "let ${1:reversed}: string = string_reverse(${2:text});"
+    ],
+    "description": "Reverse a string using C++ function"
+  },
+  "String Upper": {
+    "prefix": "strupper",
+    "body": [
+      "let ${1:upper}: string = string_upper(${2:text});"
+    ],
+    "description": "Convert string to uppercase using C++ function"
+  },
+  "String Lower": {
+    "prefix": "strlower",
+    "body": [
+      "let ${1:lower}: string = string_lower(${2:text});"
+    ],
+    "description": "Convert string to lowercase using C++ function"
+  },
+  "Array Sum": {
+    "prefix": "arraysum",
+    "body": [
+      "let ${1:sum}: i32 = array_sum_i32(${2:array}, ${2:array}.length);"
+    ],
+    "description": "Sum array elements using C++ function"
+  },
+  "Array Max": {
+    "prefix": "arraymax",
+    "body": [
+      "let ${1:max}: i32 = array_max_i32(${2:array}, ${2:array}.length);"
+    ],
+    "description": "Find maximum array element using C++ function"
+  },
+  "Array Min": {
+    "prefix": "arraymin",
+    "body": [
+      "let ${1:min}: i32 = array_min_i32(${2:array}, ${2:array}.length);"
+    ],
+    "description": "Find minimum array element using C++ function"
+  },
+  "File Write": {
+    "prefix": "filewrite",
+    "body": [
+      "let ${1:result}: i32 = file_write(\"${2:filename}\", \"${3:content}\");"
+    ],
+    "description": "Write to file using C++ function"
+  },
+  "File Read": {
+    "prefix": "fileread",
+    "body": [
+      "let ${1:content}: string = file_read(\"${2:filename}\");"
+    ],
+    "description": "Read from file using C++ function"
+  },
+  "Random Integer": {
+    "prefix": "randint",
+    "body": [
+      "let ${1:randomNum}: i32 = random_int(${2:min}, ${3:max});"
+    ],
+    "description": "Generate random integer using C++ function"
+  },
+  "Basic Program Template": {
+    "prefix": "template",
+    "body": [
+      "// Cypescript Program",
+      "// ${1:Description}",
+      "",
+      "println(\"=== ${2:Program Name} ===\");",
+      "",
+      "let ${3:variable}: ${4|string,i32,f64,boolean|} = ${5:value};",
+      "",
+      "${6:// Your code here}",
+      "",
+      "println(\"=== Complete ===\");"
+    ],
+    "description": "Basic Cypescript program template"
+  },
+  "C++ Integration Template": {
+    "prefix": "cpptemplate",
+    "body": [
+      "// Cypescript with C++ Integration",
+      "// ${1:Description}",
+      "",
+      "println(\"=== ${2:Program Name} ===\");",
+      "",
+      "// String operations",
+      "let text: string = \"${3:Hello World}\";",
+      "let processed: string = string_${4|reverse,upper,lower|}(text);",
+      "println(processed);",
+      "",
+      "// Array operations",
+      "let numbers: i32[] = [${5:1, 2, 3, 4, 5}];",
+      "let result: i32 = array_${6|sum,max,min|}_i32(numbers, numbers.length);",
+      "println(result);",
+      "",
+      "println(\"=== Complete ===\");"
+    ],
+    "description": "C++ integration program template"
+  }
+}
