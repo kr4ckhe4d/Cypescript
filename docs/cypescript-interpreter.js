@@ -209,7 +209,30 @@ class CypescriptInterpreter {
             }
             
             if (match('IDENTIFIER')) {
-                return { type: 'VARIABLE', name: advance().value };
+                const name = advance().value;
+                let base = { type: 'VARIABLE', name };
+                
+                // Handle array access arr[index] or object access obj.property
+                while (match('OPERATOR', '[') || match('OPERATOR', '.')) {
+                    if (match('OPERATOR', '[')) {
+                        advance(); // consume '['
+                        const index = parseExpression();
+                        if (!match('OPERATOR', ']')) {
+                            throw new Error('Expected ] after array index');
+                        }
+                        advance(); // consume ']'
+                        base = { type: 'ARRAY_ACCESS', array: base, index };
+                    } else if (match('OPERATOR', '.')) {
+                        advance(); // consume '.'
+                        if (!match('IDENTIFIER')) {
+                            throw new Error('Expected property name after .');
+                        }
+                        const property = advance().value;
+                        base = { type: 'OBJECT_ACCESS', object: base, property };
+                    }
+                }
+                
+                return base;
             }
             
             if (match('OPERATOR', '(')) {
@@ -220,6 +243,68 @@ class CypescriptInterpreter {
                 }
                 advance(); // consume ')'
                 return expr;
+            }
+            
+            // Array literal [1, 2, 3]
+            if (match('OPERATOR', '[')) {
+                advance(); // consume '['
+                const elements = [];
+                
+                if (!match('OPERATOR', ']')) {
+                    elements.push(parseExpression());
+                    while (match('OPERATOR', ',')) {
+                        advance(); // consume ','
+                        elements.push(parseExpression());
+                    }
+                }
+                
+                if (!match('OPERATOR', ']')) {
+                    throw new Error('Expected ] to close array literal');
+                }
+                advance(); // consume ']'
+                
+                return { type: 'ARRAY_LITERAL', elements };
+            }
+            
+            // Object literal { key: value }
+            if (match('OPERATOR', '{')) {
+                advance(); // consume '{'
+                const properties = [];
+                
+                if (!match('OPERATOR', '}')) {
+                    do {
+                        // Parse property key
+                        let key;
+                        if (match('IDENTIFIER')) {
+                            key = advance().value;
+                        } else if (match('STRING')) {
+                            key = advance().value;
+                        } else {
+                            throw new Error('Expected property name in object literal');
+                        }
+                        
+                        if (!match('OPERATOR', ':')) {
+                            throw new Error('Expected : after property name');
+                        }
+                        advance(); // consume ':'
+                        
+                        const value = parseExpression();
+                        properties.push({ key, value });
+                        
+                        if (match('OPERATOR', ',')) {
+                            advance(); // consume ','
+                        } else {
+                            break;
+                        }
+                    } while (!match('OPERATOR', '}'));
+                }
+                
+                if (!match('OPERATOR', '}')) {
+                    throw new Error('Expected } to close object literal');
+                }
+                advance(); // consume '}'
+                
+                return { type: 'OBJECT_LITERAL', properties };
             }
             
             const token = peek();
@@ -252,6 +337,15 @@ class CypescriptInterpreter {
                         throw new Error('Expected type after :');
                     }
                     advance(); // consume type
+                    
+                    // Handle array type syntax: i32[]
+                    if (match('OPERATOR', '[')) {
+                        advance(); // consume '['
+                        if (!match('OPERATOR', ']')) {
+                            throw new Error('Expected ] after [ in array type');
+                        }
+                        advance(); // consume ']'
+                    }
                 }
                 
                 if (!match('ASSIGN')) {
@@ -547,20 +641,12 @@ class CypescriptInterpreter {
                 if (node.name === 'print') {
                     const args = node.arguments.map(arg => this.evaluate(arg));
                     for (const arg of args) {
-                        if (typeof arg === 'boolean') {
-                            this.currentLine += (arg ? 'true' : 'false');
-                        } else {
-                            this.currentLine += String(arg);
-                        }
+                        this.currentLine += this.valueToString(arg);
                     }
                 } else if (node.name === 'println') {
                     const args = node.arguments.map(arg => this.evaluate(arg));
                     for (const arg of args) {
-                        if (typeof arg === 'boolean') {
-                            this.currentLine += (arg ? 'true' : 'false');
-                        } else {
-                            this.currentLine += String(arg);
-                        }
+                        this.currentLine += this.valueToString(arg);
                     }
                     // Add the current line to output and start a new line
                     this.output.push(this.currentLine);
@@ -644,6 +730,34 @@ class CypescriptInterpreter {
                 }
                 return this.variables.get(node.name);
                 
+            case 'ARRAY_LITERAL':
+                return node.elements.map(element => this.evaluate(element));
+                
+            case 'OBJECT_LITERAL':
+                const obj = {};
+                for (const prop of node.properties) {
+                    obj[prop.key] = this.evaluate(prop.value);
+                }
+                return obj;
+                
+            case 'ARRAY_ACCESS':
+                const array = this.evaluate(node.array);
+                const index = this.evaluate(node.index);
+                if (!Array.isArray(array)) {
+                    throw new Error('Cannot index non-array value');
+                }
+                if (typeof index !== 'number' || index < 0 || index >= array.length) {
+                    throw new Error('Array index out of bounds');
+                }
+                return array[index];
+                
+            case 'OBJECT_ACCESS':
+                const object = this.evaluate(node.object);
+                if (typeof object !== 'object' || object === null) {
+                    throw new Error('Cannot access property of non-object value');
+                }
+                return object[node.property];
+                
             default:
                 throw new Error(`Unknown node type: ${node.type}`);
         }
@@ -654,6 +768,19 @@ class CypescriptInterpreter {
         if (typeof value === 'number') return value !== 0;
         if (typeof value === 'string') return value !== '';
         return false;
+    }
+    
+    valueToString(value) {
+        if (typeof value === 'boolean') {
+            return value ? 'true' : 'false';
+        } else if (Array.isArray(value)) {
+            return '[' + value.map(v => this.valueToString(v)).join(', ') + ']';
+        } else if (typeof value === 'object' && value !== null) {
+            const pairs = Object.entries(value).map(([k, v]) => `${k}: ${this.valueToString(v)}`);
+            return '{' + pairs.join(', ') + '}';
+        } else {
+            return String(value);
+        }
     }
     
     execute(source) {

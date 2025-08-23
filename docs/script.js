@@ -159,7 +159,22 @@ function clearPlayground() {
     const codeTextarea = document.getElementById('playground-code');
     const outputElement = document.getElementById('playground-output');
     
-    codeTextarea.value = '// Write your Cypescript code here...\nprintln("Hello from the playground!");\n\nlet number: i32 = 42;\nprint("The answer is: ");\nprintln(number);';
+    codeTextarea.value = `// Write your Cypescript code here...
+println("Hello from the playground!");
+
+// Arrays
+let numbers: i32[] = [1, 2, 3, 4, 5];
+print("Array: ");
+println(numbers);
+print("First element: ");
+println(numbers[0]);
+
+// Objects
+let person = { name: "Alice", age: 25 };
+print("Name: ");
+println(person.name);
+print("Age: ");
+println(person.age);`;
     outputElement.textContent = '';
     outputElement.className = 'output';
 }

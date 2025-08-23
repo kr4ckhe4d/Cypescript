@@ -14,6 +14,10 @@ class StringLiteralNode;
 class IntegerLiteralNode;
 class VariableExpressionNode;
 class FunctionCallNode;
+class ArrayLiteralNode;
+class ArrayAccessNode;
+class ObjectLiteralNode;
+class ObjectAccessNode;
 class VariableDeclarationNode;
 class StatementNode;
 class ExpressionNode;
@@ -343,6 +347,112 @@ public:
         }
         printIndent(os, indent);
         os << ")\n";
+    }
+};
+
+// Array literal node for [1, 2, 3]
+class ArrayLiteralNode : public ExpressionNode
+{
+public:
+    std::vector<std::unique_ptr<ExpressionNode>> elements;
+    std::string elementType; // "i32", "string", etc.
+    
+    explicit ArrayLiteralNode(std::string elemType) : elementType(std::move(elemType)) {}
+    
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "ArrayLiteralNode: " << elementType << "[]\n";
+        printIndent(os, indent + 1);
+        os << "Elements:\n";
+        for (const auto &elem : elements) {
+            if (elem) {
+                elem->printNode(os, indent + 2);
+            }
+        }
+    }
+};
+
+// Array access node for arr[index]
+class ArrayAccessNode : public ExpressionNode
+{
+public:
+    std::unique_ptr<ExpressionNode> array;
+    std::unique_ptr<ExpressionNode> index;
+    
+    ArrayAccessNode(std::unique_ptr<ExpressionNode> arr, std::unique_ptr<ExpressionNode> idx)
+        : array(std::move(arr)), index(std::move(idx)) {}
+    
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "ArrayAccessNode:\n";
+        printIndent(os, indent + 1);
+        os << "Array:\n";
+        if (array) {
+            array->printNode(os, indent + 2);
+        }
+        printIndent(os, indent + 1);
+        os << "Index:\n";
+        if (index) {
+            index->printNode(os, indent + 2);
+        }
+    }
+};
+
+// Object literal node for { name: "Alice", age: 25 }
+class ObjectLiteralNode : public ExpressionNode
+{
+public:
+    struct Property {
+        std::string key;
+        std::unique_ptr<ExpressionNode> value;
+        
+        Property(std::string k, std::unique_ptr<ExpressionNode> v)
+            : key(std::move(k)), value(std::move(v)) {}
+    };
+    
+    std::vector<Property> properties;
+    
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "ObjectLiteralNode:\n";
+        printIndent(os, indent + 1);
+        os << "Properties:\n";
+        for (const auto &prop : properties) {
+            printIndent(os, indent + 2);
+            os << "Key: " << prop.key << "\n";
+            printIndent(os, indent + 2);
+            os << "Value:\n";
+            if (prop.value) {
+                prop.value->printNode(os, indent + 3);
+            }
+        }
+    }
+};
+
+// Object access node for obj.property
+class ObjectAccessNode : public ExpressionNode
+{
+public:
+    std::unique_ptr<ExpressionNode> object;
+    std::string property;
+    
+    ObjectAccessNode(std::unique_ptr<ExpressionNode> obj, std::string prop)
+        : object(std::move(obj)), property(std::move(prop)) {}
+    
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "ObjectAccessNode:\n";
+        printIndent(os, indent + 1);
+        os << "Object:\n";
+        if (object) {
+            object->printNode(os, indent + 2);
+        }
+        printIndent(os, indent + 1);
+        os << "Property: " << property << "\n";
     }
 };
 

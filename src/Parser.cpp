@@ -129,27 +129,41 @@ std::unique_ptr<VariableDeclarationNode> Parser::parseVariableDeclarationStateme
     const Token &varNameToken = consume(TOK_IDENTIFIER, "Expected variable name after 'let'");
     std::string varName = varNameToken.value;
 
-    consume(TOK_COLON, "Expected ':' after variable name for type annotation");
-
-    // Handle both old identifier-based types and new specific type tokens
     std::string typeName;
-    TokenType currentType = peek().type;
     
-    if (currentType == TOK_TYPE_STRING || currentType == TOK_TYPE_I32 || 
-        currentType == TOK_TYPE_F64 || currentType == TOK_TYPE_BOOLEAN ||
-        currentType == TOK_TYPE_NUMBER) {
-        // New specific type tokens
-        const Token &typeToken = advance();
-        typeName = typeToken.value;
-    } else if (currentType == TOK_IDENTIFIER) {
-        // Legacy identifier-based types (for backward compatibility)
-        const Token &typeNameToken = consume(TOK_IDENTIFIER, "Expected type name after ':'");
-        typeName = typeNameToken.value;
+    // Check if there's a type annotation
+    if (peek().type == TOK_COLON) {
+        consume(TOK_COLON, "Expected ':' after variable name for type annotation");
+
+        // Handle both old identifier-based types and new specific type tokens
+        TokenType currentType = peek().type;
+        
+        if (currentType == TOK_TYPE_STRING || currentType == TOK_TYPE_I32 || 
+            currentType == TOK_TYPE_F64 || currentType == TOK_TYPE_BOOLEAN ||
+            currentType == TOK_TYPE_NUMBER) {
+            // New specific type tokens
+            const Token &typeToken = advance();
+            typeName = typeToken.value;
+        } else if (currentType == TOK_IDENTIFIER) {
+            // Legacy identifier-based types (for backward compatibility)
+            const Token &typeNameToken = consume(TOK_IDENTIFIER, "Expected type name after ':'");
+            typeName = typeNameToken.value;
+        } else {
+            std::string errorMsg = "Expected type name after ':'. Found " + 
+                                  std::string(tokenTypeToString(peek().type)) + " ('" + peek().value + "') instead.";
+            std::cerr << errorMsg << std::endl;
+            throw std::runtime_error(errorMsg);
+        }
+        
+        // Check for array type syntax: i32[]
+        if (peek().type == TOK_LBRACKET) {
+            advance(); // consume '['
+            consume(TOK_RBRACKET, "Expected ']' after '[' in array type");
+            typeName += "[]"; // Mark as array type
+        }
     } else {
-        std::string errorMsg = "Expected type name after ':'. Found " + 
-                              std::string(tokenTypeToString(peek().type)) + " ('" + peek().value + "') instead.";
-        std::cerr << errorMsg << std::endl;
-        throw std::runtime_error(errorMsg);
+        // No explicit type annotation - infer from initializer
+        typeName = "auto"; // We'll infer the type from the initializer
     }
 
     consume(TOK_EQUAL, "Expected '=' for variable initialization");
@@ -448,6 +462,16 @@ std::unique_ptr<ExpressionNode> Parser::parsePrimaryExpression()
         consume(TOK_RPAREN, "Expected ')' after expression");
         return expr;
     }
+    else if (peek().type == TOK_LBRACKET)
+    {
+        // Array literal [1, 2, 3]
+        return parseArrayLiteral();
+    }
+    else if (peek().type == TOK_LBRACE)
+    {
+        // Object literal { key: value }
+        return parseObjectLiteral();
+    }
     // Add other primary expressions: ( expression ), function calls if they are expressions, etc.
     else
     {
@@ -487,10 +511,13 @@ std::unique_ptr<IntegerLiteralNode> Parser::parseIntegerLiteral()
     }
 }
 
-std::unique_ptr<VariableExpressionNode> Parser::parseVariableExpression()
+std::unique_ptr<ExpressionNode> Parser::parseVariableExpression()
 {
     const Token &varToken = consume(TOK_IDENTIFIER, "Expected variable name.");
-    return std::make_unique<VariableExpressionNode>(varToken.value);
+    auto baseExpr = std::make_unique<VariableExpressionNode>(varToken.value);
+    
+    // Check for array access [index] or object access .property
+    return parseArrayOrObjectAccess(std::move(baseExpr));
 }
 
 // --- Public Main Parsing Method ---
@@ -506,4 +533,103 @@ std::unique_ptr<ProgramNode> Parser::parse()
         // std::cerr << "Caught parsing exception: " << e.what() << std::endl;
         return nullptr; // Indicate failure
     }
+}
+
+// Array literal parsing: [1, 2, 3]
+std::unique_ptr<ArrayLiteralNode> Parser::parseArrayLiteral()
+{
+    consume(TOK_LBRACKET, "Expected '[' to start array literal");
+    
+    // For now, assume i32 arrays - we can enhance this later
+    auto arrayNode = std::make_unique<ArrayLiteralNode>("i32");
+    
+    // Handle empty array []
+    if (peek().type == TOK_RBRACKET) {
+        advance(); // consume ']'
+        return arrayNode;
+    }
+    
+    // Parse array elements
+    do {
+        arrayNode->elements.push_back(parseExpression());
+        
+        if (peek().type == TOK_COMMA) {
+            advance(); // consume ','
+        } else {
+            break;
+        }
+    } while (peek().type != TOK_RBRACKET && !isAtEnd());
+    
+    consume(TOK_RBRACKET, "Expected ']' to close array literal");
+    return arrayNode;
+}
+
+// Object literal parsing: { name: "Alice", age: 25 }
+std::unique_ptr<ObjectLiteralNode> Parser::parseObjectLiteral()
+{
+    consume(TOK_LBRACE, "Expected '{' to start object literal");
+    
+    auto objectNode = std::make_unique<ObjectLiteralNode>();
+    
+    // Handle empty object {}
+    if (peek().type == TOK_RBRACE) {
+        advance(); // consume '}'
+        return objectNode;
+    }
+    
+    // Parse object properties
+    do {
+        // Parse property key (must be identifier or string)
+        std::string key;
+        if (peek().type == TOK_IDENTIFIER) {
+            key = peek().value;
+            advance();
+        } else if (peek().type == TOK_STRING_LITERAL) {
+            key = peek().value;
+            advance();
+        } else {
+            throw std::runtime_error("Expected property name in object literal");
+        }
+        
+        consume(TOK_COLON, "Expected ':' after property name");
+        
+        // Parse property value
+        auto value = parseExpression();
+        
+        // Add property to object
+        objectNode->properties.emplace_back(key, std::move(value));
+        
+        if (peek().type == TOK_COMMA) {
+            advance(); // consume ','
+        } else {
+            break;
+        }
+    } while (peek().type != TOK_RBRACE && !isAtEnd());
+    
+    consume(TOK_RBRACE, "Expected '}' to close object literal");
+    return objectNode;
+}
+
+// Parse array access arr[index] or object access obj.property
+std::unique_ptr<ExpressionNode> Parser::parseArrayOrObjectAccess(std::unique_ptr<ExpressionNode> base)
+{
+    while (peek().type == TOK_LBRACKET || peek().type == TOK_DOT) {
+        if (peek().type == TOK_LBRACKET) {
+            // Array access: base[index]
+            advance(); // consume '['
+            auto index = parseExpression();
+            consume(TOK_RBRACKET, "Expected ']' after array index");
+            base = std::make_unique<ArrayAccessNode>(std::move(base), std::move(index));
+        } else if (peek().type == TOK_DOT) {
+            // Object property access: base.property
+            advance(); // consume '.'
+            if (peek().type != TOK_IDENTIFIER) {
+                throw std::runtime_error("Expected property name after '.'");
+            }
+            std::string property = peek().value;
+            advance(); // consume property name
+            base = std::make_unique<ObjectAccessNode>(std::move(base), property);
+        }
+    }
+    return base;
 }

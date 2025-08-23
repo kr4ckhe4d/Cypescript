@@ -25,6 +25,10 @@ class IntegerLiteralNode;      // New
 class VariableExpressionNode;  // New
 class VariableDeclarationNode; // New
 class BinaryExpressionNode;    // For arithmetic operations
+class ArrayLiteralNode;        // For array literals
+class ObjectLiteralNode;       // For object literals
+class ArrayAccessNode;         // For array access
+class ObjectAccessNode;        // For object access
 class IfStatementNode;         // For if/else statements
 class WhileStatementNode;      // For while loops
 class ForStatementNode;        // For traditional for loops
@@ -61,6 +65,10 @@ private:
     llvm::Value *visit(IntegerLiteralNode *node);     // New
     llvm::Value *visit(VariableExpressionNode *node); // New
     llvm::Value *visit(BinaryExpressionNode *node);   // For arithmetic operations
+    llvm::Value *visit(ArrayLiteralNode *node);       // For array literals
+    llvm::Value *visit(ObjectLiteralNode *node);      // For object literals
+    llvm::Value *visit(ArrayAccessNode *node);        // For array access
+    llvm::Value *visit(ObjectAccessNode *node);       // For object access
 
     llvm::FunctionCallee getOrDeclarePuts();
     llvm::FunctionCallee getOrDeclarePrintf(); // New: For printf for integers

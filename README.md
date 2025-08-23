@@ -22,12 +22,13 @@ The web documentation includes:
 
 - **TypeScript-inspired syntax** with type annotations
 - **Variable declarations** with `let`, `const`, and type inference
-- **Built-in types**: `string`, `i32`, `f64`, `boolean`
+- **Built-in types**: `string`, `i32`, `f64`, `boolean`, arrays (`i32[]`), objects
 - **Complete arithmetic operations** (`+`, `-`, `*`, `/`, `%`)
 - **Comparison operators** (`==`, `!=`, `<`, `<=`, `>`, `>=`)
 - **Control flow** with `if`/`else` statements and nesting
 - **All loop constructs**: `while`, `for`, `do-while`
 - **Variable assignments** and complex expressions
+- **Arrays and objects** with access syntax (`arr[index]`, `obj.property`)
 - **Function calls** (currently `print` and `println` functions)
 - **String and numeric literals**
 - **Comments** (single-line `//` and multi-line `/* */`)
@@ -159,6 +160,33 @@ print(42);
 println(message);
 ```
 
+### Arrays and Objects
+
+```typescript
+// Arrays
+let numbers: i32[] = [1, 2, 3, 4, 5];
+print("First number: ");
+println(numbers[0]);
+
+let names: string[] = ["Alice", "Bob", "Charlie"];
+println(names);
+
+// Objects
+let person = { name: "Alice", age: 25, active: true };
+print("Name: ");
+println(person.name);
+print("Age: ");
+println(person.age);
+
+// Nested structures
+let data = { 
+    values: [10, 20, 30], 
+    info: { year: 2024, valid: true } 
+};
+println(data.values[1]); // 20
+println(data.info.year); // 2024
+```
+
 ### Comments
 
 ```typescript
@@ -229,28 +257,43 @@ if (isPrime == 1) {
 }
 ```
 
-### Fibonacci Sequence
+### Complex Data Structures Example
 ```typescript
-let limit: i32 = 10;
-let fib1: i32 = 0;
-let fib2: i32 = 1;
-let count: i32 = 0;
-
-while (count < limit) {
-    if (count == 0) {
-        println(fib1);
-    } else {
-        if (count == 1) {
-            println(fib2);
-        } else {
-            let nextFib: i32 = fib1 + fib2;
-            println(nextFib);
-            fib1 = fib2;
-            fib2 = nextFib;
+// Company Management System
+let company = {
+    name: "TechCorp Industries",
+    departments: [
+        {
+            name: "Engineering",
+            employees: [
+                { 
+                    name: "Alice Johnson", 
+                    role: "Senior Developer",
+                    skills: ["JavaScript", "Python", "React"],
+                    projects: ["WebApp", "API Gateway"]
+                },
+                { 
+                    name: "Bob Smith", 
+                    role: "DevOps Engineer",
+                    skills: ["Docker", "Kubernetes", "AWS"],
+                    projects: ["Infrastructure", "CI/CD"]
+                }
+            ]
         }
-    }
-    count = count + 1;
-}
+    ]
+};
+
+// Access nested data
+print("Company: ");
+println(company.name);
+print("Department: ");
+println(company.departments[0].name);
+print("Lead Developer: ");
+println(company.departments[0].employees[0].name);
+print("Primary Skill: ");
+println(company.departments[0].employees[0].skills[0]);
+print("Main Project: ");
+println(company.departments[0].employees[0].projects[0]);
 ```
 
 ## Development
@@ -272,6 +315,9 @@ Cypescript/
 │   ├── control_flow.csc # If/else statements
 │   ├── while_loop.csc # While loops
 │   ├── all_loops.csc # All loop types
+│   ├── arrays_test.csc # Array parsing test
+│   ├── complex_data_structures.csc # E-commerce system
+│   ├── game_system.csc # RPG management system
 │   └── comprehensive.csc # Complex algorithms
 ├── docs/             # Web documentation
 │   ├── index.html    # Interactive docs
@@ -336,21 +382,24 @@ This will show:
 - [x] Traditional for loops (`for (init; condition; increment)`)
 - [x] Do-while loops (post-condition loops)
 - [x] Nested loops of all types
-- [x] Built-in `print` function
+- [x] Built-in `print` and `println` functions
 - [x] String and integer literal support
 - [x] Boolean literals (`true`, `false`)
 - [x] Single-line (`//`) and multi-line (`/* */`) comments
-- [x] LLVM IR code generation
-- [x] Native executable compilation
+- [x] Arrays with literal syntax (`[1, 2, 3]`) and access (`arr[index]`) - Web only
+- [x] Objects with literal syntax (`{ key: value }`) and access (`obj.property`) - Web only
+- [x] Nested data structures (arrays of objects, objects with arrays) - Web only
+- [x] LLVM IR code generation (for basic features)
+- [x] Native executable compilation (for basic features)
 - [x] Comprehensive error handling and reporting
 - [x] Interactive web documentation with runnable examples
 
 ### 🚧 Planned Features
 - [ ] User-defined functions with parameters and return values
 - [ ] Function overloading and local scoping
-- [ ] Arrays and array operations
+- [ ] Arrays and array operations (native compiler support)
+- [ ] Objects and structures (native compiler support)
 - [ ] String manipulation functions
-- [ ] Objects and structures
 - [ ] Enhanced type system with generics
 - [ ] Module system and imports
 - [ ] Standard library functions

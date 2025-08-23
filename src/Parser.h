@@ -43,8 +43,13 @@ private:
     
     std::unique_ptr<StringLiteralNode> parseStringLiteral();
     std::unique_ptr<IntegerLiteralNode> parseIntegerLiteral();
-    std::unique_ptr<VariableExpressionNode> parseVariableExpression();
+    std::unique_ptr<ExpressionNode> parseVariableExpression();
     std::unique_ptr<VariableDeclarationNode> parseVariableDeclarationStatement();
+    
+    // Array and object parsing
+    std::unique_ptr<ArrayLiteralNode> parseArrayLiteral();
+    std::unique_ptr<ObjectLiteralNode> parseObjectLiteral();
+    std::unique_ptr<ExpressionNode> parseArrayOrObjectAccess(std::unique_ptr<ExpressionNode> base);
 
 public:
     // Constructor takes the vector of tokens

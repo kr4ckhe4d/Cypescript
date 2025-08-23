@@ -490,38 +490,261 @@ do {
                 </div>
 
                 <div class="interactive-example">
-                    <h2>Function Examples</h2>
+                    <h2>Arrays</h2>
+                    <p>Arrays store multiple values of the same type. Access elements using square bracket notation.</p>
+                    
                     <div class="code-example">
                         <div class="code-header">
-                            <span class="filename">functions.csc</span>
-                            <button class="run-btn" onclick="runExample('functions-example')">
+                            <span class="filename">arrays.csc</span>
+                            <button class="run-btn" onclick="runExample('arrays-example')">
                                 <i class="fas fa-play"></i> Run
                             </button>
                         </div>
-                        <pre><code class="language-typescript" id="functions-example">// Print without newline
-print("Hello, ");
-print("World!");
-println(""); // Add a newline
+                        <pre><code class="language-typescript" id="arrays-example">// Array declaration and initialization
+let numbers: i32[] = [1, 2, 3, 4, 5];
+println("Array: ");
+println(numbers);
 
-// Print with automatic newline
-println("This is line 1");
-println("This is line 2");
+// Array access
+print("First element: ");
+println(numbers[0]);
+print("Last element: ");
+println(numbers[4]);
 
-// Mixed usage
-print("Count: ");
-println(42);
-print("Status: ");
-println(true);
+// String array
+let names: string[] = ["Alice", "Bob", "Charlie"];
+println("Names: ");
+println(names);
 
-// Print variables
-let name: string = "Cypescript";
-let version: i32 = 1;
+// Mixed operations
+let scores: i32[] = [85, 92, 78, 96];
+print("Second score: ");
+println(scores[1]);
+print("Third score: ");
+println(scores[2]);</code></pre>
+                        <div class="output" id="arrays-example-output"></div>
+                    </div>
+                </div>
 
-print("Language: ");
-println(name);
-print("Version: ");
-println(version);</code></pre>
-                        <div class="output" id="functions-example-output"></div>
+                <div class="interactive-example">
+                    <h2>Objects</h2>
+                    <p>Objects store key-value pairs. Access properties using dot notation.</p>
+                    
+                    <div class="code-example">
+                        <div class="code-header">
+                            <span class="filename">objects.csc</span>
+                            <button class="run-btn" onclick="runExample('objects-example')">
+                                <i class="fas fa-play"></i> Run
+                            </button>
+                        </div>
+                        <pre><code class="language-typescript" id="objects-example">// Object declaration
+let person = { 
+    name: "Alice", 
+    age: 25, 
+    isActive: true 
+};
+println("Person object:");
+println(person);
+
+// Property access
+print("Name: ");
+println(person.name);
+print("Age: ");
+println(person.age);
+print("Active: ");
+println(person.isActive);
+
+// Nested objects and arrays
+let student = {
+    name: "Bob",
+    grades: [85, 92, 78],
+    info: { year: 2024, major: "CS" }
+};
+
+println("Student:");
+println(student);
+print("First grade: ");
+println(student.grades[0]);
+print("Major: ");
+println(student.info.major);</code></pre>
+                        <div class="output" id="objects-example-output"></div>
+                    </div>
+                </div>
+
+                <div class="interactive-example">
+                    <h2>Complex Data Structures</h2>
+                    <p>Advanced examples combining arrays and objects for real-world scenarios like company management systems.</p>
+                    
+                    <div class="code-example">
+                        <div class="code-header">
+                            <span class="filename">company_system.csc</span>
+                            <button class="run-btn" onclick="runExample('complex-data-example')">
+                                <i class="fas fa-play"></i> Run
+                            </button>
+                        </div>
+                        <pre><code class="language-typescript" id="complex-data-example">// Complex Company Management System
+println("=== Company Management System ===");
+
+// Define company structure with departments and employees
+let company = {
+    name: "TechCorp Industries",
+    founded: 2020,
+    departments: [
+        {
+            name: "Engineering",
+            budget: 500000,
+            employees: [
+                { 
+                    name: "Alice Johnson", 
+                    role: "Senior Developer", 
+                    salary: 95000,
+                    skills: ["JavaScript", "Python", "React"],
+                    projects: ["WebApp", "API Gateway"]
+                },
+                { 
+                    name: "Bob Smith", 
+                    role: "DevOps Engineer", 
+                    salary: 85000,
+                    skills: ["Docker", "Kubernetes", "AWS"],
+                    projects: ["Infrastructure", "CI/CD"]
+                }
+            ]
+        },
+        {
+            name: "Marketing",
+            budget: 200000,
+            employees: [
+                { 
+                    name: "Carol Davis", 
+                    role: "Marketing Manager", 
+                    salary: 75000,
+                    skills: ["SEO", "Content Marketing", "Analytics"],
+                    projects: ["Brand Campaign", "Social Media"]
+                }
+            ]
+        }
+    ]
+};
+
+// Display company information
+print("Company: ");
+println(company.name);
+print("Founded: ");
+println(company.founded);
+
+println("");
+println("=== Department Analysis ===");
+
+// Analyze each department
+let totalBudget: i32 = 0;
+let totalEmployees: i32 = 0;
+
+// Engineering Department
+let engineering = company.departments[0];
+print("Department: ");
+println(engineering.name);
+print("Budget: $");
+println(engineering.budget);
+print("Team Size: ");
+println(engineering.employees.length);
+
+totalBudget = totalBudget + engineering.budget;
+totalEmployees = totalEmployees + engineering.employees.length;
+
+println("Engineering Team:");
+print("  Lead Developer: ");
+println(engineering.employees[0].name);
+print("  Role: ");
+println(engineering.employees[0].role);
+print("  Primary Skill: ");
+println(engineering.employees[0].skills[0]);
+print("  Main Project: ");
+println(engineering.employees[0].projects[0]);
+
+print("  DevOps Engineer: ");
+println(engineering.employees[1].name);
+print("  Specialization: ");
+println(engineering.employees[1].skills[1]);
+
+// Marketing Department
+let marketing = company.departments[1];
+print("Department: ");
+println(marketing.name);
+print("Budget: $");
+println(marketing.budget);
+print("Team Size: ");
+println(marketing.employees.length);
+
+totalBudget = totalBudget + marketing.budget;
+totalEmployees = totalEmployees + marketing.employees.length;
+
+println("Marketing Team:");
+print("  Manager: ");
+println(marketing.employees[0].name);
+print("  Expertise: ");
+println(marketing.employees[0].skills[0]);
+
+println("");
+println("=== Company Statistics ===");
+print("Total Departments: ");
+println(company.departments.length);
+print("Total Budget: $");
+println(totalBudget);
+print("Total Employees: ");
+println(totalEmployees);
+
+// Project tracking across departments
+println("");
+println("=== Active Projects ===");
+let allProjects: string[] = [];
+
+// Collect all projects from engineering
+let engProjects = engineering.employees[0].projects;
+allProjects = [engProjects[0], engProjects[1]];
+
+let devopsProjects = engineering.employees[1].projects;
+allProjects = [allProjects[0], allProjects[1], devopsProjects[0], devopsProjects[1]];
+
+let marketingProjects = marketing.employees[0].projects;
+allProjects = [allProjects[0], allProjects[1], allProjects[2], allProjects[3], marketingProjects[0], marketingProjects[1]];
+
+print("Total Active Projects: ");
+println(allProjects.length);
+println("Project List:");
+print("1. ");
+println(allProjects[0]);
+print("2. ");
+println(allProjects[1]);
+print("3. ");
+println(allProjects[2]);
+print("4. ");
+println(allProjects[3]);
+print("5. ");
+println(allProjects[4]);
+print("6. ");
+println(allProjects[5]);
+
+println("");
+println("=== Skill Matrix ===");
+// Analyze skills across the company
+print("JavaScript Developers: ");
+if (engineering.employees[0].skills[0] == "JavaScript") {
+    println("Alice Johnson");
+}
+
+print("Cloud Infrastructure: ");
+if (engineering.employees[1].skills[2] == "AWS") {
+    println("Bob Smith (AWS Certified)");
+}
+
+print("Marketing Analytics: ");
+if (marketing.employees[0].skills[2] == "Analytics") {
+    println("Carol Davis");
+}
+
+println("");
+println("=== System Complete ===");</code></pre>
+                        <div class="output" id="complex-data-example-output"></div>
                     </div>
                 </div>
             </section>
@@ -610,42 +833,61 @@ if (isPrime == 1) {
                         <h2>Fibonacci Sequence</h2>
                         <div class="code-example">
                             <div class="code-header">
-                                <span class="filename">fibonacci.csc</span>
-                                <button class="run-btn" onclick="runExample('fibonacci-example')">
+                                <span class="filename">data_structures.csc</span>
+                                <button class="run-btn" onclick="runExample('data-structures-example')">
                                     <i class="fas fa-play"></i> Run
                                 </button>
                             </div>
-                            <pre><code class="language-typescript" id="fibonacci-example">let limit: i32 = 8;
-let fib1: i32 = 0;
-let fib2: i32 = 1;
-let count: i32 = 0;
+                            <pre><code class="language-typescript" id="data-structures-example">// Comprehensive data structures example
+println("=== Data Structures Demo ===");
 
-print("Fibonacci sequence (first ");
-print(limit);
-println(" numbers):");
+// Array of numbers
+let fibonacci: i32[] = [0, 1, 1, 2, 3, 5, 8, 13];
+print("Fibonacci sequence: ");
+println(fibonacci);
 
-while (count < limit) {
-    if (count == 0) {
-        print("F(0) = ");
-        println(fib1);
-    } else {
-        if (count == 1) {
-            print("F(1) = ");
-            println(fib2);
-        } else {
-            let nextFib: i32 = fib1 + fib2;
-            print("F(");
-            print(count);
-            print(") = ");
-            println(nextFib);
-            
-            fib1 = fib2;
-            fib2 = nextFib;
-        }
-    }
-    count = count + 1;
-}</code></pre>
-                            <div class="output" id="fibonacci-example-output"></div>
+// Object representing a person
+let employee = {
+    name: "Sarah Connor",
+    id: 12345,
+    department: "Engineering",
+    skills: ["JavaScript", "Python", "Cypescript"],
+    active: true
+};
+
+println("Employee Information:");
+print("Name: ");
+println(employee.name);
+print("ID: ");
+println(employee.id);
+print("Department: ");
+println(employee.department);
+print("Skills: ");
+println(employee.skills);
+print("Active: ");
+println(employee.active);
+
+// Accessing nested data
+print("First skill: ");
+println(employee.skills[0]);
+print("Second skill: ");
+println(employee.skills[1]);
+
+// Array of objects
+let team = [
+    { name: "Alice", role: "Developer" },
+    { name: "Bob", role: "Designer" },
+    { name: "Charlie", role: "Manager" }
+];
+
+println("Team members:");
+println(team);
+
+print("Team leader: ");
+println(team[2].name);
+print("Developer: ");
+println(team[0].name);</code></pre>
+                            <div class="output" id="data-structures-example-output"></div>
                         </div>
                     </div>
                 </div>
@@ -669,14 +911,26 @@ while (count < limit) {
                     <textarea id="playground-code" class="playground-editor" placeholder="// Write your Cypescript code here...
 println(&quot;Hello from the playground!&quot;);
 
-let number: i32 = 42;
-print(&quot;The answer is: &quot;);
-println(number);">// Write your Cypescript code here...
+let numbers: i32[] = [1, 2, 3];
+println(numbers);
+
+let person = { name: &quot;Alice&quot;, age: 25 };
+println(person.name);">// Write your Cypescript code here...
 println("Hello from the playground!");
 
-let number: i32 = 42;
-print("The answer is: ");
-println(number);</textarea>
+// Arrays
+let numbers: i32[] = [1, 2, 3, 4, 5];
+print("Array: ");
+println(numbers);
+print("First element: ");
+println(numbers[0]);
+
+// Objects
+let person = { name: "Alice", age: 25 };
+print("Name: ");
+println(person.name);
+print("Age: ");
+println(person.age);</textarea>
                     <div class="output" id="playground-output"></div>
                 </div>
             </section>

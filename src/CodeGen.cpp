@@ -43,6 +43,22 @@ llvm::Type *CodeGen::getLLVMType(const std::string &typeName)
     {
         return llvm::Type::getInt1Ty(m_context);
     }
+    else if (typeName.length() > 2 && typeName.substr(typeName.length() - 2) == "[]")
+    {
+        // Array type like "i32[]"
+        std::string elementTypeName = typeName.substr(0, typeName.length() - 2);
+        llvm::Type *elementType = getLLVMType(elementTypeName);
+        
+        // For now, return a pointer to the element type (representing a dynamic array)
+        // In a full implementation, we might use a struct with size and data pointer
+        return llvm::PointerType::get(elementType, 0);
+    }
+    else if (typeName == "auto")
+    {
+        // Type inference - for now, default to i32
+        // In a full implementation, we'd analyze the initializer
+        return llvm::Type::getInt32Ty(m_context);
+    }
     
     std::cerr << "Codegen Error: Unknown type name '" << typeName << "'\n";
     throw std::runtime_error("Unknown type name in getLLVMType: " + typeName);
@@ -144,7 +160,33 @@ void CodeGen::visit(StatementNode *node)
 
 void CodeGen::visit(VariableDeclarationNode *node)
 {
-    llvm::Type *varLLVMType = getLLVMType(node->typeName);
+    llvm::Type *varLLVMType;
+    
+    // Handle type inference
+    if (node->typeName == "auto") {
+        // Infer type from initializer
+        if (node->initializer) {
+            // Try to determine type from the initializer
+            if (auto *strLit = dynamic_cast<StringLiteralNode*>(node->initializer.get())) {
+                varLLVMType = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+            } else if (auto *intLit = dynamic_cast<IntegerLiteralNode*>(node->initializer.get())) {
+                varLLVMType = llvm::Type::getInt32Ty(m_context);
+            } else if (auto *arrLit = dynamic_cast<ArrayLiteralNode*>(node->initializer.get())) {
+                // For arrays, use pointer to element type
+                llvm::Type *elementType = llvm::Type::getInt32Ty(m_context); // Default to i32
+                varLLVMType = llvm::PointerType::get(elementType, 0);
+            } else {
+                // Default to i32 for unknown types
+                varLLVMType = llvm::Type::getInt32Ty(m_context);
+                std::cerr << "Codegen Warning: Could not infer type for variable '" << node->variableName << "', defaulting to i32\n";
+            }
+        } else {
+            varLLVMType = llvm::Type::getInt32Ty(m_context);
+            std::cerr << "Codegen Warning: No initializer for auto variable '" << node->variableName << "', defaulting to i32\n";
+        }
+    } else {
+        varLLVMType = getLLVMType(node->typeName);
+    }
     
     // Create alloca at the beginning of the function
     llvm::Function *currentFunction = m_builder.GetInsertBlock()->getParent();
@@ -201,6 +243,22 @@ llvm::Value *CodeGen::visit(ExpressionNode *node)
     {
         return visit(binNode);
     }
+    else if (auto *arrLitNode = dynamic_cast<ArrayLiteralNode *>(node))
+    {
+        return visit(arrLitNode);
+    }
+    else if (auto *objLitNode = dynamic_cast<ObjectLiteralNode *>(node))
+    {
+        return visit(objLitNode);
+    }
+    else if (auto *arrAccNode = dynamic_cast<ArrayAccessNode *>(node))
+    {
+        return visit(arrAccNode);
+    }
+    else if (auto *objAccNode = dynamic_cast<ObjectAccessNode *>(node))
+    {
+        return visit(objAccNode);
+    }
     
     std::cerr << "Codegen Error: Unsupported expression type in visit(ExpressionNode*).\n";
     throw std::runtime_error("Unsupported expression type in codegen.");
@@ -240,10 +298,45 @@ llvm::Value *CodeGen::visit(BinaryExpressionNode *node)
         throw std::runtime_error("Codegen Error: Failed to generate operands for binary expression");
     }
     
-    // For now, we only support integer arithmetic
-    // TODO: Add type checking and support for other types
+    // Check if we're dealing with strings
+    bool isStringComparison = leftVal->getType()->isPointerTy() && rightVal->getType()->isPointerTy();
+    
+    // Handle string comparisons
+    if (isStringComparison && (node->op == BinaryExpressionNode::EQUAL || node->op == BinaryExpressionNode::NOT_EQUAL)) {
+        // For string comparison, we need to call strcmp
+        // First, get or create the strcmp function declaration
+        llvm::Function *strcmpFunc = m_module->getFunction("strcmp");
+        if (!strcmpFunc) {
+            // Declare strcmp: int strcmp(const char* s1, const char* s2)
+            llvm::FunctionType *strcmpType = llvm::FunctionType::get(
+                llvm::Type::getInt32Ty(m_context),
+                {llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                 llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0)},
+                false
+            );
+            strcmpFunc = llvm::Function::Create(strcmpType, llvm::Function::ExternalLinkage, "strcmp", m_module.get());
+        }
+        
+        // Call strcmp
+        llvm::Value *cmpResult = m_builder.CreateCall(strcmpFunc, {leftVal, rightVal}, "strcmp_result");
+        
+        // strcmp returns 0 if strings are equal
+        llvm::Value *zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), 0);
+        
+        if (node->op == BinaryExpressionNode::EQUAL) {
+            return m_builder.CreateICmpEQ(cmpResult, zero, "streq");
+        } else { // NOT_EQUAL
+            return m_builder.CreateICmpNE(cmpResult, zero, "strne");
+        }
+    }
+    
+    // For arithmetic and integer comparisons, both operands must be integers
     if (!leftVal->getType()->isIntegerTy() || !rightVal->getType()->isIntegerTy()) {
-        throw std::runtime_error("Codegen Error: Binary operations currently only support integers");
+        if (isStringComparison) {
+            throw std::runtime_error("Codegen Error: String operations other than == and != are not supported yet");
+        } else {
+            throw std::runtime_error("Codegen Error: Binary operations currently only support integers and string comparisons");
+        }
     }
     
     // Generate the appropriate LLVM instruction based on the operator
@@ -563,4 +656,94 @@ llvm::Module *CodeGen::generate(ProgramNode *astRoot)
     }
     
     return m_module.get();
+}
+
+// Array literal implementation - basic version
+llvm::Value *CodeGen::visit(ArrayLiteralNode *node)
+{
+    // For now, implement a simple array as a struct containing size and data pointer
+    // This is a simplified implementation - a full implementation would need proper memory management
+    
+    if (node->elements.empty()) {
+        // Empty array - return null pointer for now
+        return llvm::ConstantPointerNull::get(llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0));
+    }
+    
+    // For simplicity, assume all elements are integers for now
+    // In a full implementation, we'd need proper type checking
+    
+    // Create an array type
+    llvm::Type *elementType = llvm::Type::getInt32Ty(m_context);
+    llvm::ArrayType *arrayType = llvm::ArrayType::get(elementType, node->elements.size());
+    
+    // Allocate space for the array
+    llvm::AllocaInst *arrayAlloca = m_builder.CreateAlloca(arrayType, nullptr, "array_tmp");
+    
+    // Initialize array elements
+    for (size_t i = 0; i < node->elements.size(); ++i) {
+        llvm::Value *elementValue = visit(node->elements[i].get());
+        if (!elementValue) {
+            throw std::runtime_error("Codegen Error: Failed to generate array element");
+        }
+        
+        // Get pointer to array element
+        llvm::Value *indices[] = {
+            llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), i)
+        };
+        llvm::Value *elementPtr = m_builder.CreateGEP(arrayType, arrayAlloca, indices, "element_ptr");
+        
+        // Store the value
+        m_builder.CreateStore(elementValue, elementPtr);
+    }
+    
+    // Return pointer to the array
+    return arrayAlloca;
+}
+
+// Object literal implementation - basic version
+llvm::Value *CodeGen::visit(ObjectLiteralNode *node)
+{
+    // For now, objects are not fully supported in native compilation
+    // This is a placeholder that will throw an error
+    throw std::runtime_error("Codegen Error: Object literals are not yet supported in native compilation. Use the browser interpreter for full object support.");
+}
+
+// Array access implementation - basic version
+llvm::Value *CodeGen::visit(ArrayAccessNode *node)
+{
+    // Get the array value
+    llvm::Value *arrayValue = visit(node->array.get());
+    if (!arrayValue) {
+        throw std::runtime_error("Codegen Error: Failed to generate array for access");
+    }
+    
+    // Get the index value
+    llvm::Value *indexValue = visit(node->index.get());
+    if (!indexValue) {
+        throw std::runtime_error("Codegen Error: Failed to generate array index");
+    }
+    
+    // For now, assume we're accessing an i32 array
+    llvm::Type *elementType = llvm::Type::getInt32Ty(m_context);
+    
+    // Create GEP to access array element
+    llvm::Value *indices[] = {
+        llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), 0),
+        indexValue
+    };
+    
+    // Get the array type - this is simplified, in reality we'd need proper type tracking
+    llvm::ArrayType *arrayType = llvm::ArrayType::get(elementType, 0); // Size 0 as placeholder
+    llvm::Value *elementPtr = m_builder.CreateGEP(arrayType, arrayValue, indices, "array_access");
+    
+    // Load and return the value
+    return m_builder.CreateLoad(elementType, elementPtr, "array_element");
+}
+
+// Object access implementation - basic version
+llvm::Value *CodeGen::visit(ObjectAccessNode *node)
+{
+    // For now, object access is not fully supported in native compilation
+    throw std::runtime_error("Codegen Error: Object property access is not yet supported in native compilation. Use the browser interpreter for full object support.");
 }
