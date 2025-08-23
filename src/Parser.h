@@ -33,6 +33,7 @@ private:
     std::unique_ptr<ForStatementNode> parseForStatement();          // For traditional for loops
     std::unique_ptr<DoWhileStatementNode> parseDoWhileStatement();  // For do-while loops
     std::unique_ptr<StatementNode> parseAssignmentStatement();      // For variable assignments
+    std::unique_ptr<StatementNode> parseArrayAssignmentStatement(); // For array element assignments
     
     // Expression parsing with operator precedence
     std::unique_ptr<ExpressionNode> parseExpression();

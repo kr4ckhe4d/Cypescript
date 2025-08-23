@@ -19,6 +19,8 @@ class ArrayAccessNode;
 class ObjectLiteralNode;
 class ObjectAccessNode;
 class VariableDeclarationNode;
+class AssignmentStatementNode;
+class ArrayAssignmentStatementNode;
 class StatementNode;
 class ExpressionNode;
 class ProgramNode;
@@ -246,6 +248,41 @@ public:
         os << "AssignmentStatementNode: " << variableName << " =\n";
         if (value) {
             value->printNode(os, indent + 1);
+        }
+    }
+};
+
+// Array assignment statement for array element updates (arr[index] = value)
+class ArrayAssignmentStatementNode : public StatementNode
+{
+public:
+    std::unique_ptr<ExpressionNode> array;
+    std::unique_ptr<ExpressionNode> index;
+    std::unique_ptr<ExpressionNode> value;
+    
+    ArrayAssignmentStatementNode(std::unique_ptr<ExpressionNode> arr, 
+                                std::unique_ptr<ExpressionNode> idx, 
+                                std::unique_ptr<ExpressionNode> val)
+        : array(std::move(arr)), index(std::move(idx)), value(std::move(val)) {}
+    
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "ArrayAssignmentStatementNode:\n";
+        printIndent(os, indent + 1);
+        os << "Array:\n";
+        if (array) {
+            array->printNode(os, indent + 2);
+        }
+        printIndent(os, indent + 1);
+        os << "Index:\n";
+        if (index) {
+            index->printNode(os, indent + 2);
+        }
+        printIndent(os, indent + 1);
+        os << "Value:\n";
+        if (value) {
+            value->printNode(os, indent + 2);
         }
     }
 };

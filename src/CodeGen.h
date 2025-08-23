@@ -34,6 +34,7 @@ class WhileStatementNode;      // For while loops
 class ForStatementNode;        // For traditional for loops
 class DoWhileStatementNode;    // For do-while loops
 class AssignmentStatementNode; // For variable assignments
+class ArrayAssignmentStatementNode; // For array element assignments
 
 class CodeGen
 {
@@ -45,6 +46,10 @@ private:
     // Symbol Table: Maps variable names to their allocated memory location (AllocaInst)
     // This will need to be enhanced for scopes later.
     std::map<std::string, llvm::AllocaInst *> namedValues;
+    
+    // Type tracking: Maps variable names to their type information
+    // For arrays, stores the element type (e.g., "i32" for i32[], "string" for string[])
+    std::map<std::string, std::string> variableTypes;
 
     // Helper to get LLVM type from our string type names
     llvm::Type *getLLVMType(const std::string &typeName);
@@ -59,6 +64,7 @@ private:
     void visit(ForStatementNode *node);        // For traditional for loops
     void visit(DoWhileStatementNode *node);    // For do-while loops
     void visit(AssignmentStatementNode *node); // For variable assignments
+    void visit(ArrayAssignmentStatementNode *node); // For array element assignments
 
     llvm::Value *visit(ExpressionNode *node); // Dispatcher
     llvm::Value *visit(StringLiteralNode *node);

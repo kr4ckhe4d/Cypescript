@@ -100,9 +100,36 @@ std::unique_ptr<StatementNode> Parser::parseStatement()
     }
     else if (peek().type == TOK_IDENTIFIER)
     {
-        // Look ahead to see if this is an assignment (identifier = expression)
+        // Look ahead to see what kind of statement this is
         if (peek(1).type == TOK_EQUAL) {
+            // Simple variable assignment: identifier = expression
             return parseAssignmentStatement();
+        }
+        else if (peek(1).type == TOK_LBRACKET) {
+            // Could be array assignment: identifier[index] = value
+            // Look further ahead to check for assignment pattern
+            size_t pos = 2;
+            int bracketDepth = 1;
+            
+            // Skip through the array index expression to find the closing bracket
+            while (pos < m_tokens.size() && bracketDepth > 0) {
+                if (m_tokens[m_currentPos + pos].type == TOK_LBRACKET) {
+                    bracketDepth++;
+                } else if (m_tokens[m_currentPos + pos].type == TOK_RBRACKET) {
+                    bracketDepth--;
+                }
+                pos++;
+            }
+            
+            // Check if we have an assignment after the closing bracket
+            if (pos < m_tokens.size() && m_tokens[m_currentPos + pos].type == TOK_EQUAL) {
+                return parseArrayAssignmentStatement();
+            } else {
+                // Not an assignment, this is an unexpected statement
+                std::string errorMsg = std::string("Unexpected token at start of statement: ") + 
+                                     tokenTypeToString(peek().type) + " ('" + peek().value + "')";
+                throw std::runtime_error(errorMsg);
+            }
         }
         else {
             // Could be other expression statements in the future
@@ -241,6 +268,27 @@ std::unique_ptr<StatementNode> Parser::parseAssignmentStatement()
     consume(TOK_SEMICOLON, "Expected ';' after assignment");
     
     return std::make_unique<AssignmentStatementNode>(varNameToken.value, std::move(value));
+}
+
+std::unique_ptr<StatementNode> Parser::parseArrayAssignmentStatement()
+{
+    // Parse array[index] = value;
+    
+    // Parse the array identifier
+    const Token &arrayNameToken = consume(TOK_IDENTIFIER, "Expected array name");
+    std::unique_ptr<ExpressionNode> arrayExpr = std::make_unique<VariableExpressionNode>(arrayNameToken.value);
+    
+    // Parse [index]
+    consume(TOK_LBRACKET, "Expected '[' for array access");
+    std::unique_ptr<ExpressionNode> indexExpr = parseExpression();
+    consume(TOK_RBRACKET, "Expected ']' after array index");
+    
+    // Parse = value
+    consume(TOK_EQUAL, "Expected '=' in array assignment");
+    std::unique_ptr<ExpressionNode> valueExpr = parseExpression();
+    consume(TOK_SEMICOLON, "Expected ';' after array assignment");
+    
+    return std::make_unique<ArrayAssignmentStatementNode>(std::move(arrayExpr), std::move(indexExpr), std::move(valueExpr));
 }
 
 std::unique_ptr<ForStatementNode> Parser::parseForStatement()
