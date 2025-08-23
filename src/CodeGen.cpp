@@ -115,6 +115,10 @@ void CodeGen::visit(StatementNode *node)
     {
         visit(callNode);
     }
+    else if (auto *ifNode = dynamic_cast<IfStatementNode *>(node))
+    {
+        visit(ifNode);
+    }
     else
     {
         std::cerr << "Codegen Error: Unsupported statement type.\n";
@@ -177,6 +181,10 @@ llvm::Value *CodeGen::visit(ExpressionNode *node)
     {
         return visit(varNode);
     }
+    else if (auto *binNode = dynamic_cast<BinaryExpressionNode *>(node))
+    {
+        return visit(binNode);
+    }
     
     std::cerr << "Codegen Error: Unsupported expression type in visit(ExpressionNode*).\n";
     throw std::runtime_error("Unsupported expression type in codegen.");
@@ -204,6 +212,110 @@ llvm::Value *CodeGen::visit(VariableExpressionNode *node)
     
     // Load the value from the memory location
     return m_builder.CreateLoad(allocaInst->getAllocatedType(), allocaInst, node->name + "_val");
+}
+
+llvm::Value *CodeGen::visit(BinaryExpressionNode *node)
+{
+    // Generate code for left and right operands
+    llvm::Value *leftVal = visit(node->left.get());
+    llvm::Value *rightVal = visit(node->right.get());
+    
+    if (!leftVal || !rightVal) {
+        throw std::runtime_error("Codegen Error: Failed to generate operands for binary expression");
+    }
+    
+    // For now, we only support integer arithmetic
+    // TODO: Add type checking and support for other types
+    if (!leftVal->getType()->isIntegerTy() || !rightVal->getType()->isIntegerTy()) {
+        throw std::runtime_error("Codegen Error: Binary operations currently only support integers");
+    }
+    
+    // Generate the appropriate LLVM instruction based on the operator
+    switch (node->op) {
+        // Arithmetic operations
+        case BinaryExpressionNode::ADD:
+            return m_builder.CreateAdd(leftVal, rightVal, "addtmp");
+        case BinaryExpressionNode::SUBTRACT:
+            return m_builder.CreateSub(leftVal, rightVal, "subtmp");
+        case BinaryExpressionNode::MULTIPLY:
+            return m_builder.CreateMul(leftVal, rightVal, "multmp");
+        case BinaryExpressionNode::DIVIDE:
+            // Use signed division
+            return m_builder.CreateSDiv(leftVal, rightVal, "divtmp");
+        case BinaryExpressionNode::MODULO:
+            // Use signed remainder
+            return m_builder.CreateSRem(leftVal, rightVal, "modtmp");
+            
+        // Comparison operations (return i1 boolean values)
+        case BinaryExpressionNode::EQUAL:
+            return m_builder.CreateICmpEQ(leftVal, rightVal, "eqtmp");
+        case BinaryExpressionNode::NOT_EQUAL:
+            return m_builder.CreateICmpNE(leftVal, rightVal, "netmp");
+        case BinaryExpressionNode::LESS_THAN:
+            return m_builder.CreateICmpSLT(leftVal, rightVal, "lttmp");
+        case BinaryExpressionNode::LESS_EQUAL:
+            return m_builder.CreateICmpSLE(leftVal, rightVal, "letmp");
+        case BinaryExpressionNode::GREATER_THAN:
+            return m_builder.CreateICmpSGT(leftVal, rightVal, "gttmp");
+        case BinaryExpressionNode::GREATER_EQUAL:
+            return m_builder.CreateICmpSGE(leftVal, rightVal, "getmp");
+            
+        default:
+            throw std::runtime_error("Codegen Error: Unknown binary operator");
+    }
+}
+
+void CodeGen::visit(IfStatementNode *node)
+{
+    // Generate code for the condition
+    llvm::Value *conditionVal = visit(node->condition.get());
+    if (!conditionVal) {
+        throw std::runtime_error("Codegen Error: Failed to generate condition for if statement");
+    }
+    
+    // Get the current function
+    llvm::Function *currentFunction = m_builder.GetInsertBlock()->getParent();
+    
+    // Create basic blocks for then, else (optional), and merge
+    llvm::BasicBlock *thenBlock = llvm::BasicBlock::Create(m_context, "then", currentFunction);
+    llvm::BasicBlock *elseBlock = nullptr;
+    llvm::BasicBlock *mergeBlock = llvm::BasicBlock::Create(m_context, "ifcont", currentFunction);
+    
+    if (!node->elseStatements.empty()) {
+        elseBlock = llvm::BasicBlock::Create(m_context, "else", currentFunction);
+    }
+    
+    // Create conditional branch
+    if (elseBlock) {
+        m_builder.CreateCondBr(conditionVal, thenBlock, elseBlock);
+    } else {
+        m_builder.CreateCondBr(conditionVal, thenBlock, mergeBlock);
+    }
+    
+    // Generate then block
+    m_builder.SetInsertPoint(thenBlock);
+    for (const auto &stmt : node->thenStatements) {
+        visit(stmt.get());
+    }
+    // Branch to merge block (if we haven't already branched elsewhere)
+    if (!m_builder.GetInsertBlock()->getTerminator()) {
+        m_builder.CreateBr(mergeBlock);
+    }
+    
+    // Generate else block if it exists
+    if (elseBlock) {
+        m_builder.SetInsertPoint(elseBlock);
+        for (const auto &stmt : node->elseStatements) {
+            visit(stmt.get());
+        }
+        // Branch to merge block (if we haven't already branched elsewhere)
+        if (!m_builder.GetInsertBlock()->getTerminator()) {
+            m_builder.CreateBr(mergeBlock);
+        }
+    }
+    
+    // Continue with merge block
+    m_builder.SetInsertPoint(mergeBlock);
 }
 
 void CodeGen::visit(FunctionCallNode *node)

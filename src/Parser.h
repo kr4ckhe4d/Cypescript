@@ -28,11 +28,18 @@ private:
     std::unique_ptr<ProgramNode> parseProgram();
     std::unique_ptr<StatementNode> parseStatement();
     std::unique_ptr<FunctionCallNode> parseFunctionCallStatement(); // Specific for print(...)
-    std::unique_ptr<ExpressionNode> parseExpression(); // We only need string literals for MVP
+    std::unique_ptr<IfStatementNode> parseIfStatement();            // For if/else statements
+    
+    // Expression parsing with operator precedence
+    std::unique_ptr<ExpressionNode> parseExpression();
+    std::unique_ptr<ExpressionNode> parseComparisonExpression();    // == != < <= > >=
+    std::unique_ptr<ExpressionNode> parseAdditionExpression();      // + -
+    std::unique_ptr<ExpressionNode> parseMultiplicationExpression(); // * / %
+    std::unique_ptr<ExpressionNode> parsePrimaryExpression();       // literals, variables, (expr)
+    
     std::unique_ptr<StringLiteralNode> parseStringLiteral();
     std::unique_ptr<IntegerLiteralNode> parseIntegerLiteral();
     std::unique_ptr<VariableExpressionNode> parseVariableExpression();
-    std::unique_ptr<ExpressionNode> parsePrimaryExpression();
     std::unique_ptr<VariableDeclarationNode> parseVariableDeclarationStatement();
 
 public:

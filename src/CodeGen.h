@@ -24,6 +24,8 @@ class StringLiteralNode;
 class IntegerLiteralNode;      // New
 class VariableExpressionNode;  // New
 class VariableDeclarationNode; // New
+class BinaryExpressionNode;    // For arithmetic operations
+class IfStatementNode;         // For if/else statements
 
 class CodeGen
 {
@@ -44,11 +46,13 @@ private:
     void visit(StatementNode *node);           // Dispatcher
     void visit(VariableDeclarationNode *node); // New
     void visit(FunctionCallNode *node);
+    void visit(IfStatementNode *node);         // For if/else statements
 
     llvm::Value *visit(ExpressionNode *node); // Dispatcher
     llvm::Value *visit(StringLiteralNode *node);
     llvm::Value *visit(IntegerLiteralNode *node);     // New
     llvm::Value *visit(VariableExpressionNode *node); // New
+    llvm::Value *visit(BinaryExpressionNode *node);   // For arithmetic operations
 
     llvm::FunctionCallee getOrDeclarePuts();
     llvm::FunctionCallee getOrDeclarePrintf(); // New: For printf for integers

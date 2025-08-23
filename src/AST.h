@@ -91,7 +91,111 @@ public:
     }
 };
 
+// Binary expression for arithmetic and comparison operations
+class BinaryExpressionNode : public ExpressionNode
+{
+public:
+    enum Operator {
+        // Arithmetic operators
+        ADD,        // +
+        SUBTRACT,   // -
+        MULTIPLY,   // *
+        DIVIDE,     // /
+        MODULO,     // %
+        
+        // Comparison operators
+        EQUAL,          // ==
+        NOT_EQUAL,      // !=
+        LESS_THAN,      // <
+        LESS_EQUAL,     // <=
+        GREATER_THAN,   // >
+        GREATER_EQUAL   // >=
+    };
+    
+    Operator op;
+    std::unique_ptr<ExpressionNode> left;
+    std::unique_ptr<ExpressionNode> right;
+    
+    BinaryExpressionNode(Operator operation, 
+                        std::unique_ptr<ExpressionNode> leftExpr, 
+                        std::unique_ptr<ExpressionNode> rightExpr)
+        : op(operation), left(std::move(leftExpr)), right(std::move(rightExpr)) {}
+    
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "BinaryExpressionNode: " << operatorToString(op) << "\n";
+        printIndent(os, indent + 1);
+        os << "Left:\n";
+        if (left) {
+            left->printNode(os, indent + 2);
+        }
+        printIndent(os, indent + 1);
+        os << "Right:\n";
+        if (right) {
+            right->printNode(os, indent + 2);
+        }
+    }
+    
+private:
+    const char* operatorToString(Operator op) const {
+        switch (op) {
+            case ADD: return "+";
+            case SUBTRACT: return "-";
+            case MULTIPLY: return "*";
+            case DIVIDE: return "/";
+            case MODULO: return "%";
+            case EQUAL: return "==";
+            case NOT_EQUAL: return "!=";
+            case LESS_THAN: return "<";
+            case LESS_EQUAL: return "<=";
+            case GREATER_THAN: return ">";
+            case GREATER_EQUAL: return ">=";
+            default: return "UNKNOWN";
+        }
+    }
+};
+
 // --- Concrete Statement Node Types ---
+
+// If statement for control flow
+class IfStatementNode : public StatementNode
+{
+public:
+    std::unique_ptr<ExpressionNode> condition;
+    std::vector<std::unique_ptr<StatementNode>> thenStatements;
+    std::vector<std::unique_ptr<StatementNode>> elseStatements; // Optional
+    
+    explicit IfStatementNode(std::unique_ptr<ExpressionNode> cond)
+        : condition(std::move(cond)) {}
+    
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "IfStatementNode:\n";
+        printIndent(os, indent + 1);
+        os << "Condition:\n";
+        if (condition) {
+            condition->printNode(os, indent + 2);
+        }
+        printIndent(os, indent + 1);
+        os << "Then:\n";
+        for (const auto &stmt : thenStatements) {
+            if (stmt) {
+                stmt->printNode(os, indent + 2);
+            }
+        }
+        if (!elseStatements.empty()) {
+            printIndent(os, indent + 1);
+            os << "Else:\n";
+            for (const auto &stmt : elseStatements) {
+                if (stmt) {
+                    stmt->printNode(os, indent + 2);
+                }
+            }
+        }
+    }
+};
 
 class FunctionCallNode : public StatementNode
 {

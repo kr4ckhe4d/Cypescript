@@ -78,11 +78,15 @@ std::unique_ptr<StatementNode> Parser::parseStatement()
     {
         return parseVariableDeclarationStatement();
     }
+    else if (peek().type == TOK_IF)
+    {
+        return parseIfStatement();
+    }
     else if (peek().type == TOK_IDENTIFIER && peek().value == "print")
     { // Assuming print is not a general expression start
         return parseFunctionCallStatement();
     }
-    // Add other statement types here (if, while, return, expression statements etc.)
+    // Add other statement types here (while, return, expression statements etc.)
     else
     {
         // Corrected string concatenation
@@ -132,6 +136,41 @@ std::unique_ptr<VariableDeclarationNode> Parser::parseVariableDeclarationStateme
     return std::make_unique<VariableDeclarationNode>(varName, typeName, std::move(initializer));
 }
 
+std::unique_ptr<IfStatementNode> Parser::parseIfStatement()
+{
+    consume(TOK_IF, "Expected 'if' keyword");
+    consume(TOK_LPAREN, "Expected '(' after 'if'");
+    
+    std::unique_ptr<ExpressionNode> condition = parseExpression();
+    
+    consume(TOK_RPAREN, "Expected ')' after if condition");
+    consume(TOK_LBRACE, "Expected '{' to start if body");
+    
+    auto ifNode = std::make_unique<IfStatementNode>(std::move(condition));
+    
+    // Parse then statements
+    while (peek().type != TOK_RBRACE && !isAtEnd()) {
+        ifNode->thenStatements.push_back(parseStatement());
+    }
+    
+    consume(TOK_RBRACE, "Expected '}' to end if body");
+    
+    // Check for optional else clause
+    if (peek().type == TOK_ELSE) {
+        advance(); // consume 'else'
+        consume(TOK_LBRACE, "Expected '{' to start else body");
+        
+        // Parse else statements
+        while (peek().type != TOK_RBRACE && !isAtEnd()) {
+            ifNode->elseStatements.push_back(parseStatement());
+        }
+        
+        consume(TOK_RBRACE, "Expected '}' to end else body");
+    }
+    
+    return ifNode;
+}
+
 std::unique_ptr<FunctionCallNode> Parser::parseFunctionCallStatement()
 {
     const Token &funcNameToken = consume(TOK_IDENTIFIER, "Expected function name"); // e.g. "print"
@@ -156,12 +195,96 @@ std::unique_ptr<FunctionCallNode> Parser::parseFunctionCallStatement()
     return callNode;
 }
 
-// Expression Parsing (currently very simple, will need operator precedence later)
+// Expression Parsing with operator precedence
+// Grammar:
+// expression -> comparison
+// comparison -> addition ( ( "==" | "!=" | "<" | "<=" | ">" | ">=" ) addition )*
+// addition -> multiplication ( ( "+" | "-" ) multiplication )*
+// multiplication -> primary ( ( "*" | "/" | "%" ) primary )*
+// primary -> NUMBER | STRING | IDENTIFIER | "(" expression ")"
+
 std::unique_ptr<ExpressionNode> Parser::parseExpression()
 {
-    // For now, our expressions are just primary expressions (literals or identifiers)
-    // This will be expanded for arithmetic, logical ops, etc.
-    return parsePrimaryExpression();
+    return parseComparisonExpression();
+}
+
+std::unique_ptr<ExpressionNode> Parser::parseComparisonExpression()
+{
+    std::unique_ptr<ExpressionNode> expr = parseAdditionExpression();
+    
+    while (peek().type == TOK_EQUAL_EQUAL || peek().type == TOK_NOT_EQUAL ||
+           peek().type == TOK_LESS || peek().type == TOK_LESS_EQUAL ||
+           peek().type == TOK_GREATER || peek().type == TOK_GREATER_EQUAL) {
+        
+        TokenType operatorType = peek().type;
+        advance(); // consume operator
+        
+        std::unique_ptr<ExpressionNode> right = parseAdditionExpression();
+        
+        BinaryExpressionNode::Operator op;
+        switch (operatorType) {
+            case TOK_EQUAL_EQUAL: op = BinaryExpressionNode::EQUAL; break;
+            case TOK_NOT_EQUAL: op = BinaryExpressionNode::NOT_EQUAL; break;
+            case TOK_LESS: op = BinaryExpressionNode::LESS_THAN; break;
+            case TOK_LESS_EQUAL: op = BinaryExpressionNode::LESS_EQUAL; break;
+            case TOK_GREATER: op = BinaryExpressionNode::GREATER_THAN; break;
+            case TOK_GREATER_EQUAL: op = BinaryExpressionNode::GREATER_EQUAL; break;
+            default:
+                throw std::runtime_error("Unknown comparison operator");
+        }
+        
+        expr = std::make_unique<BinaryExpressionNode>(op, std::move(expr), std::move(right));
+    }
+    
+    return expr;
+}
+
+std::unique_ptr<ExpressionNode> Parser::parseAdditionExpression()
+{
+    std::unique_ptr<ExpressionNode> expr = parseMultiplicationExpression();
+    
+    while (peek().type == TOK_PLUS || peek().type == TOK_MINUS) {
+        TokenType operatorType = peek().type;
+        advance(); // consume operator
+        
+        std::unique_ptr<ExpressionNode> right = parseMultiplicationExpression();
+        
+        BinaryExpressionNode::Operator op;
+        if (operatorType == TOK_PLUS) {
+            op = BinaryExpressionNode::ADD;
+        } else {
+            op = BinaryExpressionNode::SUBTRACT;
+        }
+        
+        expr = std::make_unique<BinaryExpressionNode>(op, std::move(expr), std::move(right));
+    }
+    
+    return expr;
+}
+
+std::unique_ptr<ExpressionNode> Parser::parseMultiplicationExpression()
+{
+    std::unique_ptr<ExpressionNode> expr = parsePrimaryExpression();
+    
+    while (peek().type == TOK_STAR || peek().type == TOK_SLASH || peek().type == TOK_PERCENT) {
+        TokenType operatorType = peek().type;
+        advance(); // consume operator
+        
+        std::unique_ptr<ExpressionNode> right = parsePrimaryExpression();
+        
+        BinaryExpressionNode::Operator op;
+        if (operatorType == TOK_STAR) {
+            op = BinaryExpressionNode::MULTIPLY;
+        } else if (operatorType == TOK_SLASH) {
+            op = BinaryExpressionNode::DIVIDE;
+        } else {
+            op = BinaryExpressionNode::MODULO;
+        }
+        
+        expr = std::make_unique<BinaryExpressionNode>(op, std::move(expr), std::move(right));
+    }
+    
+    return expr;
 }
 
 std::unique_ptr<ExpressionNode> Parser::parsePrimaryExpression()
@@ -177,6 +300,14 @@ std::unique_ptr<ExpressionNode> Parser::parsePrimaryExpression()
     else if (peek().type == TOK_IDENTIFIER)
     {
         return parseVariableExpression();
+    }
+    else if (peek().type == TOK_LPAREN)
+    {
+        // Parenthesized expression
+        advance(); // consume '('
+        std::unique_ptr<ExpressionNode> expr = parseExpression();
+        consume(TOK_RPAREN, "Expected ')' after expression");
+        return expr;
     }
     // Add other primary expressions: ( expression ), function calls if they are expressions, etc.
     else
