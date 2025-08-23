@@ -540,25 +540,39 @@ std::unique_ptr<ArrayLiteralNode> Parser::parseArrayLiteral()
 {
     consume(TOK_LBRACKET, "Expected '[' to start array literal");
     
-    // For now, assume i32 arrays - we can enhance this later
-    auto arrayNode = std::make_unique<ArrayLiteralNode>("i32");
-    
     // Handle empty array []
     if (peek().type == TOK_RBRACKET) {
         advance(); // consume ']'
-        return arrayNode;
+        // Default to i32 for empty arrays
+        return std::make_unique<ArrayLiteralNode>("i32");
     }
     
-    // Parse array elements
-    do {
-        arrayNode->elements.push_back(parseExpression());
+    // Parse first element to infer type
+    auto firstElement = parseExpression();
+    std::string elementType = "i32"; // Default
+    
+    // Try to infer type from first element
+    if (auto *strLit = dynamic_cast<StringLiteralNode*>(firstElement.get())) {
+        elementType = "string";
+    } else if (auto *intLit = dynamic_cast<IntegerLiteralNode*>(firstElement.get())) {
+        elementType = "i32";
+    }
+    // Add more type inference as needed
+    
+    auto arrayNode = std::make_unique<ArrayLiteralNode>(elementType);
+    arrayNode->elements.push_back(std::move(firstElement));
+    
+    // Parse remaining elements
+    while (peek().type == TOK_COMMA) {
+        advance(); // consume ','
         
-        if (peek().type == TOK_COMMA) {
-            advance(); // consume ','
-        } else {
+        if (peek().type == TOK_RBRACKET) {
+            // Trailing comma is allowed
             break;
         }
-    } while (peek().type != TOK_RBRACKET && !isAtEnd());
+        
+        arrayNode->elements.push_back(parseExpression());
+    }
     
     consume(TOK_RBRACKET, "Expected ']' to close array literal");
     return arrayNode;
