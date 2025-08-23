@@ -82,9 +82,34 @@ std::unique_ptr<StatementNode> Parser::parseStatement()
     {
         return parseIfStatement();
     }
-    else if (peek().type == TOK_IDENTIFIER && peek().value == "print")
-    { // Assuming print is not a general expression start
+    else if (peek().type == TOK_WHILE)
+    {
+        return parseWhileStatement();
+    }
+    else if (peek().type == TOK_FOR)
+    {
+        return parseForStatement();
+    }
+    else if (peek().type == TOK_DO)
+    {
+        return parseDoWhileStatement();
+    }
+    else if (peek().type == TOK_IDENTIFIER && (peek().value == "print" || peek().value == "println"))
+    { // Handle both print and println function calls
         return parseFunctionCallStatement();
+    }
+    else if (peek().type == TOK_IDENTIFIER)
+    {
+        // Look ahead to see if this is an assignment (identifier = expression)
+        if (peek(1).type == TOK_EQUAL) {
+            return parseAssignmentStatement();
+        }
+        else {
+            // Could be other expression statements in the future
+            std::string errorMsg = std::string("Unexpected token at start of statement: ") + 
+                                 tokenTypeToString(peek().type) + " ('" + peek().value + "')";
+            throw std::runtime_error(errorMsg);
+        }
     }
     // Add other statement types here (while, return, expression statements etc.)
     else
@@ -169,6 +194,120 @@ std::unique_ptr<IfStatementNode> Parser::parseIfStatement()
     }
     
     return ifNode;
+}
+
+std::unique_ptr<WhileStatementNode> Parser::parseWhileStatement()
+{
+    consume(TOK_WHILE, "Expected 'while' keyword");
+    consume(TOK_LPAREN, "Expected '(' after 'while'");
+    
+    std::unique_ptr<ExpressionNode> condition = parseExpression();
+    
+    consume(TOK_RPAREN, "Expected ')' after while condition");
+    consume(TOK_LBRACE, "Expected '{' to start while body");
+    
+    auto whileNode = std::make_unique<WhileStatementNode>(std::move(condition));
+    
+    // Parse body statements
+    while (peek().type != TOK_RBRACE && !isAtEnd()) {
+        whileNode->bodyStatements.push_back(parseStatement());
+    }
+    
+    consume(TOK_RBRACE, "Expected '}' to end while body");
+    
+    return whileNode;
+}
+
+std::unique_ptr<StatementNode> Parser::parseAssignmentStatement()
+{
+    const Token &varNameToken = consume(TOK_IDENTIFIER, "Expected variable name");
+    consume(TOK_EQUAL, "Expected '=' in assignment");
+    
+    std::unique_ptr<ExpressionNode> value = parseExpression();
+    consume(TOK_SEMICOLON, "Expected ';' after assignment");
+    
+    return std::make_unique<AssignmentStatementNode>(varNameToken.value, std::move(value));
+}
+
+std::unique_ptr<ForStatementNode> Parser::parseForStatement()
+{
+    consume(TOK_FOR, "Expected 'for' keyword");
+    consume(TOK_LPAREN, "Expected '(' after 'for'");
+    
+    // Parse initialization (can be variable declaration or assignment)
+    std::unique_ptr<StatementNode> initialization = nullptr;
+    if (peek().type == TOK_LET) {
+        initialization = parseVariableDeclarationStatement();
+    } else if (peek().type == TOK_IDENTIFIER && peek(1).type == TOK_EQUAL) {
+        initialization = parseAssignmentStatement();
+    } else if (peek().type != TOK_SEMICOLON) {
+        throw std::runtime_error("Expected variable declaration or assignment in for loop initialization");
+    }
+    
+    // If no initialization, consume the semicolon
+    if (!initialization) {
+        consume(TOK_SEMICOLON, "Expected ';' after for loop initialization");
+    }
+    
+    // Parse condition
+    std::unique_ptr<ExpressionNode> condition = nullptr;
+    if (peek().type != TOK_SEMICOLON) {
+        condition = parseExpression();
+    }
+    consume(TOK_SEMICOLON, "Expected ';' after for loop condition");
+    
+    // Parse increment
+    std::unique_ptr<StatementNode> increment = nullptr;
+    if (peek().type != TOK_RPAREN) {
+        if (peek().type == TOK_IDENTIFIER && peek(1).type == TOK_EQUAL) {
+            // Parse assignment without semicolon for increment
+            const Token &varNameToken = consume(TOK_IDENTIFIER, "Expected variable name");
+            consume(TOK_EQUAL, "Expected '=' in assignment");
+            std::unique_ptr<ExpressionNode> value = parseExpression();
+            increment = std::make_unique<AssignmentStatementNode>(varNameToken.value, std::move(value));
+        } else {
+            throw std::runtime_error("Expected assignment in for loop increment");
+        }
+    }
+    
+    consume(TOK_RPAREN, "Expected ')' after for loop header");
+    consume(TOK_LBRACE, "Expected '{' to start for loop body");
+    
+    auto forNode = std::make_unique<ForStatementNode>(std::move(initialization), std::move(condition), std::move(increment));
+    
+    // Parse body statements
+    while (peek().type != TOK_RBRACE && !isAtEnd()) {
+        forNode->bodyStatements.push_back(parseStatement());
+    }
+    
+    consume(TOK_RBRACE, "Expected '}' to end for loop body");
+    
+    return forNode;
+}
+
+std::unique_ptr<DoWhileStatementNode> Parser::parseDoWhileStatement()
+{
+    consume(TOK_DO, "Expected 'do' keyword");
+    consume(TOK_LBRACE, "Expected '{' to start do-while body");
+    
+    auto doWhileNode = std::make_unique<DoWhileStatementNode>(nullptr);
+    
+    // Parse body statements
+    while (peek().type != TOK_RBRACE && !isAtEnd()) {
+        doWhileNode->bodyStatements.push_back(parseStatement());
+    }
+    
+    consume(TOK_RBRACE, "Expected '}' to end do-while body");
+    consume(TOK_WHILE, "Expected 'while' after do-while body");
+    consume(TOK_LPAREN, "Expected '(' after 'while'");
+    
+    std::unique_ptr<ExpressionNode> condition = parseExpression();
+    doWhileNode->condition = std::move(condition);
+    
+    consume(TOK_RPAREN, "Expected ')' after do-while condition");
+    consume(TOK_SEMICOLON, "Expected ';' after do-while statement");
+    
+    return doWhileNode;
 }
 
 std::unique_ptr<FunctionCallNode> Parser::parseFunctionCallStatement()

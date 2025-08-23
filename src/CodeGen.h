@@ -26,6 +26,10 @@ class VariableExpressionNode;  // New
 class VariableDeclarationNode; // New
 class BinaryExpressionNode;    // For arithmetic operations
 class IfStatementNode;         // For if/else statements
+class WhileStatementNode;      // For while loops
+class ForStatementNode;        // For traditional for loops
+class DoWhileStatementNode;    // For do-while loops
+class AssignmentStatementNode; // For variable assignments
 
 class CodeGen
 {
@@ -47,6 +51,10 @@ private:
     void visit(VariableDeclarationNode *node); // New
     void visit(FunctionCallNode *node);
     void visit(IfStatementNode *node);         // For if/else statements
+    void visit(WhileStatementNode *node);      // For while loops
+    void visit(ForStatementNode *node);        // For traditional for loops
+    void visit(DoWhileStatementNode *node);    // For do-while loops
+    void visit(AssignmentStatementNode *node); // For variable assignments
 
     llvm::Value *visit(ExpressionNode *node); // Dispatcher
     llvm::Value *visit(StringLiteralNode *node);

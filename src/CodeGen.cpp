@@ -119,6 +119,22 @@ void CodeGen::visit(StatementNode *node)
     {
         visit(ifNode);
     }
+    else if (auto *whileNode = dynamic_cast<WhileStatementNode *>(node))
+    {
+        visit(whileNode);
+    }
+    else if (auto *forNode = dynamic_cast<ForStatementNode *>(node))
+    {
+        visit(forNode);
+    }
+    else if (auto *doWhileNode = dynamic_cast<DoWhileStatementNode *>(node))
+    {
+        visit(doWhileNode);
+    }
+    else if (auto *assignNode = dynamic_cast<AssignmentStatementNode *>(node))
+    {
+        visit(assignNode);
+    }
     else
     {
         std::cerr << "Codegen Error: Unsupported statement type.\n";
@@ -318,45 +334,200 @@ void CodeGen::visit(IfStatementNode *node)
     m_builder.SetInsertPoint(mergeBlock);
 }
 
+void CodeGen::visit(WhileStatementNode *node)
+{
+    // Get the current function
+    llvm::Function *currentFunction = m_builder.GetInsertBlock()->getParent();
+    
+    // Create basic blocks for loop condition, body, and exit
+    llvm::BasicBlock *condBlock = llvm::BasicBlock::Create(m_context, "loopcond", currentFunction);
+    llvm::BasicBlock *bodyBlock = llvm::BasicBlock::Create(m_context, "loopbody", currentFunction);
+    llvm::BasicBlock *exitBlock = llvm::BasicBlock::Create(m_context, "loopexit", currentFunction);
+    
+    // Branch to condition block
+    m_builder.CreateBr(condBlock);
+    
+    // Generate condition block
+    m_builder.SetInsertPoint(condBlock);
+    llvm::Value *conditionVal = visit(node->condition.get());
+    if (!conditionVal) {
+        throw std::runtime_error("Codegen Error: Failed to generate condition for while statement");
+    }
+    
+    // Create conditional branch: if true go to body, if false go to exit
+    m_builder.CreateCondBr(conditionVal, bodyBlock, exitBlock);
+    
+    // Generate body block
+    m_builder.SetInsertPoint(bodyBlock);
+    for (const auto &stmt : node->bodyStatements) {
+        visit(stmt.get());
+    }
+    
+    // Branch back to condition (creating the loop)
+    if (!m_builder.GetInsertBlock()->getTerminator()) {
+        m_builder.CreateBr(condBlock);
+    }
+    
+    // Continue with exit block
+    m_builder.SetInsertPoint(exitBlock);
+}
+
+void CodeGen::visit(AssignmentStatementNode *node)
+{
+    // Look up the variable in our symbol table
+    auto it = namedValues.find(node->variableName);
+    if (it == namedValues.end()) {
+        throw std::runtime_error("Codegen Error: Undefined variable '" + node->variableName + "'");
+    }
+    
+    llvm::AllocaInst *varAlloca = it->second;
+    
+    // Generate code for the value expression
+    llvm::Value *value = visit(node->value.get());
+    if (!value) {
+        throw std::runtime_error("Codegen Error: Failed to generate value for assignment");
+    }
+    
+    // Store the value in the variable's memory location
+    m_builder.CreateStore(value, varAlloca);
+}
+
+void CodeGen::visit(ForStatementNode *node)
+{
+    // Get the current function
+    llvm::Function *currentFunction = m_builder.GetInsertBlock()->getParent();
+    
+    // Create basic blocks for initialization, condition, body, increment, and exit
+    llvm::BasicBlock *initBlock = llvm::BasicBlock::Create(m_context, "forinit", currentFunction);
+    llvm::BasicBlock *condBlock = llvm::BasicBlock::Create(m_context, "forcond", currentFunction);
+    llvm::BasicBlock *bodyBlock = llvm::BasicBlock::Create(m_context, "forbody", currentFunction);
+    llvm::BasicBlock *incrBlock = llvm::BasicBlock::Create(m_context, "forincr", currentFunction);
+    llvm::BasicBlock *exitBlock = llvm::BasicBlock::Create(m_context, "forexit", currentFunction);
+    
+    // Branch to initialization block
+    m_builder.CreateBr(initBlock);
+    
+    // Generate initialization block
+    m_builder.SetInsertPoint(initBlock);
+    if (node->initialization) {
+        visit(node->initialization.get());
+    }
+    m_builder.CreateBr(condBlock);
+    
+    // Generate condition block
+    m_builder.SetInsertPoint(condBlock);
+    if (node->condition) {
+        llvm::Value *conditionVal = visit(node->condition.get());
+        if (!conditionVal) {
+            throw std::runtime_error("Codegen Error: Failed to generate condition for for statement");
+        }
+        m_builder.CreateCondBr(conditionVal, bodyBlock, exitBlock);
+    } else {
+        // No condition means infinite loop (like for(;;))
+        m_builder.CreateBr(bodyBlock);
+    }
+    
+    // Generate body block
+    m_builder.SetInsertPoint(bodyBlock);
+    for (const auto &stmt : node->bodyStatements) {
+        visit(stmt.get());
+    }
+    m_builder.CreateBr(incrBlock);
+    
+    // Generate increment block
+    m_builder.SetInsertPoint(incrBlock);
+    if (node->increment) {
+        visit(node->increment.get());
+    }
+    m_builder.CreateBr(condBlock); // Loop back to condition
+    
+    // Continue with exit block
+    m_builder.SetInsertPoint(exitBlock);
+}
+
+void CodeGen::visit(DoWhileStatementNode *node)
+{
+    // Get the current function
+    llvm::Function *currentFunction = m_builder.GetInsertBlock()->getParent();
+    
+    // Create basic blocks for body, condition, and exit
+    llvm::BasicBlock *bodyBlock = llvm::BasicBlock::Create(m_context, "dobody", currentFunction);
+    llvm::BasicBlock *condBlock = llvm::BasicBlock::Create(m_context, "docond", currentFunction);
+    llvm::BasicBlock *exitBlock = llvm::BasicBlock::Create(m_context, "doexit", currentFunction);
+    
+    // Branch to body block (do-while always executes body at least once)
+    m_builder.CreateBr(bodyBlock);
+    
+    // Generate body block
+    m_builder.SetInsertPoint(bodyBlock);
+    for (const auto &stmt : node->bodyStatements) {
+        visit(stmt.get());
+    }
+    m_builder.CreateBr(condBlock);
+    
+    // Generate condition block
+    m_builder.SetInsertPoint(condBlock);
+    llvm::Value *conditionVal = visit(node->condition.get());
+    if (!conditionVal) {
+        throw std::runtime_error("Codegen Error: Failed to generate condition for do-while statement");
+    }
+    
+    // Create conditional branch: if true go back to body, if false go to exit
+    m_builder.CreateCondBr(conditionVal, bodyBlock, exitBlock);
+    
+    // Continue with exit block
+    m_builder.SetInsertPoint(exitBlock);
+}
+
 void CodeGen::visit(FunctionCallNode *node)
 {
-    if (node->functionName == "print")
+    if (node->functionName == "print" || node->functionName == "println")
     {
         if (node->arguments.size() != 1)
         {
-            std::cerr << "Codegen Error: 'print' expects exactly one argument.\n";
-            throw std::runtime_error("'print' expects one argument.");
+            std::cerr << "Codegen Error: '" << node->functionName << "' expects exactly one argument.\n";
+            throw std::runtime_error("'" + node->functionName + "' expects one argument.");
         }
 
         llvm::Value *argValue = visit(node->arguments[0].get());
         if (!argValue)
         {
-            std::cerr << "Codegen Error: Failed to generate code for 'print' argument.\n";
-            throw std::runtime_error("Failed to generate code for 'print' argument.");
+            std::cerr << "Codegen Error: Failed to generate code for '" << node->functionName << "' argument.\n";
+            throw std::runtime_error("Failed to generate code for '" + node->functionName + "' argument.");
         }
 
         llvm::Type *argType = argValue->getType();
-        llvm::Type *expectedStringLLVMType = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+        bool addNewline = (node->functionName == "println");
 
         if (argType->isPointerTy())
         {
-            // Assume it's a string pointer, use puts
-            llvm::FunctionCallee putsFunc = getOrDeclarePuts();
-            m_builder.CreateCall(putsFunc, argValue, "putsCall");
+            // Assume it's a string pointer
+            if (addNewline) {
+                // Use puts for println (automatically adds newline)
+                llvm::FunctionCallee putsFunc = getOrDeclarePuts();
+                m_builder.CreateCall(putsFunc, argValue, "putsCall");
+            } else {
+                // Use printf with "%s" for print (no newline)
+                llvm::FunctionCallee printfFunc = getOrDeclarePrintf();
+                llvm::Value *formatStr = m_builder.CreateGlobalString("%s", ".format_str");
+                std::vector<llvm::Value *> printfArgs = {formatStr, argValue};
+                m_builder.CreateCall(printfFunc, printfArgs, "printfCall");
+            }
         }
         else if (argType->isIntegerTy(32))
         {
             // Argument is i32
             llvm::FunctionCallee printfFunc = getOrDeclarePrintf();
-            // Create format string "%d\n" for printf
-            llvm::Value *formatStr = m_builder.CreateGlobalString("%d\n", ".format_int");
+            // Create format string with or without newline
+            std::string formatString = addNewline ? "%d\n" : "%d";
+            llvm::Value *formatStr = m_builder.CreateGlobalString(formatString, ".format_int");
             std::vector<llvm::Value *> printfArgs = {formatStr, argValue};
             m_builder.CreateCall(printfFunc, printfArgs, "printfCall");
         }
         else
         {
-            std::cerr << "Codegen Error: 'print' argument type not supported. Expected string or i32.\n";
-            throw std::runtime_error("'print' argument type not supported.");
+            std::cerr << "Codegen Error: '" << node->functionName << "' argument type not supported. Expected string or i32.\n";
+            throw std::runtime_error("'" + node->functionName + "' argument type not supported.");
         }
     }
     else

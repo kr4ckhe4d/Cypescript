@@ -85,6 +85,7 @@ Token Lexer::makeIdentifier() {
         {"else", TOK_ELSE},
         {"while", TOK_WHILE},
         {"for", TOK_FOR},
+        {"do", TOK_DO},
         {"return", TOK_RETURN},
         {"true", TOK_TRUE},
         {"false", TOK_FALSE},

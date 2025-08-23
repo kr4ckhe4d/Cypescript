@@ -197,6 +197,127 @@ public:
     }
 };
 
+// While statement for loops
+class WhileStatementNode : public StatementNode
+{
+public:
+    std::unique_ptr<ExpressionNode> condition;
+    std::vector<std::unique_ptr<StatementNode>> bodyStatements;
+    
+    explicit WhileStatementNode(std::unique_ptr<ExpressionNode> cond)
+        : condition(std::move(cond)) {}
+    
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "WhileStatementNode:\n";
+        printIndent(os, indent + 1);
+        os << "Condition:\n";
+        if (condition) {
+            condition->printNode(os, indent + 2);
+        }
+        printIndent(os, indent + 1);
+        os << "Body:\n";
+        for (const auto &stmt : bodyStatements) {
+            if (stmt) {
+                stmt->printNode(os, indent + 2);
+            }
+        }
+    }
+};
+
+// Assignment statement for variable updates
+class AssignmentStatementNode : public StatementNode
+{
+public:
+    std::string variableName;
+    std::unique_ptr<ExpressionNode> value;
+    
+    AssignmentStatementNode(std::string varName, std::unique_ptr<ExpressionNode> val)
+        : variableName(std::move(varName)), value(std::move(val)) {}
+    
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "AssignmentStatementNode: " << variableName << " =\n";
+        if (value) {
+            value->printNode(os, indent + 1);
+        }
+    }
+};
+
+// For statement (traditional C-style for loop)
+class ForStatementNode : public StatementNode
+{
+public:
+    std::unique_ptr<StatementNode> initialization; // let i: i32 = 0 or i = 0
+    std::unique_ptr<ExpressionNode> condition;     // i < 10
+    std::unique_ptr<StatementNode> increment;      // i = i + 1
+    std::vector<std::unique_ptr<StatementNode>> bodyStatements;
+    
+    ForStatementNode(std::unique_ptr<StatementNode> init,
+                     std::unique_ptr<ExpressionNode> cond,
+                     std::unique_ptr<StatementNode> incr)
+        : initialization(std::move(init)), condition(std::move(cond)), increment(std::move(incr)) {}
+    
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "ForStatementNode:\n";
+        printIndent(os, indent + 1);
+        os << "Initialization:\n";
+        if (initialization) {
+            initialization->printNode(os, indent + 2);
+        }
+        printIndent(os, indent + 1);
+        os << "Condition:\n";
+        if (condition) {
+            condition->printNode(os, indent + 2);
+        }
+        printIndent(os, indent + 1);
+        os << "Increment:\n";
+        if (increment) {
+            increment->printNode(os, indent + 2);
+        }
+        printIndent(os, indent + 1);
+        os << "Body:\n";
+        for (const auto &stmt : bodyStatements) {
+            if (stmt) {
+                stmt->printNode(os, indent + 2);
+            }
+        }
+    }
+};
+
+// Do-while statement (post-condition loop)
+class DoWhileStatementNode : public StatementNode
+{
+public:
+    std::vector<std::unique_ptr<StatementNode>> bodyStatements;
+    std::unique_ptr<ExpressionNode> condition;
+    
+    explicit DoWhileStatementNode(std::unique_ptr<ExpressionNode> cond)
+        : condition(std::move(cond)) {}
+    
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "DoWhileStatementNode:\n";
+        printIndent(os, indent + 1);
+        os << "Body:\n";
+        for (const auto &stmt : bodyStatements) {
+            if (stmt) {
+                stmt->printNode(os, indent + 2);
+            }
+        }
+        printIndent(os, indent + 1);
+        os << "Condition:\n";
+        if (condition) {
+            condition->printNode(os, indent + 2);
+        }
+    }
+};
+
 class FunctionCallNode : public StatementNode
 {
 public:

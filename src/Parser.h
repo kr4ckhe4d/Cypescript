@@ -29,6 +29,10 @@ private:
     std::unique_ptr<StatementNode> parseStatement();
     std::unique_ptr<FunctionCallNode> parseFunctionCallStatement(); // Specific for print(...)
     std::unique_ptr<IfStatementNode> parseIfStatement();            // For if/else statements
+    std::unique_ptr<WhileStatementNode> parseWhileStatement();      // For while loops
+    std::unique_ptr<ForStatementNode> parseForStatement();          // For traditional for loops
+    std::unique_ptr<DoWhileStatementNode> parseDoWhileStatement();  // For do-while loops
+    std::unique_ptr<StatementNode> parseAssignmentStatement();      // For variable assignments
     
     // Expression parsing with operator precedence
     std::unique_ptr<ExpressionNode> parseExpression();

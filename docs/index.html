@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cypescript Language Documentation</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="logo">
+                <h1><i class="fas fa-code"></i> Cypescript</h1>
+                <p class="version">v1.0</p>
+            </div>
+            
+            <ul class="nav-menu">
+                <li><a href="#overview" class="nav-link active">Overview</a></li>
+                <li><a href="#getting-started" class="nav-link">Getting Started</a></li>
+                <li><a href="#data-types" class="nav-link">Data Types</a></li>
+                <li><a href="#variables" class="nav-link">Variables</a></li>
+                <li><a href="#operators" class="nav-link">Operators</a></li>
+                <li><a href="#control-flow" class="nav-link">Control Flow</a></li>
+                <li><a href="#loops" class="nav-link">Loops</a></li>
+                <li><a href="#functions" class="nav-link">Functions</a></li>
+                <li><a href="#examples" class="nav-link">Examples</a></li>
+                <li><a href="#playground" class="nav-link">Playground</a></li>
+            </ul>
+            
+            <div class="sidebar-footer">
+                <a href="https://github.com/your-org/cypescript" target="_blank">
+                    <i class="fab fa-github"></i> GitHub
+                </a>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Overview Section -->
+            <section id="overview" class="content-section active">
+                <div class="section-header">
+                    <h1>Cypescript Language Reference</h1>
+                    <p class="subtitle">A TypeScript-inspired language that compiles to efficient native code</p>
+                </div>
+
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <i class="fas fa-rocket"></i>
+                        <h3>High Performance</h3>
+                        <p>Compiles to native code via LLVM for optimal performance</p>
+                    </div>
+                    <div class="feature-card">
+                        <i class="fas fa-shield-alt"></i>
+                        <h3>Type Safety</h3>
+                        <p>Static typing with compile-time type checking</p>
+                    </div>
+                    <div class="feature-card">
+                        <i class="fas fa-code-branch"></i>
+                        <h3>Familiar Syntax</h3>
+                        <p>TypeScript-inspired syntax for easy adoption</p>
+                    </div>
+                    <div class="feature-card">
+                        <i class="fas fa-cogs"></i>
+                        <h3>Zero Runtime</h3>
+                        <p>No runtime dependencies, pure native executables</p>
+                    </div>
+                </div>
+
+                <div class="quick-example">
+                    <h2>Quick Example</h2>
+                    <div class="code-example">
+                        <div class="code-header">
+                            <span class="filename">hello.csc</span>
+                            <button class="run-btn" onclick="runExample('hello-example')">
+                                <i class="fas fa-play"></i> Run
+                            </button>
+                        </div>
+                        <pre><code class="language-typescript" id="hello-example">let message: string = "Hello, Cypescript!";
+println(message);
+
+let answer: i32 = 42;
+print("The answer is: ");
+println(answer);</code></pre>
+                        <div class="output" id="hello-example-output"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Getting Started Section -->
+            <section id="getting-started" class="content-section">
+                <h1>Getting Started</h1>
+                
+                <div class="installation-steps">
+                    <h2>Installation</h2>
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h3>Clone Repository</h3>
+                            <pre><code class="language-bash">git clone https://github.com/your-org/cypescript.git
+cd cypescript</code></pre>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h3>Setup Dependencies (macOS)</h3>
+                            <pre><code class="language-bash">./setup-macos.sh</code></pre>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h3>Build Compiler</h3>
+                            <pre><code class="language-bash">./build.sh</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="first-program">
+                    <h2>Your First Program</h2>
+                    <p>Create a file named <code>hello.csc</code> and try this example:</p>
+                    
+                    <div class="code-example">
+                        <div class="code-header">
+                            <span class="filename">hello.csc</span>
+                            <button class="run-btn" onclick="runExample('first-program')">
+                                <i class="fas fa-play"></i> Run
+                            </button>
+                        </div>
+                        <pre><code class="language-typescript" id="first-program">// Your first Cypescript program
+let greeting: string = "Welcome to Cypescript!";
+println(greeting);
+
+let version: i32 = 1;
+print("Version: ");
+println(version);</code></pre>
+                        <div class="output" id="first-program-output"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Data Types Section -->
+            <section id="data-types" class="content-section">
+                <h1>Data Types</h1>
+                
+                <div class="type-grid">
+                    <div class="type-card">
+                        <h3><code>i32</code></h3>
+                        <p>32-bit signed integer</p>
+                        <span class="range">-2,147,483,648 to 2,147,483,647</span>
+                    </div>
+                    <div class="type-card">
+                        <h3><code>f64</code></h3>
+                        <p>64-bit floating point</p>
+                        <span class="range">Double precision</span>
+                    </div>
+                    <div class="type-card">
+                        <h3><code>string</code></h3>
+                        <p>UTF-8 text string</p>
+                        <span class="range">Variable length</span>
+                    </div>
+                    <div class="type-card">
+                        <h3><code>boolean</code></h3>
+                        <p>True or false value</p>
+                        <span class="range">true, false</span>
+                    </div>
+                </div>
+
+                <div class="interactive-example">
+                    <h2>Try Different Types</h2>
+                    <div class="code-example">
+                        <div class="code-header">
+                            <span class="filename">types.csc</span>
+                            <button class="run-btn" onclick="runExample('types-example')">
+                                <i class="fas fa-play"></i> Run
+                            </button>
+                        </div>
+                        <pre><code class="language-typescript" id="types-example">// Integer type
+let age: i32 = 25;
+print("Age: ");
+println(age);
+
+// String type
+let name: string = "Alice";
+print("Name: ");
+println(name);
+
+// Boolean type
+let isActive: boolean = true;
+print("Active: ");
+println(isActive);
+
+// Boolean from comparison
+let isAdult: boolean = age >= 18;
+print("Is adult: ");
+println(isAdult);
+
+// Arithmetic with integers
+let result: i32 = age * 2;
+print("Double age: ");
+println(result);</code></pre>
+                        <div class="output" id="types-example-output"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Variables Section -->
+            <section id="variables" class="content-section">
+                <h1>Variables and Assignment</h1>
+                
+                <div class="concept-explanation">
+                    <h2>Variable Declaration</h2>
+                    <p>Variables are declared using the <code>let</code> keyword with explicit type annotations:</p>
+                    
+                    <div class="syntax-box">
+                        <code>let variableName: type = initialValue;</code>
+                    </div>
+                </div>
+
+                <div class="interactive-example">
+                    <h2>Variable Examples</h2>
+                    <div class="code-example">
+                        <div class="code-header">
+                            <span class="filename">variables.csc</span>
+                            <button class="run-btn" onclick="runExample('variables-example')">
+                                <i class="fas fa-play"></i> Run
+                            </button>
+                        </div>
+                        <pre><code class="language-typescript" id="variables-example">// Variable declaration and initialization
+let counter: i32 = 0;
+print("Initial counter: ");
+println(counter);
+
+// Variable assignment
+counter = 10;
+print("Updated counter: ");
+println(counter);
+
+// Using variables in expressions
+counter = counter + 5;
+print("After increment: ");
+println(counter);
+
+// Multiple variables
+let firstName: string = "John";
+let lastName: string = "Doe";
+print("First name: ");
+println(firstName);
+print("Last name: ");
+println(lastName);</code></pre>
+                        <div class="output" id="variables-example-output"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Operators Section -->
+            <section id="operators" class="content-section">
+                <h1>Operators</h1>
+                
+                <div class="operator-tables">
+                    <div class="operator-category">
+                        <h2>Arithmetic Operators</h2>
+                        <table class="operator-table">
+                            <thead>
+                                <tr>
+                                    <th>Operator</th>
+                                    <th>Description</th>
+                                    <th>Example</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><code>+</code></td><td>Addition</td><td><code>5 + 3</code></td></tr>
+                                <tr><td><code>-</code></td><td>Subtraction</td><td><code>5 - 3</code></td></tr>
+                                <tr><td><code>*</code></td><td>Multiplication</td><td><code>5 * 3</code></td></tr>
+                                <tr><td><code>/</code></td><td>Division</td><td><code>10 / 3</code></td></tr>
+                                <tr><td><code>%</code></td><td>Modulo</td><td><code>10 % 3</code></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="operator-category">
+                        <h2>Comparison Operators</h2>
+                        <table class="operator-table">
+                            <thead>
+                                <tr>
+                                    <th>Operator</th>
+                                    <th>Description</th>
+                                    <th>Example</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><code>==</code></td><td>Equal to</td><td><code>a == b</code></td></tr>
+                                <tr><td><code>!=</code></td><td>Not equal to</td><td><code>a != b</code></td></tr>
+                                <tr><td><code>&lt;</code></td><td>Less than</td><td><code>a &lt; b</code></td></tr>
+                                <tr><td><code>&lt;=</code></td><td>Less than or equal</td><td><code>a &lt;= b</code></td></tr>
+                                <tr><td><code>&gt;</code></td><td>Greater than</td><td><code>a &gt; b</code></td></tr>
+                                <tr><td><code>&gt;=</code></td><td>Greater than or equal</td><td><code>a &gt;= b</code></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="interactive-example">
+                    <h2>Operator Examples</h2>
+                    <div class="code-example">
+                        <div class="code-header">
+                            <span class="filename">operators.csc</span>
+                            <button class="run-btn" onclick="runExample('operators-example')">
+                                <i class="fas fa-play"></i> Run
+                            </button>
+                        </div>
+                        <pre><code class="language-typescript" id="operators-example">let a: i32 = 10;
+let b: i32 = 3;
+
+// Arithmetic operations
+println("Arithmetic Operations:");
+print("a + b = ");
+println(a + b);
+print("a - b = ");
+println(a - b);
+print("a * b = ");
+println(a * b);
+print("a / b = ");
+println(a / b);
+print("a % b = ");
+println(a % b);
+
+// Comparison operations
+println("Comparison Operations:");
+if (a > b) {
+    println("a is greater than b");
+}
+if (a != b) {
+    println("a is not equal to b");
+}</code></pre>
+                        <div class="output" id="operators-example-output"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Control Flow Section -->
+            <section id="control-flow" class="content-section">
+                <h1>Control Flow</h1>
+                
+                <div class="concept-explanation">
+                    <h2>If Statements</h2>
+                    <p>Execute code conditionally based on boolean expressions.</p>
+                </div>
+
+                <div class="interactive-example">
+                    <h2>If-Else Examples</h2>
+                    <div class="code-example">
+                        <div class="code-header">
+                            <span class="filename">control-flow.csc</span>
+                            <button class="run-btn" onclick="runExample('control-flow-example')">
+                                <i class="fas fa-play"></i> Run
+                            </button>
+                        </div>
+                        <pre><code class="language-typescript" id="control-flow-example">let score: i32 = 85;
+
+print("Score: ");
+println(score);
+
+// Simple if-else
+if (score >= 90) {
+    println("Grade: A - Excellent!");
+} else {
+    if (score >= 80) {
+        println("Grade: B - Good work!");
+    } else {
+        if (score >= 70) {
+            println("Grade: C - Satisfactory");
+        } else {
+            println("Grade: D or F - Needs improvement");
+        }
+    }
+}
+
+// Complex conditions
+let bonus: i32 = 5;
+let finalScore: i32 = score + bonus;
+
+if (finalScore > score) {
+    print("Bonus applied! Final score: ");
+    println(finalScore);
+}</code></pre>
+                        <div class="output" id="control-flow-example-output"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Loops Section -->
+            <section id="loops" class="content-section">
+                <h1>Loop Statements</h1>
+                
+                <div class="loop-types">
+                    <div class="loop-type">
+                        <h2><i class="fas fa-sync"></i> While Loop</h2>
+                        <p>Execute statements while a condition remains true.</p>
+                        <div class="syntax-box">
+                            <code>while (condition) { /* statements */ }</code>
+                        </div>
+                    </div>
+
+                    <div class="loop-type">
+                        <h2><i class="fas fa-repeat"></i> For Loop</h2>
+                        <p>Traditional C-style for loops with initialization, condition, and increment.</p>
+                        <div class="syntax-box">
+                            <code>for (init; condition; increment) { /* statements */ }</code>
+                        </div>
+                    </div>
+
+                    <div class="loop-type">
+                        <h2><i class="fas fa-redo"></i> Do-While Loop</h2>
+                        <p>Execute statements at least once, then continue while condition is true.</p>
+                        <div class="syntax-box">
+                            <code>do { /* statements */ } while (condition);</code>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="interactive-example">
+                    <h2>Loop Examples</h2>
+                    <div class="code-example">
+                        <div class="code-header">
+                            <span class="filename">loops.csc</span>
+                            <button class="run-btn" onclick="runExample('loops-example')">
+                                <i class="fas fa-play"></i> Run
+                            </button>
+                        </div>
+                        <pre><code class="language-typescript" id="loops-example">println("=== Loop Examples ===");
+
+// While loop
+println("While loop (countdown):");
+let countdown: i32 = 3;
+while (countdown > 0) {
+    print("T-minus ");
+    println(countdown);
+    countdown = countdown - 1;
+}
+println("Liftoff!");
+
+// For loop
+println("For loop (counting up):");
+for (let i: i32 = 1; i <= 3; i = i + 1) {
+    print("Count: ");
+    println(i);
+}
+
+// Do-while loop
+println("Do-while loop:");
+let attempts: i32 = 0;
+do {
+    attempts = attempts + 1;
+    print("Attempt: ");
+    println(attempts);
+} while (attempts < 2);</code></pre>
+                        <div class="output" id="loops-example-output"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Functions Section -->
+            <section id="functions" class="content-section">
+                <h1>Functions</h1>
+                
+                <div class="function-reference">
+                    <h2>Built-in Functions</h2>
+                    
+                    <div class="function-card">
+                        <h3><code>print()</code></h3>
+                        <p>Outputs values to the console without adding a newline.</p>
+                        <div class="function-signature">
+                            <code>print(expression: string | i32 | f64 | boolean)</code>
+                        </div>
+                    </div>
+                    
+                    <div class="function-card">
+                        <h3><code>println()</code></h3>
+                        <p>Outputs values to the console and adds a newline at the end.</p>
+                        <div class="function-signature">
+                            <code>println(expression: string | i32 | f64 | boolean)</code>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="interactive-example">
+                    <h2>Function Examples</h2>
+                    <div class="code-example">
+                        <div class="code-header">
+                            <span class="filename">functions.csc</span>
+                            <button class="run-btn" onclick="runExample('functions-example')">
+                                <i class="fas fa-play"></i> Run
+                            </button>
+                        </div>
+                        <pre><code class="language-typescript" id="functions-example">// Print without newline
+print("Hello, ");
+print("World!");
+println(""); // Add a newline
+
+// Print with automatic newline
+println("This is line 1");
+println("This is line 2");
+
+// Mixed usage
+print("Count: ");
+println(42);
+print("Status: ");
+println(true);
+
+// Print variables
+let name: string = "Cypescript";
+let version: i32 = 1;
+
+print("Language: ");
+println(name);
+print("Version: ");
+println(version);</code></pre>
+                        <div class="output" id="functions-example-output"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Examples Section -->
+            <section id="examples" class="content-section">
+                <h1>Complete Examples</h1>
+                
+                <div class="example-gallery">
+                    <div class="example-item">
+                        <h2>Factorial Calculator</h2>
+                        <div class="code-example">
+                            <div class="code-header">
+                                <span class="filename">factorial.csc</span>
+                                <button class="run-btn" onclick="runExample('factorial-example')">
+                                    <i class="fas fa-play"></i> Run
+                                </button>
+                            </div>
+                            <pre><code class="language-typescript" id="factorial-example">let n: i32 = 5;
+let factorial: i32 = 1;
+let counter: i32 = 1;
+
+print("Calculating factorial of ");
+println(n);
+
+while (counter <= n) {
+    factorial = factorial * counter;
+    print("Step ");
+    print(counter);
+    print(": ");
+    println(factorial);
+    counter = counter + 1;
+}
+
+print("Final result: ");
+print(n);
+print("! = ");
+println(factorial);</code></pre>
+                            <div class="output" id="factorial-example-output"></div>
+                        </div>
+                    </div>
+
+                    <div class="example-item">
+                        <h2>Prime Number Checker</h2>
+                        <div class="code-example">
+                            <div class="code-header">
+                                <span class="filename">prime.csc</span>
+                                <button class="run-btn" onclick="runExample('prime-example')">
+                                    <i class="fas fa-play"></i> Run
+                                </button>
+                            </div>
+                            <pre><code class="language-typescript" id="prime-example">let testNum: i32 = 17;
+let divisor: i32 = 2;
+let isPrime: i32 = 1; // 1 = true, 0 = false
+
+print("Testing if ");
+print(testNum);
+println(" is prime...");
+
+if (testNum <= 1) {
+    isPrime = 0;
+} else {
+    while (divisor * divisor <= testNum) {
+        let remainder: i32 = testNum % divisor;
+        if (remainder == 0) {
+            isPrime = 0;
+            print("Found divisor: ");
+            println(divisor);
+        }
+        divisor = divisor + 1;
+    }
+}
+
+if (isPrime == 1) {
+    print(testNum);
+    println(" is PRIME!");
+} else {
+    print(testNum);
+    println(" is NOT prime");
+}</code></pre>
+                            <div class="output" id="prime-example-output"></div>
+                        </div>
+                    </div>
+
+                    <div class="example-item">
+                        <h2>Fibonacci Sequence</h2>
+                        <div class="code-example">
+                            <div class="code-header">
+                                <span class="filename">fibonacci.csc</span>
+                                <button class="run-btn" onclick="runExample('fibonacci-example')">
+                                    <i class="fas fa-play"></i> Run
+                                </button>
+                            </div>
+                            <pre><code class="language-typescript" id="fibonacci-example">let limit: i32 = 8;
+let fib1: i32 = 0;
+let fib2: i32 = 1;
+let count: i32 = 0;
+
+print("Fibonacci sequence (first ");
+print(limit);
+println(" numbers):");
+
+while (count < limit) {
+    if (count == 0) {
+        print("F(0) = ");
+        println(fib1);
+    } else {
+        if (count == 1) {
+            print("F(1) = ");
+            println(fib2);
+        } else {
+            let nextFib: i32 = fib1 + fib2;
+            print("F(");
+            print(count);
+            print(") = ");
+            println(nextFib);
+            
+            fib1 = fib2;
+            fib2 = nextFib;
+        }
+    }
+    count = count + 1;
+}</code></pre>
+                            <div class="output" id="fibonacci-example-output"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Playground Section -->
+            <section id="playground" class="content-section">
+                <h1>Interactive Playground</h1>
+                <p>Write and run your own Cypescript code:</p>
+                
+                <div class="playground">
+                    <div class="playground-header">
+                        <span class="filename">playground.csc</span>
+                        <button class="run-btn" onclick="runPlayground()">
+                            <i class="fas fa-play"></i> Run Code
+                        </button>
+                        <button class="clear-btn" onclick="clearPlayground()">
+                            <i class="fas fa-trash"></i> Clear
+                        </button>
+                    </div>
+                    <textarea id="playground-code" class="playground-editor" placeholder="// Write your Cypescript code here...
+println(&quot;Hello from the playground!&quot;);
+
+let number: i32 = 42;
+print(&quot;The answer is: &quot;);
+println(number);">// Write your Cypescript code here...
+println("Hello from the playground!");
+
+let number: i32 = 42;
+print("The answer is: ");
+println(number);</textarea>
+                    <div class="output" id="playground-output"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    <script src="cypescript-interpreter.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

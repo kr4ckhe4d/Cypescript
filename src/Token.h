@@ -22,6 +22,7 @@ enum TokenType {
     TOK_ELSE,           // else
     TOK_WHILE,          // while
     TOK_FOR,            // for
+    TOK_DO,             // do
     TOK_RETURN,         // return
     TOK_TRUE,           // true
     TOK_FALSE,          // false
@@ -95,6 +96,7 @@ inline const char* tokenTypeToString(TokenType type) {
         case TOK_ELSE: return "ELSE";
         case TOK_WHILE: return "WHILE";
         case TOK_FOR: return "FOR";
+        case TOK_DO: return "DO";
         case TOK_RETURN: return "RETURN";
         case TOK_TRUE: return "TRUE";
         case TOK_FALSE: return "FALSE";

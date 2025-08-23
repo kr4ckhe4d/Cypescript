@@ -2,12 +2,33 @@
 
 A TypeScript-style language compiler built with C++ and LLVM. Cypescript aims to provide a familiar syntax for developers coming from TypeScript/JavaScript while compiling to efficient native code through LLVM.
 
+## 📖 Interactive Documentation
+
+**NEW!** Cypescript now features comprehensive web-based documentation with runnable examples:
+
+```bash
+# Launch interactive documentation
+./launch-docs.sh
+```
+
+The web documentation includes:
+- 🚀 **Runnable Examples** - Execute Cypescript code directly in your browser
+- 🎮 **Interactive Playground** - Write and test your own code
+- 📱 **Mobile-Friendly** - Works on all devices
+- 🔍 **Searchable** - Find what you need quickly
+- 📚 **Complete Reference** - All language features documented
+
 ## Features
 
 - **TypeScript-inspired syntax** with type annotations
 - **Variable declarations** with `let`, `const`, and type inference
 - **Built-in types**: `string`, `i32`, `f64`, `boolean`
-- **Function calls** (currently `print` function)
+- **Complete arithmetic operations** (`+`, `-`, `*`, `/`, `%`)
+- **Comparison operators** (`==`, `!=`, `<`, `<=`, `>`, `>=`)
+- **Control flow** with `if`/`else` statements and nesting
+- **All loop constructs**: `while`, `for`, `do-while`
+- **Variable assignments** and complex expressions
+- **Function calls** (currently `print` and `println` functions)
 - **String and numeric literals**
 - **Comments** (single-line `//` and multi-line `/* */`)
 - **Comprehensive error handling** and reporting
@@ -41,7 +62,13 @@ This will install:
 ./test.sh
 ```
 
-### 4. Manual Usage
+### 4. View Documentation
+
+```bash
+./launch-docs.sh
+```
+
+### 5. Manual Usage
 
 ```bash
 # Compile a Cypescript file
@@ -68,12 +95,68 @@ let pi: f64 = 3.14159;
 let isActive: boolean = true;
 ```
 
+### Arithmetic Operations
+
+```typescript
+let a: i32 = 10;
+let b: i32 = 3;
+
+let sum: i32 = a + b;        // 13
+let difference: i32 = a - b; // 7
+let product: i32 = a * b;    // 30
+let quotient: i32 = a / b;   // 3 (integer division)
+let remainder: i32 = a % b;  // 1
+```
+
+### Control Flow
+
+```typescript
+let score: i32 = 85;
+
+if (score >= 90) {
+    print("Grade: A");
+} else {
+    if (score >= 80) {
+        print("Grade: B");
+    } else {
+        print("Grade: C or below");
+    }
+}
+```
+
+### Loops
+
+```typescript
+// While loop
+let count: i32 = 0;
+while (count < 5) {
+    print("Count: ");
+    print(count);
+    count = count + 1;
+}
+
+// For loop
+for (let i: i32 = 0; i < 10; i = i + 1) {
+    print("Iteration: ");
+    print(i);
+}
+
+// Do-while loop
+let attempts: i32 = 0;
+do {
+    print("Attempt: ");
+    print(attempts);
+    attempts = attempts + 1;
+} while (attempts < 3);
+```
+
 ### Function Calls
 
 ```typescript
-print("Hello, World!");
+print("Hello, World!");  // Output without newline
+println("Hello, World!"); // Output with newline
 print(42);
-print(message);
+println(message);
 ```
 
 ### Comments
@@ -107,6 +190,69 @@ clang output.o -o my_program
 ./my_program
 ```
 
+## Example Programs
+
+### Factorial Calculator
+```typescript
+let n: i32 = 5;
+let factorial: i32 = 1;
+let counter: i32 = 1;
+
+while (counter <= n) {
+    factorial = factorial * counter;
+    counter = counter + 1;
+}
+
+print("5! = ");
+println(factorial); // Output: 120
+```
+
+### Prime Number Checker
+```typescript
+let testNum: i32 = 17;
+let divisor: i32 = 2;
+let isPrime: i32 = 1;
+
+if (testNum <= 1) {
+    isPrime = 0;
+} else {
+    while (divisor * divisor <= testNum) {
+        if (testNum % divisor == 0) {
+            isPrime = 0;
+        }
+        divisor = divisor + 1;
+    }
+}
+
+if (isPrime == 1) {
+    println("17 is prime!");
+}
+```
+
+### Fibonacci Sequence
+```typescript
+let limit: i32 = 10;
+let fib1: i32 = 0;
+let fib2: i32 = 1;
+let count: i32 = 0;
+
+while (count < limit) {
+    if (count == 0) {
+        println(fib1);
+    } else {
+        if (count == 1) {
+            println(fib2);
+        } else {
+            let nextFib: i32 = fib1 + fib2;
+            println(nextFib);
+            fib1 = fib2;
+            fib2 = nextFib;
+        }
+    }
+    count = count + 1;
+}
+```
+
 ## Development
 
 ### Project Structure
@@ -121,10 +267,21 @@ Cypescript/
 │   ├── CodeGen.cpp/h # LLVM IR generation
 │   └── Token.h       # Token definitions
 ├── example/
-│   └── hello.csc     # Example Cypescript code
+│   ├── hello.csc     # Basic example
+│   ├── arithmetic.csc # Arithmetic operations
+│   ├── control_flow.csc # If/else statements
+│   ├── while_loop.csc # While loops
+│   ├── all_loops.csc # All loop types
+│   └── comprehensive.csc # Complex algorithms
+├── docs/             # Web documentation
+│   ├── index.html    # Interactive docs
+│   ├── styles.css    # Documentation styling
+│   ├── script.js     # UI functionality
+│   └── cypescript-interpreter.js # Browser interpreter
 ├── build.sh          # Build script
 ├── test.sh           # Test script
 ├── setup-macos.sh    # macOS setup script
+├── launch-docs.sh    # Documentation launcher
 └── CMakeLists.txt    # CMake configuration
 ```
 
@@ -163,36 +320,54 @@ This will show:
 - **CMake** 3.15+
 - **LLVM** (any recent version, installed via Homebrew)
 - **Clang** (for linking final executable)
+- **Python 3** (for web documentation)
 
-## Roadmap
+## Language Features Status
 
-### Current Features ✅
+### ✅ Implemented Features
 - [x] Lexical analysis with comprehensive token support
-- [x] Basic parsing for variable declarations and function calls
-- [x] LLVM IR code generation
+- [x] Variable declarations (`let`) with type annotations
+- [x] Variable assignments with type checking
+- [x] All arithmetic operators (`+`, `-`, `*`, `/`, `%`)
+- [x] All comparison operators (`==`, `!=`, `<`, `<=`, `>`, `>=`)
+- [x] Control flow with `if`/`else` statements
+- [x] Nested conditional statements
+- [x] While loops with complex conditions
+- [x] Traditional for loops (`for (init; condition; increment)`)
+- [x] Do-while loops (post-condition loops)
+- [x] Nested loops of all types
+- [x] Built-in `print` function
 - [x] String and integer literal support
-- [x] Type annotations
-- [x] Error handling and reporting
+- [x] Boolean literals (`true`, `false`)
+- [x] Single-line (`//`) and multi-line (`/* */`) comments
+- [x] LLVM IR code generation
+- [x] Native executable compilation
+- [x] Comprehensive error handling and reporting
+- [x] Interactive web documentation with runnable examples
 
-### Planned Features 🚧
-- [ ] Arithmetic expressions (`+`, `-`, `*`, `/`)
-- [ ] Boolean expressions and logic operators
-- [ ] Control flow (`if`/`else`, `while`, `for`)
-- [ ] Function definitions
-- [ ] Arrays and objects
-- [ ] Type inference
-- [ ] Module system
+### 🚧 Planned Features
+- [ ] User-defined functions with parameters and return values
+- [ ] Function overloading and local scoping
+- [ ] Arrays and array operations
+- [ ] String manipulation functions
+- [ ] Objects and structures
+- [ ] Enhanced type system with generics
+- [ ] Module system and imports
 - [ ] Standard library functions
+- [ ] `break` and `continue` statements
+- [ ] `for...in` and `for...of` loops
+- [ ] Exception handling (`try`/`catch`)
 
 ## Contributing
 
 This is a learning project, but contributions are welcome! Areas that need work:
 
-1. **Parser improvements** - Add support for expressions and control flow
-2. **Type system** - Implement proper type checking
-3. **Standard library** - Add more built-in functions
-4. **Error messages** - Improve error reporting with line numbers
-5. **Optimization** - Add LLVM optimization passes
+1. **Language features** - Implement planned features
+2. **Standard library** - Add more built-in functions
+3. **Optimization** - Improve LLVM IR generation
+4. **Error messages** - Better error reporting with line numbers
+5. **Documentation** - Expand examples and tutorials
+6. **Testing** - Add comprehensive test suite
 
 ## License
 
@@ -203,3 +378,4 @@ MIT License - feel free to use this project for learning and experimentation.
 - Built with [LLVM](https://llvm.org/) compiler infrastructure
 - Inspired by TypeScript syntax and semantics
 - Thanks to the LLVM community for excellent documentation and examples
+- Web documentation powered by modern web technologies
