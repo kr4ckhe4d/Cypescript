@@ -108,6 +108,7 @@ void CodeGen::visit(ProgramNode *node)
     // Clear symbol table for each new program generation
     namedValues.clear();
     variableTypes.clear();
+    arraySizes.clear();
 
     for (const auto &stmt : node->statements)
     {
@@ -218,8 +219,16 @@ void CodeGen::visit(VariableDeclarationNode *node)
             typeToStore = "i32";
         } else if (auto *arrLit = dynamic_cast<ArrayLiteralNode*>(node->initializer.get())) {
             typeToStore = arrLit->elementType + "[]";
+            // Store array size for .length property access
+            arraySizes[node->variableName] = arrLit->elements.size();
         } else {
             typeToStore = "i32"; // default
+        }
+    } else if (node->typeName.length() > 2 && node->typeName.substr(node->typeName.length() - 2) == "[]") {
+        // Explicit array type declaration
+        if (auto *arrLit = dynamic_cast<ArrayLiteralNode*>(node->initializer.get())) {
+            // Store array size for .length property access
+            arraySizes[node->variableName] = arrLit->elements.size();
         }
     }
     variableTypes[node->variableName] = typeToStore;
@@ -903,9 +912,38 @@ llvm::Value *CodeGen::visit(ObjectLiteralNode *node)
     throw std::runtime_error("Codegen Error: Object literals are not yet supported in native compilation. Use the browser interpreter for full object support.");
 }
 
-// Object access implementation - basic version
+// Object access implementation - with array.length support
 llvm::Value *CodeGen::visit(ObjectAccessNode *node)
 {
-    // For now, object access is not fully supported in native compilation
-    throw std::runtime_error("Codegen Error: Object property access is not yet supported in native compilation. Use the browser interpreter for full object support.");
+    // Check if this is array.length access
+    if (node->property == "length") {
+        // Check if the base is a variable that refers to an array
+        if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(node->object.get())) {
+            // Look up the variable type
+            auto typeIt = variableTypes.find(varExpr->name);
+            if (typeIt != variableTypes.end()) {
+                std::string varType = typeIt->second;
+                // Check if it's an array type
+                if (varType.length() > 2 && varType.substr(varType.length() - 2) == "[]") {
+                    // Look up the array size
+                    auto sizeIt = arraySizes.find(varExpr->name);
+                    if (sizeIt != arraySizes.end()) {
+                        // Return the array size as an i32 constant
+                        return llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), sizeIt->second, false);
+                    } else {
+                        throw std::runtime_error("Codegen Error: Array size not found for variable '" + varExpr->name + "'");
+                    }
+                } else {
+                    throw std::runtime_error("Codegen Error: .length property is only supported on arrays, not on '" + varType + "'");
+                }
+            } else {
+                throw std::runtime_error("Codegen Error: Unknown variable '" + varExpr->name + "' in property access");
+            }
+        } else {
+            throw std::runtime_error("Codegen Error: .length property access is only supported on array variables");
+        }
+    }
+    
+    // For other property access, object access is not yet supported
+    throw std::runtime_error("Codegen Error: Object property access (other than array.length) is not yet supported in native compilation. Use the browser interpreter for full object support.");
 }
