@@ -58,6 +58,7 @@ The **browser interpreter** provides:
 
 - **`game_system.csc`** - RPG management system with complex object hierarchies
 - **`complex_data_structures.csc`** - E-commerce system with nested objects and arrays
+- **`functions_preview.csc`** - Preview of planned user-defined functions (not yet implemented)
 
 ## Alternative Approaches
 

@@ -676,23 +676,141 @@ let result: i32 = my_function(21); // Returns 42
 - [x] Interactive web documentation with runnable examples
 
 ### 🚧 Planned Features
-- [ ] User-defined functions with parameters and return values
-- [ ] Function overloading and local scoping
-- [ ] Arrays and array operations (native compiler support)
-- [ ] Objects and structures (native compiler support)
-- [ ] String manipulation functions
-- [ ] Enhanced type system with generics
-- [ ] Module system and imports
-- [ ] Standard library functions
-- [ ] `break` and `continue` statements
-- [ ] `for...in` and `for...of` loops
-- [ ] Exception handling (`try`/`catch`)
+- [ ] **User-defined functions** with parameters and return values
+  - [ ] Function declarations: `function add(a: i32, b: i32): i32 { return a + b; }`
+  - [ ] Function calls: `let result: i32 = add(5, 3);`
+  - [ ] Return statements and type checking
+  - [ ] Local variable scoping within functions
+  - [ ] Function overloading support
+- [ ] **Enhanced string operations**
+  - [ ] String concatenation operator (`+`)
+  - [ ] Escape sequences (`\n`, `\t`, `\"`, `\\`)
+  - [ ] String interpolation/template literals
+- [ ] **Advanced control flow**
+  - [ ] `break` and `continue` statements in loops
+  - [ ] `for...in` and `for...of` loops for arrays
+  - [ ] Switch/case statements
+- [ ] **Enhanced type system**
+  - [ ] Boolean literals (`true`, `false`) in native compiler
+  - [ ] Floating-point support (`f64` literals and arithmetic)
+  - [ ] Type inference improvements
+  - [ ] Generic types and functions
+- [ ] **Data structures** (native compiler support)
+  - [ ] Objects and structures with property access
+  - [ ] Nested data structures
+  - [ ] Dynamic arrays and collections
+- [ ] **Module system and imports**
+  - [ ] File-based modules: `import { function } from "./module.csc"`
+  - [ ] Export declarations: `export function myFunc() { }`
+  - [ ] Standard library modules
+- [ ] **Exception handling**
+  - [ ] Try/catch blocks: `try { } catch (error) { }`
+  - [ ] Throw statements: `throw "Error message"`
+  - [ ] Error types and handling
+- [ ] **Standard library expansion**
+  - [ ] More built-in functions and utilities
+  - [ ] File system operations
+  - [ ] Network/HTTP capabilities
+  - [ ] JSON parsing and serialization
+
+## Function Implementation Roadmap
+
+### **Phase 1: Basic Function Support**
+```typescript
+// Function declaration
+function add(a: i32, b: i32): i32 {
+    return a + b;
+}
+
+// Function call
+let result: i32 = add(5, 3);
+println(result); // 8
+```
+
+**Implementation Requirements:**
+- [ ] **Lexer**: Add `function` and `return` keywords
+- [ ] **Parser**: Parse function declarations and calls
+- [ ] **AST**: Add `FunctionDeclarationNode` and `FunctionCallNode`
+- [ ] **CodeGen**: Generate LLVM function definitions and calls
+- [ ] **Symbol Table**: Track function names and signatures
+- [ ] **Type Checking**: Validate parameter and return types
+
+### **Phase 2: Advanced Function Features**
+```typescript
+// Multiple parameters
+function greet(name: string, age: i32): string {
+    print("Hello ");
+    print(name);
+    print(", you are ");
+    print(age);
+    println(" years old");
+    return "greeting_complete";
+}
+
+// Void functions
+function printHeader(): void {
+    println("=== Program Start ===");
+}
+
+// Local variables
+function calculate(x: i32): i32 {
+    let temp: i32 = x * 2;
+    let result: i32 = temp + 10;
+    return result;
+}
+```
+
+**Implementation Requirements:**
+- [ ] **Local Scoping**: Variables local to function scope
+- [ ] **Void Functions**: Functions that don't return values
+- [ ] **Multiple Parameters**: Support for 0-N parameters
+- [ ] **Stack Management**: Proper LLVM stack frame handling
+
+### **Phase 3: Function Overloading**
+```typescript
+// Same name, different signatures
+function process(value: i32): i32 {
+    return value * 2;
+}
+
+function process(text: string): string {
+    return string_upper(text);
+}
+
+// Usage
+let num: i32 = process(42);        // Calls i32 version
+let str: string = process("hello"); // Calls string version
+```
+
+**Implementation Requirements:**
+- [ ] **Name Mangling**: Generate unique LLVM function names
+- [ ] **Overload Resolution**: Choose correct function based on parameters
+- [ ] **Type System**: Enhanced type matching for overloads
+
+### **Phase 4: Recursive Functions**
+```typescript
+// Factorial example
+function factorial(n: i32): i32 {
+    if (n <= 1) {
+        return 1;
+    } else {
+        return n * factorial(n - 1);
+    }
+}
+
+let result: i32 = factorial(5); // 120
+```
+
+**Implementation Requirements:**
+- [ ] **Call Stack**: Proper recursive call handling
+- [ ] **Tail Recursion**: Optimization for tail-recursive functions
+- [ ] **Stack Overflow**: Protection against infinite recursion
 
 ## Contributing
 
 This is a learning project, but contributions are welcome! Areas that need work:
 
-1. **Language features** - Implement planned features
+1. **Language features** - Implement planned features (especially functions!)
 2. **Standard library** - Add more built-in functions
 3. **Optimization** - Improve LLVM IR generation
 4. **Error messages** - Better error reporting with line numbers

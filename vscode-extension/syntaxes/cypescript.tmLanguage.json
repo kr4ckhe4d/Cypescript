@@ -67,7 +67,7 @@
         },
         {
           "name": "keyword.other.cypescript",
-          "match": "\\b(let|const|var)\\b"
+          "match": "\\b(let|const|var|function)\\b"
         },
         {
           "name": "keyword.operator.new.cypescript",

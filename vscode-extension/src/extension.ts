@@ -143,10 +143,14 @@ class CypescriptCompletionProvider implements vscode.CompletionItemProvider {
         const completions: vscode.CompletionItem[] = [];
 
         // Keywords
-        const keywords = ['let', 'const', 'if', 'else', 'while', 'for', 'do', 'break', 'continue', 'return'];
+        const keywords = ['let', 'const', 'if', 'else', 'while', 'for', 'do', 'break', 'continue', 'return', 'function'];
         keywords.forEach(keyword => {
             const item = new vscode.CompletionItem(keyword, vscode.CompletionItemKind.Keyword);
             item.detail = 'Cypescript keyword';
+            if (keyword === 'function') {
+                item.detail = 'Cypescript keyword (planned feature)';
+                item.documentation = new vscode.MarkdownString('User-defined functions are planned for a future release.');
+            }
             completions.push(item);
         });
 

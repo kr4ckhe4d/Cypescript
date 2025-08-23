@@ -137,6 +137,30 @@
     ],
     "description": "Generate random integer using C++ function"
   },
+  "Function Declaration": {
+    "prefix": "function",
+    "body": [
+      "function ${1:functionName}(${2:param}: ${3|string,i32,f64,boolean|}): ${4|string,i32,f64,boolean,void|} {",
+      "\t${5:// function body}",
+      "\treturn ${6:value};",
+      "}"
+    ],
+    "description": "Declare a function with parameters and return type (planned feature)"
+  },
+  "Function Call": {
+    "prefix": "call",
+    "body": [
+      "let ${1:result}: ${2|string,i32,f64,boolean|} = ${3:functionName}(${4:arguments});"
+    ],
+    "description": "Call a function and store result (planned feature)"
+  },
+  "Return Statement": {
+    "prefix": "return",
+    "body": [
+      "return ${1:value};"
+    ],
+    "description": "Return a value from function (planned feature)"
+  },
   "Basic Program Template": {
     "prefix": "template",
     "body": [
