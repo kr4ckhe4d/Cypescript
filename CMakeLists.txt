@@ -68,6 +68,7 @@ add_executable(cscript
     src/Lexer.cpp
     src/Parser.cpp
     src/CodeGen.cpp
+    src/ObjectOptimizer.cpp  # NEW: Phase 1 optimization
 )
 
 # Set target properties

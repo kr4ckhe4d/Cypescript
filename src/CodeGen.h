@@ -3,6 +3,7 @@
 #define CODEGEN_H
 
 #include "AST.h"
+#include "ObjectOptimizer.h"  // NEW: Include optimizer
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/IRBuilder.h"
@@ -56,7 +57,12 @@ private:
     // Array size tracking: Maps array variable names to their sizes
     std::map<std::string, size_t> arraySizes;
     
-    // Object property tracking: Maps object variable names to their properties
+    // OPTIMIZED: Object system with direct access (Phase 1 optimization)
+    ObjectOptimizer objectOptimizer;
+    OptimizedObjectCreator objectCreator;
+    std::map<std::string, ObjectOptimizer::ObjectLayout> objectLayouts;
+    
+    // Legacy object property tracking (to be phased out after optimization)
     std::map<std::string, std::map<std::string, llvm::Value*>> objectProperties;
     std::map<std::string, std::map<std::string, std::string>> objectPropertyTypes;
     
@@ -106,6 +112,9 @@ private:
     // Object support helper functions
     llvm::Value *createEmptyObject();
     llvm::Value *createObjectWithProperties(ObjectLiteralNode *node);
+    
+    // OPTIMIZED: Phase 1 object creation with direct struct access
+    llvm::Value *createOptimizedObjectWithProperties(ObjectLiteralNode *node);
 
 public:
     CodeGen(llvm::LLVMContext &context);
