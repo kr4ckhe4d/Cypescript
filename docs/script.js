@@ -351,3 +351,183 @@ function trackPageViews() {
 
 // Initialize performance tracking
 document.addEventListener('DOMContentLoaded', trackPageViews);
+
+// Performance Demo functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const performanceButton = document.getElementById('run-performance-test');
+    const performanceResults = document.getElementById('performance-results');
+    const performanceOutput = document.getElementById('performance-output');
+    
+    if (performanceButton) {
+        performanceButton.addEventListener('click', runPerformanceDemo);
+    }
+    
+    function runPerformanceDemo() {
+        performanceButton.disabled = true;
+        performanceButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running...';
+        
+        // Show results container
+        performanceResults.style.display = 'block';
+        performanceOutput.innerHTML = '<p>Running performance tests...</p>';
+        
+        // Run tests after a short delay to show loading state
+        setTimeout(() => {
+            const results = runBrowserBenchmarks();
+            displayPerformanceResults(results);
+            
+            performanceButton.disabled = false;
+            performanceButton.innerHTML = '<i class="fas fa-play"></i> Run Performance Test';
+        }, 100);
+    }
+    
+    function runBrowserBenchmarks() {
+        const results = {};
+        
+        // Test 1: Array Sum Performance
+        console.log('Running array sum benchmark...');
+        const arraySize = 1000;
+        const iterations = 10000;
+        const testArray = Array.from({length: arraySize}, (_, i) => i + 1);
+        
+        const sumStart = performance.now();
+        let totalSum = 0;
+        for (let iter = 0; iter < iterations; iter++) {
+            let currentSum = 0;
+            for (let i = 0; i < arraySize; i++) {
+                currentSum += testArray[i];
+            }
+            totalSum += currentSum;
+        }
+        const sumEnd = performance.now();
+        results.arraySum = {
+            time: sumEnd - sumStart,
+            operations: iterations * arraySize,
+            result: totalSum
+        };
+        
+        // Test 2: Prime Number Generation
+        console.log('Running prime generation benchmark...');
+        const primeLimit = 1000;
+        const primeStart = performance.now();
+        let primeCount = 0;
+        
+        for (let num = 2; num <= primeLimit; num++) {
+            let isPrime = true;
+            for (let divisor = 2; divisor * divisor <= num; divisor++) {
+                if (num % divisor === 0) {
+                    isPrime = false;
+                    break;
+                }
+            }
+            if (isPrime) primeCount++;
+        }
+        
+        const primeEnd = performance.now();
+        results.primeGeneration = {
+            time: primeEnd - primeStart,
+            primesFound: primeCount,
+            limit: primeLimit
+        };
+        
+        // Test 3: Fibonacci Sequence
+        console.log('Running Fibonacci benchmark...');
+        const fibIterations = 1000;
+        const fibLimit = 20;
+        const fibStart = performance.now();
+        let fibTotal = 0;
+        
+        for (let iter = 0; iter < fibIterations; iter++) {
+            for (let n = 0; n <= fibLimit; n++) {
+                let a = 0, b = 1, fib = 0;
+                if (n === 0) fib = 0;
+                else if (n === 1) fib = 1;
+                else {
+                    for (let i = 2; i <= n; i++) {
+                        fib = a + b;
+                        a = b;
+                        b = fib;
+                    }
+                }
+                fibTotal += fib;
+            }
+        }
+        
+        const fibEnd = performance.now();
+        results.fibonacci = {
+            time: fibEnd - fibStart,
+            iterations: fibIterations,
+            total: fibTotal
+        };
+        
+        // Test 4: Array Sorting
+        console.log('Running sorting benchmark...');
+        const sortIterations = 100;
+        const sortArray = [64, 34, 25, 12, 22, 11, 90, 88, 76, 50, 42, 30, 18, 95, 70];
+        const sortStart = performance.now();
+        let sortOperations = 0;
+        
+        for (let iter = 0; iter < sortIterations; iter++) {
+            const arr = [...sortArray]; // Copy array
+            // Bubble sort
+            for (let i = 0; i < arr.length - 1; i++) {
+                for (let j = 0; j < arr.length - i - 1; j++) {
+                    if (arr[j] > arr[j + 1]) {
+                        [arr[j], arr[j + 1]] = [arr[j + 1], arr[j]];
+                        sortOperations++;
+                    }
+                }
+            }
+        }
+        
+        const sortEnd = performance.now();
+        results.sorting = {
+            time: sortEnd - sortStart,
+            iterations: sortIterations,
+            operations: sortOperations
+        };
+        
+        return results;
+    }
+    
+    function displayPerformanceResults(results) {
+        const totalTime = results.arraySum.time + results.primeGeneration.time + 
+                         results.fibonacci.time + results.sorting.time;
+        
+        const html = `
+            <div class="performance-summary">
+                <h4>🚀 Browser JavaScript Performance Results</h4>
+                <div class="result-item">
+                    <strong>Array Sum (${results.arraySum.operations.toLocaleString()} operations):</strong>
+                    <span class="time">${results.arraySum.time.toFixed(2)}ms</span>
+                </div>
+                <div class="result-item">
+                    <strong>Prime Generation (up to ${results.primeGeneration.limit}):</strong>
+                    <span class="time">${results.primeGeneration.time.toFixed(2)}ms</span>
+                    <span class="detail">(Found ${results.primeGeneration.primesFound} primes)</span>
+                </div>
+                <div class="result-item">
+                    <strong>Fibonacci Sequence (${results.fibonacci.iterations} iterations):</strong>
+                    <span class="time">${results.fibonacci.time.toFixed(2)}ms</span>
+                </div>
+                <div class="result-item">
+                    <strong>Array Sorting (${results.sorting.iterations} iterations):</strong>
+                    <span class="time">${results.sorting.time.toFixed(2)}ms</span>
+                    <span class="detail">(${results.sorting.operations} swaps)</span>
+                </div>
+                <div class="total-time">
+                    <strong>Total Time: ${totalTime.toFixed(2)}ms</strong>
+                </div>
+                <div class="comparison-note">
+                    <p><strong>💡 Comparison with Benchmarks:</strong></p>
+                    <p>This browser test shows JavaScript's excellent performance on smaller datasets. 
+                    The native Cypescript advantage becomes apparent with larger, more intensive computations.</p>
+                    <p><em>Your browser: ${navigator.userAgent.includes('Chrome') ? 'Chrome V8' : 
+                                        navigator.userAgent.includes('Firefox') ? 'Firefox SpiderMonkey' : 
+                                        navigator.userAgent.includes('Safari') ? 'Safari JavaScriptCore' : 'Unknown'}</em></p>
+                </div>
+            </div>
+        `;
+        
+        performanceOutput.innerHTML = html;
+    }
+});
