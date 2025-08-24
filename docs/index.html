@@ -27,6 +27,8 @@
                 <li><a href="#control-flow" class="nav-link">Control Flow</a></li>
                 <li><a href="#loops" class="nav-link">Loops</a></li>
                 <li><a href="#functions" class="nav-link">Functions</a></li>
+                <li><a href="#objects" class="nav-link">Objects</a></li>
+                <li><a href="#cpp-integration" class="nav-link">C++ Integration</a></li>
                 <li><a href="#performance" class="nav-link">Performance</a></li>
                 <li><a href="#examples" class="nav-link">Examples</a></li>
                 <li><a href="#playground" class="nav-link">Playground</a></li>
@@ -748,6 +750,396 @@ println("");
 println("=== System Complete ===");</code></pre>
                         <div class="output" id="complex-data-example-output"></div>
                     </div>
+                </div>
+            </section>
+
+            <!-- Objects Section -->
+            <section id="objects" class="content-section">
+                <h1>Native TypeScript-Style Objects</h1>
+                <p>Cypescript provides native TypeScript-style object support with property access, just like TypeScript!</p>
+                
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h3><i class="fas fa-plus-circle"></i> Object Creation</h3>
+                        <p>Create objects with mixed types using familiar syntax</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3><i class="fas fa-search"></i> Property Access</h3>
+                        <p>Access properties with dot notation: obj.property</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3><i class="fas fa-code"></i> Type Safety</h3>
+                        <p>Type-safe property access with compile-time checking</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3><i class="fas fa-rocket"></i> Native Performance</h3>
+                        <p>Compiled to efficient native code via LLVM</p>
+                    </div>
+                </div>
+
+                <div class="interactive-example">
+                    <h2>Object Creation</h2>
+                    <p>Create objects with mixed types using TypeScript-style syntax.</p>
+                    
+                    <div class="code-example">
+                        <div class="code-header">
+                            <span class="filename">object-creation.csc</span>
+                            <button class="run-btn" onclick="runExample('object-creation-example')">
+                                <i class="fas fa-play"></i> Run
+                            </button>
+                        </div>
+                        <pre><code class="language-typescript" id="object-creation-example">// Create objects with mixed types
+let user = {
+    name: "Alice Johnson",
+    age: 28,
+    role: "Developer",
+    active: true
+};
+
+let config = {
+    appName: "Cypescript IDE",
+    version: "1.0.0",
+    port: 8080,
+    debug: false
+};
+
+println("✅ Objects created successfully!");
+println("🎯 TypeScript-style syntax working!");</code></pre>
+                        <div class="output" id="object-creation-example-output"></div>
+                    </div>
+                </div>
+
+                <div class="interactive-example">
+                    <h2>Property Access</h2>
+                    <p>Access object properties using dot notation.</p>
+                    
+                    <div class="code-example">
+                        <div class="code-header">
+                            <span class="filename">property-access.csc</span>
+                            <button class="run-btn" onclick="runExample('property-access-example')">
+                                <i class="fas fa-play"></i> Run
+                            </button>
+                        </div>
+                        <pre><code class="language-typescript" id="property-access-example">// Create a user object
+let user = {
+    name: "Alice Johnson",
+    age: 28,
+    role: "Developer",
+    active: true
+};
+
+// Access properties
+println("User Information:");
+println(user.name);     // "Alice Johnson"
+println(user.age);      // 28
+println(user.role);     // "Developer"
+println(user.active);   // 1 (true)
+
+// Create configuration object
+let config = {
+    appName: "Cypescript IDE",
+    port: 8080,
+    debug: false
+};
+
+println("Configuration:");
+println(config.appName);  // "Cypescript IDE"
+println(config.port);     // 8080
+println(config.debug);    // 0 (false)</code></pre>
+                        <div class="output" id="property-access-example-output"></div>
+                    </div>
+                </div>
+
+                <div class="interactive-example">
+                    <h2>Real-World Example</h2>
+                    <p>Employee management system using native objects.</p>
+                    
+                    <div class="code-example">
+                        <div class="code-header">
+                            <span class="filename">employee-system.csc</span>
+                            <button class="run-btn" onclick="runExample('employee-system-example')">
+                                <i class="fas fa-play"></i> Run
+                            </button>
+                        </div>
+                        <pre><code class="language-typescript" id="employee-system-example">// Employee management system
+let employee = {
+    firstName: "Alice",
+    lastName: "Johnson",
+    employeeId: 12345,
+    department: "Engineering",
+    salary: 95000,
+    isActive: true,
+    isRemote: false
+};
+
+// Process employee data
+print("Employee: ");
+print(employee.firstName);
+print(" ");
+println(employee.lastName);
+
+print("ID: ");
+println(employee.employeeId);
+
+print("Department: ");
+println(employee.department);
+
+print("Status: ");
+if (employee.isActive == 1) {
+    println("Active");
+} else {
+    println("Inactive");
+}
+
+print("Work Mode: ");
+if (employee.isRemote == 1) {
+    println("Remote");
+} else {
+    println("On-site");
+}</code></pre>
+                        <div class="output" id="employee-system-example-output"></div>
+                    </div>
+                </div>
+
+                <div class="feature-reference">
+                    <h2>Object Features</h2>
+                    <p>Complete reference of native object capabilities.</p>
+                    
+                    <div class="function-grid">
+                        <div class="function-card">
+                            <h4>✅ Currently Available</h4>
+                            <ul>
+                                <li>Object creation: <code>{ key: value }</code></li>
+                                <li>Property access: <code>obj.property</code></li>
+                                <li>Mixed types: strings, integers, booleans</li>
+                                <li>Multiple objects in same program</li>
+                                <li>Type-safe property access</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="function-card">
+                            <h4>🚧 Coming Soon</h4>
+                            <ul>
+                                <li>Object printing: <code>println(obj)</code></li>
+                                <li>JSON conversion: <code>JSON.stringify(obj)</code></li>
+                                <li>JSON parsing: <code>JSON.parse(jsonString)</code></li>
+                                <li>Nested objects: <code>obj.nested.property</code></li>
+                                <li>Object methods and <code>this</code> keyword</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="function-card">
+                            <h4>Supported Types</h4>
+                            <ul>
+                                <li><strong>Strings:</strong> <code>"Alice Johnson"</code></li>
+                                <li><strong>Integers:</strong> <code>28</code>, <code>8080</code></li>
+                                <li><strong>Booleans:</strong> <code>true</code>, <code>false</code></li>
+                                <li><strong>Mixed:</strong> All types in same object</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="function-card">
+                            <h4>Compilation</h4>
+                            <ul>
+                                <li>Native LLVM compilation</li>
+                                <li>Type-safe property access</li>
+                                <li>Efficient memory layout</li>
+                                <li>Zero-cost abstractions</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- C++ Integration Section -->
+            <section id="cpp-integration" class="content-section">
+                <h1>C++ Integration (Advanced)</h1>
+                <p>For programs that need additional functionality beyond native TypeScript features, Cypescript provides seamless C++ integration with 30+ standard library functions.</p>
+                
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h3><i class="fas fa-code"></i> String Functions</h3>
+                        <p>Advanced string manipulation and processing</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3><i class="fas fa-list"></i> Array Functions</h3>
+                        <p>Mathematical operations on arrays</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3><i class="fas fa-file"></i> File I/O</h3>
+                        <p>Read and write files from your programs</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3><i class="fas fa-database"></i> JSON Functions</h3>
+                        <p>Create and manipulate JSON data</p>
+                    </div>
+                </div>
+
+                <div class="interactive-example">
+                    <h2>String Functions</h2>
+                    <p>Advanced string manipulation with C++ integration.</p>
+                    
+                    <div class="code-example">
+                        <div class="code-header">
+                            <span class="filename">string-functions.csc</span>
+                            <button class="run-btn" onclick="runExample('string-functions-example')">
+                                <i class="fas fa-play"></i> Run
+                            </button>
+                        </div>
+                        <pre><code class="language-typescript" id="string-functions-example">// String processing with C++ functions
+let text: string = "Hello World";
+
+// String manipulation
+let reversed: string = string_reverse(text);
+let upper: string = string_upper(text);
+let lower: string = string_lower(text);
+let length: i32 = string_length(text);
+
+println("Original: " + text);
+println("Reversed: " + reversed);
+println("Uppercase: " + upper);
+println("Lowercase: " + lower);
+println("Length: " + length);
+
+// String searching
+let pos: i32 = string_find(text, "World");
+println("Position of 'World': " + pos);
+
+// Substring extraction
+let substr: string = string_substring(text, 0, 5);
+println("First 5 characters: " + substr);</code></pre>
+                        <div class="output" id="string-functions-example-output"></div>
+                    </div>
+                </div>
+
+                <div class="interactive-example">
+                    <h2>JSON Functions</h2>
+                    <p>Create and manipulate JSON data with C++ integration.</p>
+                    
+                    <div class="code-example">
+                        <div class="code-header">
+                            <span class="filename">json-functions.csc</span>
+                            <button class="run-btn" onclick="runExample('json-functions-example')">
+                                <i class="fas fa-play"></i> Run
+                            </button>
+                        </div>
+                        <pre><code class="language-typescript" id="json-functions-example">// JSON manipulation with C++ functions
+let user: string = json_create_object();
+
+// Add properties
+user = json_add_string(user, "name", "Alice Johnson");
+user = json_add_string(user, "role", "Developer");
+user = json_add_int(user, "age", 28);
+user = json_add_boolean(user, "active", 1);
+
+println("User JSON:");
+println(json_prettify(user));
+
+// Retrieve values
+let name: string = json_get_string(user, "name");
+let age: i32 = json_get_int(user, "age");
+let active: i32 = json_get_boolean(user, "active");
+
+println("Retrieved values:");
+println("Name: " + name);
+println("Age: " + age);
+println("Active: " + active);</code></pre>
+                        <div class="output" id="json-functions-example-output"></div>
+                    </div>
+                </div>
+
+                <div class="interactive-example">
+                    <h2>File I/O Functions</h2>
+                    <p>Read and write files with C++ integration.</p>
+                    
+                    <div class="code-example">
+                        <div class="code-header">
+                            <span class="filename">file-io.csc</span>
+                            <button class="run-btn" onclick="runExample('file-io-example')">
+                                <i class="fas fa-play"></i> Run
+                            </button>
+                        </div>
+                        <pre><code class="language-typescript" id="file-io-example">// File I/O with C++ functions
+let filename: string = "test.txt";
+let content: string = "Hello from Cypescript!";
+
+// Write to file
+let writeResult: i32 = file_write(filename, content);
+if (writeResult == 1) {
+    println("✅ File written successfully");
+} else {
+    println("❌ Failed to write file");
+}
+
+// Check if file exists
+let exists: i32 = file_exists(filename);
+if (exists == 1) {
+    println("✅ File exists");
+    
+    // Read from file
+    let readContent: string = file_read(filename);
+    println("File content: " + readContent);
+} else {
+    println("❌ File does not exist");
+}</code></pre>
+                        <div class="output" id="file-io-example-output"></div>
+                    </div>
+                </div>
+
+                <div class="function-reference">
+                    <h2>C++ Function Reference</h2>
+                    <p>Complete reference of available C++ integration functions.</p>
+                    
+                    <div class="function-grid">
+                        <div class="function-card">
+                            <h4>String Functions</h4>
+                            <ul>
+                                <li><code>string_reverse(str)</code> - Reverse string</li>
+                                <li><code>string_upper(str)</code> - Convert to uppercase</li>
+                                <li><code>string_lower(str)</code> - Convert to lowercase</li>
+                                <li><code>string_length(str)</code> - Get string length</li>
+                                <li><code>string_substring(str, start, len)</code> - Extract substring</li>
+                                <li><code>string_find(str, substr)</code> - Find substring position</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="function-card">
+                            <h4>Array Functions</h4>
+                            <ul>
+                                <li><code>array_sum_i32(arr, size)</code> - Sum array elements</li>
+                                <li><code>array_max_i32(arr, size)</code> - Find maximum</li>
+                                <li><code>array_min_i32(arr, size)</code> - Find minimum</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="function-card">
+                            <h4>File I/O Functions</h4>
+                            <ul>
+                                <li><code>file_read(filename)</code> - Read file contents</li>
+                                <li><code>file_write(filename, content)</code> - Write to file</li>
+                                <li><code>file_exists(filename)</code> - Check if file exists</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="function-card">
+                            <h4>JSON Functions</h4>
+                            <ul>
+                                <li><code>json_create_object()</code> - Create empty object</li>
+                                <li><code>json_add_string(obj, key, value)</code> - Add string</li>
+                                <li><code>json_add_int(obj, key, value)</code> - Add integer</li>
+                                <li><code>json_get_string(obj, key)</code> - Get string value</li>
+                                <li><code>json_prettify(jsonString)</code> - Format JSON</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="compilation-note">
+                    <h3>📝 Compilation Note</h3>
+                    <p>C++ integration functions require special compilation. Use:</p>
+                    <pre><code>./compile-with-cpp.sh your_program.csc output_name</code></pre>
+                    <p>For native TypeScript-style development, use regular compilation:</p>
+                    <pre><code>./build/cscript your_program.csc</code></pre>
                 </div>
             </section>
 

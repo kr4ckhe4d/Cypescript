@@ -220,6 +220,15 @@ void CodeGen::visit(VariableDeclarationNode *node)
                 varLLVMType = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
             } else if (auto *intLit = dynamic_cast<IntegerLiteralNode*>(node->initializer.get())) {
                 varLLVMType = llvm::Type::getInt32Ty(m_context);
+            } else if (auto *boolLit = dynamic_cast<BooleanLiteralNode*>(node->initializer.get())) {
+                varLLVMType = llvm::Type::getInt32Ty(m_context); // Booleans are stored as i32
+            } else if (auto *objLit = dynamic_cast<ObjectLiteralNode*>(node->initializer.get())) {
+                // Object literal - store as i32 for now (object ID)
+                varLLVMType = llvm::Type::getInt32Ty(m_context);
+                
+                // Track this variable as an object
+                std::string objectKey = "obj_" + std::to_string(reinterpret_cast<uintptr_t>(objLit));
+                variableToObjectKey[node->variableName] = objectKey;
             } else if (auto *arrLit = dynamic_cast<ArrayLiteralNode*>(node->initializer.get())) {
                 // For arrays, use pointer to element type
                 if (arrLit->elementType == "i32") {
@@ -260,6 +269,10 @@ void CodeGen::visit(VariableDeclarationNode *node)
             typeToStore = "string";
         } else if (auto *intLit = dynamic_cast<IntegerLiteralNode*>(node->initializer.get())) {
             typeToStore = "i32";
+        } else if (auto *boolLit = dynamic_cast<BooleanLiteralNode*>(node->initializer.get())) {
+            typeToStore = "boolean";
+        } else if (auto *objLit = dynamic_cast<ObjectLiteralNode*>(node->initializer.get())) {
+            typeToStore = "object";
         } else if (auto *arrLit = dynamic_cast<ArrayLiteralNode*>(node->initializer.get())) {
             typeToStore = arrLit->elementType + "[]";
             // Store array size for .length property access
@@ -334,6 +347,10 @@ llvm::Value *CodeGen::visit(ExpressionNode *node)
     {
         return visit(intNode);
     }
+    else if (auto *boolNode = dynamic_cast<BooleanLiteralNode *>(node))
+    {
+        return visit(boolNode);
+    }
     else if (auto *varNode = dynamic_cast<VariableExpressionNode *>(node))
     {
         return visit(varNode);
@@ -377,6 +394,12 @@ llvm::Value *CodeGen::visit(IntegerLiteralNode *node)
 {
     // Create i32 constant for integer literals
     return llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), node->value, true);
+}
+
+llvm::Value *CodeGen::visit(BooleanLiteralNode *node)
+{
+    // Create i32 constant for boolean literals (1 for true, 0 for false)
+    return llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), node->value ? 1 : 0, false);
 }
 
 llvm::Value *CodeGen::visit(VariableExpressionNode *node)
@@ -1009,12 +1032,111 @@ llvm::Value *CodeGen::visit(ArrayAccessNode *node)
 // Object literal implementation - basic version
 llvm::Value *CodeGen::visit(ObjectLiteralNode *node)
 {
-    // For now, objects are not fully supported in native compilation
-    // This is a placeholder that will throw an error
-    throw std::runtime_error("Codegen Error: Object literals are not yet supported in native compilation. Use the browser interpreter for full object support.");
+    // Implement proper TypeScript-style object literals
+    // We'll create a dynamic object structure that can hold mixed types
+    
+    if (node->properties.empty()) {
+        // Empty object {} - create an empty object structure
+        return createEmptyObject();
+    }
+    
+    // Create object with properties
+    return createObjectWithProperties(node);
 }
 
-// Object access implementation - with array.length support
+// Helper function to create an empty object
+llvm::Value *CodeGen::createEmptyObject()
+{
+    // For now, return a simple marker value for empty objects
+    // In a full implementation, this would be a proper object structure
+    return llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), 0);
+}
+
+// Helper function to create object with properties
+llvm::Value *CodeGen::createObjectWithProperties(ObjectLiteralNode *node)
+{
+    // For the initial implementation, we'll create a simple object representation
+    // that can be extended later for full TypeScript compatibility
+    
+    // Count properties to determine object size
+    size_t propertyCount = node->properties.size();
+    
+    // Create a simple object ID based on property count
+    // This is a simplified approach - a full implementation would use
+    // proper object structures with property tables
+    llvm::Value* objectId = llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), propertyCount);
+    
+    // Store object properties for later access
+    // We'll use the object node pointer as a unique identifier
+    std::string objectKey = "obj_" + std::to_string(reinterpret_cast<uintptr_t>(node));
+    
+    std::map<std::string, llvm::Value*> properties;
+    std::map<std::string, std::string> propertyTypes;
+    
+    // Store object properties in global variables and track them
+    for (size_t i = 0; i < node->properties.size(); ++i) {
+        const auto& prop = node->properties[i];
+        
+        // Generate a unique name for this property
+        std::string propName = ".obj_" + std::to_string(reinterpret_cast<uintptr_t>(node)) + "_" + prop.key;
+        
+        // Generate code for the property value
+        llvm::Value* propValue = visit(prop.value.get());
+        
+        if (propValue) {
+            if (auto* strLit = dynamic_cast<StringLiteralNode*>(prop.value.get())) {
+                // Handle string properties
+                llvm::Constant* strConstant = llvm::ConstantDataArray::getString(m_context, strLit->value, true);
+                llvm::GlobalVariable* globalStr = new llvm::GlobalVariable(
+                    *m_module,
+                    strConstant->getType(),
+                    true,
+                    llvm::GlobalValue::PrivateLinkage,
+                    strConstant,
+                    propName
+                );
+                properties[prop.key] = globalStr;
+                propertyTypes[prop.key] = "string";
+            }
+            else if (auto* intLit = dynamic_cast<IntegerLiteralNode*>(prop.value.get())) {
+                // Handle integer properties
+                llvm::Constant* intConstant = llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), intLit->value);
+                llvm::GlobalVariable* globalInt = new llvm::GlobalVariable(
+                    *m_module,
+                    llvm::Type::getInt32Ty(m_context),
+                    true,
+                    llvm::GlobalValue::PrivateLinkage,
+                    intConstant,
+                    propName
+                );
+                properties[prop.key] = globalInt;
+                propertyTypes[prop.key] = "i32";
+            }
+            else if (auto* boolLit = dynamic_cast<BooleanLiteralNode*>(prop.value.get())) {
+                // Handle boolean properties
+                llvm::Constant* boolConstant = llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), boolLit->value ? 1 : 0);
+                llvm::GlobalVariable* globalBool = new llvm::GlobalVariable(
+                    *m_module,
+                    llvm::Type::getInt32Ty(m_context),
+                    true,
+                    llvm::GlobalValue::PrivateLinkage,
+                    boolConstant,
+                    propName
+                );
+                properties[prop.key] = globalBool;
+                propertyTypes[prop.key] = "boolean";
+            }
+        }
+    }
+    
+    // Store the properties for later access
+    objectProperties[objectKey] = properties;
+    objectPropertyTypes[objectKey] = propertyTypes;
+    
+    return objectId;
+}
+
+// Object access implementation - with array.length support and native object properties
 llvm::Value *CodeGen::visit(ObjectAccessNode *node)
 {
     // Check if this is array.length access
@@ -1046,8 +1168,64 @@ llvm::Value *CodeGen::visit(ObjectAccessNode *node)
         }
     }
     
-    // For other property access, object access is not yet supported
-    throw std::runtime_error("Codegen Error: Object property access (other than array.length) is not yet supported in native compilation. Use the browser interpreter for full object support.");
+    // Handle native object property access
+    if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(node->object.get())) {
+        // Check if this variable is an object
+        auto objectKeyIt = variableToObjectKey.find(varExpr->name);
+        if (objectKeyIt != variableToObjectKey.end()) {
+            std::string objectKey = objectKeyIt->second;
+            
+            // Look up the object properties
+            auto propertiesIt = objectProperties.find(objectKey);
+            if (propertiesIt != objectProperties.end()) {
+                auto& properties = propertiesIt->second;
+                
+                // Look up the specific property
+                auto propertyIt = properties.find(node->property);
+                if (propertyIt != properties.end()) {
+                    llvm::Value* propertyValue = propertyIt->second;
+                    
+                    // Get the property type
+                    auto propertyTypesIt = objectPropertyTypes.find(objectKey);
+                    if (propertyTypesIt != objectPropertyTypes.end()) {
+                        auto& propertyTypes = propertyTypesIt->second;
+                        auto typeIt = propertyTypes.find(node->property);
+                        if (typeIt != propertyTypes.end()) {
+                            std::string propertyType = typeIt->second;
+                            
+                            // Load the value based on type
+                            if (propertyType == "string") {
+                                // For strings, return the global string pointer
+                                return m_builder.CreateBitCast(propertyValue, llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+                            } else if (propertyType == "i32" || propertyType == "boolean") {
+                                // For integers and booleans, load the value
+                                return m_builder.CreateLoad(llvm::Type::getInt32Ty(m_context), propertyValue);
+                            }
+                        }
+                    }
+                    
+                    // Default: return the property value as-is
+                    return propertyValue;
+                } else {
+                    throw std::runtime_error("Codegen Error: Property '" + node->property + "' not found on object '" + varExpr->name + "'");
+                }
+            } else {
+                throw std::runtime_error("Codegen Error: Object properties not found for variable '" + varExpr->name + "'");
+            }
+        } else {
+            // Check if it's a regular variable (not an object)
+            auto typeIt = variableTypes.find(varExpr->name);
+            if (typeIt != variableTypes.end()) {
+                std::string varType = typeIt->second;
+                throw std::runtime_error("Codegen Error: Cannot access property '" + node->property + "' on variable '" + varExpr->name + "' of type '" + varType + "'. Property access is only supported on objects.");
+            } else {
+                throw std::runtime_error("Codegen Error: Unknown variable '" + varExpr->name + "' in property access");
+            }
+        }
+    }
+    
+    // For other cases, property access is not yet supported
+    throw std::runtime_error("Codegen Error: Complex object property access is not yet supported. Only simple variable.property access is currently implemented.");
 }
 
 // External function call support
@@ -1430,6 +1608,83 @@ llvm::FunctionCallee CodeGen::getOrDeclareExternalFunction(const std::string& na
     else if (name == "memory_pool_cleanup") {
         return m_module->getOrInsertFunction("memory_pool_cleanup",
             llvm::Type::getVoidTy(m_context));
+    }
+    
+    // JSON functions
+    else if (name == "json_create_object") {
+        return m_module->getOrInsertFunction("json_create_object",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+    }
+    else if (name == "json_create_array") {
+        return m_module->getOrInsertFunction("json_create_array",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+    }
+    else if (name == "json_add_string") {
+        return m_module->getOrInsertFunction("json_add_string",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+    }
+    else if (name == "json_add_number") {
+        return m_module->getOrInsertFunction("json_add_number",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::Type::getDoubleTy(m_context));
+    }
+    else if (name == "json_add_int") {
+        return m_module->getOrInsertFunction("json_add_int",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "json_add_boolean") {
+        return m_module->getOrInsertFunction("json_add_boolean",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "json_get_string") {
+        return m_module->getOrInsertFunction("json_get_string",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+    }
+    else if (name == "json_get_number") {
+        return m_module->getOrInsertFunction("json_get_number",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+    }
+    else if (name == "json_get_int") {
+        return m_module->getOrInsertFunction("json_get_int",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+    }
+    else if (name == "json_get_boolean") {
+        return m_module->getOrInsertFunction("json_get_boolean",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+    }
+    else if (name == "json_is_valid") {
+        return m_module->getOrInsertFunction("json_is_valid",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+    }
+    else if (name == "json_prettify") {
+        return m_module->getOrInsertFunction("json_prettify",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+    }
+    else if (name == "json_minify") {
+        return m_module->getOrInsertFunction("json_minify",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
     }
     
     return nullptr; // Function not found

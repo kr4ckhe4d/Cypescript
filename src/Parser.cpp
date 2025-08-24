@@ -374,6 +374,14 @@ bool Parser::isKnownFunction(const std::string& name)
         return true;
     }
     
+    // External C++ functions - JSON
+    if (name == "json_create_object" || name == "json_create_array" ||
+        name == "json_add_string" || name == "json_add_number" || name == "json_add_int" || name == "json_add_boolean" ||
+        name == "json_get_string" || name == "json_get_number" || name == "json_get_int" || name == "json_get_boolean" ||
+        name == "json_is_valid" || name == "json_prettify" || name == "json_minify") {
+        return true;
+    }
+    
     return false;
 }
 
@@ -584,6 +592,10 @@ std::unique_ptr<ExpressionNode> Parser::parsePrimaryExpression()
     {
         return parseIntegerLiteral();
     }
+    else if (peek().type == TOK_TRUE || peek().type == TOK_FALSE)
+    {
+        return parseBooleanLiteral();
+    }
     else if (peek().type == TOK_IDENTIFIER)
     {
         return parseVariableExpression();
@@ -642,6 +654,19 @@ std::unique_ptr<IntegerLiteralNode> Parser::parseIntegerLiteral()
         std::string errorMsg = "Parse Error: Invalid integer literal: " + intToken.value;
         std::cerr << errorMsg << std::endl;
         throw std::runtime_error(errorMsg);
+    }
+}
+
+std::unique_ptr<BooleanLiteralNode> Parser::parseBooleanLiteral()
+{
+    if (peek().type == TOK_TRUE) {
+        advance(); // consume 'true'
+        return std::make_unique<BooleanLiteralNode>(true);
+    } else if (peek().type == TOK_FALSE) {
+        advance(); // consume 'false'
+        return std::make_unique<BooleanLiteralNode>(false);
+    } else {
+        throw std::runtime_error("Expected boolean literal (true or false)");
     }
 }
 

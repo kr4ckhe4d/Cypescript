@@ -56,6 +56,13 @@ private:
     // Array size tracking: Maps array variable names to their sizes
     std::map<std::string, size_t> arraySizes;
     
+    // Object property tracking: Maps object variable names to their properties
+    std::map<std::string, std::map<std::string, llvm::Value*>> objectProperties;
+    std::map<std::string, std::map<std::string, std::string>> objectPropertyTypes;
+    
+    // Object variable tracking: Maps variable names to their object keys
+    std::map<std::string, std::string> variableToObjectKey;
+    
     // Function context tracking
     llvm::Function *currentFunction = nullptr;  // Track current function being generated
     std::map<std::string, llvm::Function*> declaredFunctions; // Track declared functions
@@ -81,6 +88,7 @@ private:
     llvm::Value *visit(ExpressionNode *node); // Dispatcher
     llvm::Value *visit(StringLiteralNode *node);
     llvm::Value *visit(IntegerLiteralNode *node);     // New
+    llvm::Value *visit(BooleanLiteralNode *node);     // New
     llvm::Value *visit(VariableExpressionNode *node); // New
     llvm::Value *visit(BinaryExpressionNode *node);   // For arithmetic operations
     llvm::Value *visit(ArrayLiteralNode *node);       // For array literals
@@ -94,6 +102,10 @@ private:
     // External function support
     llvm::Value *generateExternalFunctionCall(FunctionCallNode *node);
     llvm::FunctionCallee getOrDeclareExternalFunction(const std::string& name);
+    
+    // Object support helper functions
+    llvm::Value *createEmptyObject();
+    llvm::Value *createObjectWithProperties(ObjectLiteralNode *node);
 
 public:
     CodeGen(llvm::LLVMContext &context);

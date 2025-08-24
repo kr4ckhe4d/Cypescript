@@ -111,3 +111,56 @@ core.*
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Development clutter prevention
+# Compiled executables (avoid clutter)
+*_test
+*_debug
+*_program
+*_demo
+*_fixed
+*_final
+*_simple
+*_comprehensive
+*_native
+*_opt
+*_optimized
+
+# Development markdown files
+*_RESULTS.md
+*_SUMMARY.md
+*_ROADMAP.md
+*_IMPLEMENTATION.md
+*_REVIEW.md
+*_APPROACH.md
+*_CORRECTION.md
+CHAT_*.md
+DEVELOPMENT_*.md
+PERFORMANCE_*.md
+OPTIMIZATION_*.md
+BENCHMARK_*.md
+MEMORY_*.md
+NEON_*.md
+ADVANCED_*.md
+MULTI_*.md
+DOCS_*.md
+JSON_*.md
+TYPESCRIPT_*.md
+FUNCTIONS_*.md
+CUSTOM_*.md
+BALANCED_*.md
+
+# Benchmark and test artifacts
+benchmarks/
+*.json
+profile.profdata
+*.profraw
+
+# Temporary scripts
+run_*.sh
+validate_*.sh
+benchmark_*.sh
+compile-*-optimized.sh
+compile-pgo*.sh
+compile-static.sh
+cypescript-pool.sh

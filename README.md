@@ -30,12 +30,11 @@ The web documentation includes:
 - **Control flow** with `if`/`else` statements and nesting
 - **All loop constructs**: `while`, `for`, `do-while`
 - **Variable assignments** and complex expressions
+- **🔥 NEW! Native TypeScript-style objects** with property access (`obj.property`)
 - **Arrays and objects** with access syntax (`arr[index]`, `obj.property`)
 - **Array length property** (`arr.length`) for dynamic programming
 - **🔥 NEW! User-defined functions** with parameters, return values, and local scoping
 - **Built-in functions** (`print` and `println`)
-- **C++ Integration** with 20+ standard library functions
-- **Custom C++ Libraries** - Import and use your own C++ code
 - **String and numeric literals**
 - **Comments** (single-line `//` and multi-line `/* */`)
 - **Comprehensive error handling** and reporting
@@ -110,25 +109,41 @@ This provides:
 ./build/cscript --help
 ```
 
-#### C++ Integration Compilation
-For programs using C++ library functions, use the enhanced compilation script:
-
+#### Complete Compilation Pipeline
 ```bash
-# Compile with C++ integration
-./compile-with-cpp.sh example/cpp_integration_basic.csc my_program
+# 1. Compile Cypescript to LLVM IR
+./build/cscript example/hello.csc
 
-# This automatically:
-# 1. Compiles the C++ standard library
-# 2. Compiles your Cypescript code to LLVM IR
-# 3. Links everything together into a native executable
-# 4. Creates a ready-to-run program
+# 2. Compile LLVM IR to object file
+llc -filetype=obj -relocation-model=pic output.ll -o output.o
+
+# 3. Link to create executable
+clang output.o -o my_program
+
+# 4. Run the program
+./my_program
 ```
 
-The C++ integration script handles the complete compilation pipeline:
-- ✅ **C++ Library Compilation**: Builds the Cypescript standard library
-- ✅ **LLVM IR Generation**: Converts Cypescript to optimized IR
-- ✅ **Native Linking**: Creates high-performance executables
-- ✅ **Automatic Cleanup**: Removes intermediate files
+#### C++ Integration (Advanced)
+
+For programs that need additional functionality, Cypescript provides seamless C++ integration:
+
+```bash
+# One-command compilation with C++ integration
+./compile-with-cpp.sh example/cpp_integration_basic.csc my_program
+
+# Then run the program
+./my_program
+```
+
+The C++ integration provides access to:
+- **String functions**: `string_reverse()`, `string_upper()`, `string_lower()`
+- **Array functions**: `array_sum_i32()`, `array_max_i32()`, `array_min_i32()`
+- **File I/O**: `file_read()`, `file_write()`, `file_exists()`
+- **JSON functions**: `json_create_object()`, `json_add_string()`, `json_get_string()`
+- **Utilities**: `random_int()`, `random_seed()`
+
+See the [C++ Integration](#c-integration) section for complete details.
 
 ## ⚡ Performance Optimizations
 
@@ -203,6 +218,34 @@ let pi: f64 = 3.14159;
 let isActive: boolean = true;
 ```
 
+### Native TypeScript-Style Objects
+
+```typescript
+// Object creation with mixed types
+let user = {
+    name: "Alice Johnson",
+    age: 28,
+    role: "Developer",
+    active: true
+};
+
+// Property access
+println(user.name);     // "Alice Johnson"
+println(user.age);      // 28
+println(user.active);   // 1 (true)
+
+// Multiple objects
+let config = {
+    appName: "Cypescript IDE",
+    version: "1.0.0",
+    port: 8080,
+    debug: false
+};
+
+println(config.appName);  // "Cypescript IDE"
+println(config.port);     // 8080
+```
+
 ### Arithmetic Operations
 
 ```typescript
@@ -258,15 +301,6 @@ do {
 } while (attempts < 3);
 ```
 
-### Function Calls
-
-```typescript
-print("Hello, World!");  // Output without newline
-println("Hello, World!"); // Output with newline
-print(42);
-println(message);
-```
-
 ### User-Defined Functions
 
 ```typescript
@@ -306,53 +340,23 @@ function complexCalculation(x: i32, y: i32): i32 {
 }
 ```
 
-### C++ Integration Functions
-
-Cypescript provides seamless integration with C++ through a comprehensive standard library:
-
-#### String Functions
-```typescript
-let text: string = "Hello World";
-let reversed: string = string_reverse(text);        // "dlroW olleH"
-let upper: string = string_upper(text);             // "HELLO WORLD"
-let lower: string = string_lower(text);             // "hello world"
-let length: i32 = string_length(text);              // 11
-let substr: string = string_substring(text, 0, 5);  // "Hello"
-let pos: i32 = string_find(text, "World");          // 6
-let concat: string = string_concat("Hello", " C++"); // "Hello C++"
-```
-
-#### Array Functions
-```typescript
-let numbers: i32[] = [10, 5, 8, 3, 12, 7];
-let sum: i32 = array_sum_i32(numbers, numbers.length);  // 45
-let max: i32 = array_max_i32(numbers, numbers.length);  // 12
-let min: i32 = array_min_i32(numbers, numbers.length);  // 3
-```
-
-#### File I/O Functions
-```typescript
-let success: i32 = file_write("data.txt", "Hello from Cypescript!");
-let exists: i32 = file_exists("data.txt");           // 1 (true)
-let content: string = file_read("data.txt");         // "Hello from Cypescript!"
-```
-
-#### Utility Functions
-```typescript
-random_seed(42);                                     // Seed random generator
-let rand1: i32 = random_int(1, 100);                // Random number 1-100
-let rand2: i32 = random_int(1, 100);                // Another random number
-```
-
-### Arrays and Objects
+### Arrays
 
 ```typescript
-// Arrays
+// Array declaration and initialization
 let numbers: i32[] = [1, 2, 3, 4, 5];
-print("First number: ");
-println(numbers[0]);
+println("Array: ");
+println(numbers);
 
+// Array access
+print("First element: ");
+println(numbers[0]);
+print("Last element: ");
+println(numbers[4]);
+
+// String array
 let names: string[] = ["Alice", "Bob", "Charlie"];
+println("Names: ");
 println(names);
 
 // Array length property
@@ -363,21 +367,15 @@ println(numbers.length); // 5
 for (let i: i32 = 0; i < numbers.length; i = i + 1) {
     println(numbers[i]);
 }
+```
 
-// Objects
-let person = { name: "Alice", age: 25, active: true };
-print("Name: ");
-println(person.name);
-print("Age: ");
-println(person.age);
+### Built-in Functions
 
-// Nested structures
-let data = { 
-    values: [10, 20, 30], 
-    info: { year: 2024, valid: true } 
-};
-println(data.values[1]); // 20
-println(data.info.year); // 2024
+```typescript
+print("Hello, World!");  // Output without newline
+println("Hello, World!"); // Output with newline
+print(42);
+println(message);
 ```
 
 ### Comments
@@ -395,9 +393,9 @@ let y: string = "test";
 
 ## Complete Compilation Pipeline
 
-### Basic Cypescript Programs
+### Native Cypescript Programs
 
-For simple programs without C++ integration:
+For TypeScript-style programs with native objects:
 
 ```bash
 # 1. Compile Cypescript to LLVM IR
@@ -413,57 +411,37 @@ clang output.o -o my_program
 ./my_program
 ```
 
-### C++ Integration Programs (Recommended)
-
-For programs using C++ library functions, use the automated script:
-
-```bash
-# One-command compilation with C++ integration
-./compile-with-cpp.sh example/cpp_integration_basic.csc my_program
-
-# Then run the program
-./my_program
-```
-
-The automated script provides:
-- ✅ **Automatic C++ Library Compilation**: Builds the Cypescript standard library
-- ✅ **LLVM IR Generation**: Converts Cypescript to optimized IR
-- ✅ **Native Linking**: Creates high-performance executables
-- ✅ **Error Handling**: Clear error messages and status reporting
-- ✅ **Cleanup**: Removes intermediate files automatically
-
-For programs using C++ library functions:
-
-```bash
-# One-command compilation with C++ integration
-./compile-with-cpp.sh example/cpp_integration_basic.csc my_program
-
-# Then run the program
-./my_program
-```
-
-#### Manual C++ Integration Steps
-
-If you prefer manual compilation:
-
-```bash
-# 1. Compile the C++ standard library
-g++ -c src/cypescript_stdlib.cpp -o cypescript_stdlib.o -std=c++11
-
-# 2. Compile Cypescript to LLVM IR
-./build/cscript example/cpp_integration_basic.csc
-
-# 3. Compile LLVM IR to object file
-llc -filetype=obj -relocation-model=pic output.ll -o cypescript_program.o
-
-# 4. Link with C++ library
-clang cypescript_program.o cypescript_stdlib.o -o my_program -lstdc++
-
-# 5. Run the program
-./my_program
-```
-
 ## Example Programs
+
+### Native TypeScript-Style Objects
+```typescript
+// Object creation and property access
+let user = {
+    name: "Alice Johnson",
+    age: 28,
+    role: "Developer",
+    active: true
+};
+
+println("User Information:");
+println(user.name);     // Alice Johnson
+println(user.age);      // 28
+println(user.role);     // Developer
+println(user.active);   // 1 (true)
+
+// Multiple objects
+let config = {
+    appName: "Cypescript IDE",
+    version: "1.0.0",
+    port: 8080,
+    debug: false
+};
+
+println("Configuration:");
+println(config.appName);  // Cypescript IDE
+println(config.port);     // 8080
+println(config.debug);    // 0 (false)
+```
 
 ### User-Defined Functions Demo
 ```typescript
@@ -541,48 +519,29 @@ if (isPrime == 1) {
 }
 ```
 
-### Complex Data Structures Example
+### Array Processing
 ```typescript
-// Company Management System
-let company = {
-    name: "TechCorp Industries",
-    departments: [
-        {
-            name: "Engineering",
-            employees: [
-                { 
-                    name: "Alice Johnson", 
-                    role: "Senior Developer",
-                    skills: ["JavaScript", "Python", "React"],
-                    projects: ["WebApp", "API Gateway"]
-                },
-                { 
-                    name: "Bob Smith", 
-                    role: "DevOps Engineer",
-                    skills: ["Docker", "Kubernetes", "AWS"],
-                    projects: ["Infrastructure", "CI/CD"]
-                }
-            ]
-        }
-    ]
-};
+// Array operations with length property
+let numbers: i32[] = [10, 25, 7, 42, 18];
+let sum: i32 = 0;
+let max: i32 = numbers[0];
 
-// Access nested data
-print("Company: ");
-println(company.name);
-print("Department: ");
-println(company.departments[0].name);
-print("Lead Developer: ");
-println(company.departments[0].employees[0].name);
-print("Primary Skill: ");
-println(company.departments[0].employees[0].skills[0]);
-print("Main Project: ");
-println(company.departments[0].employees[0].projects[0]);
+// Calculate sum and find maximum
+for (let i: i32 = 0; i < numbers.length; i = i + 1) {
+    sum = sum + numbers[i];
+    if (numbers[i] > max) {
+        max = numbers[i];
+    }
+}
+
+print("Sum: "); println(sum);     // Sum: 102
+print("Max: "); println(max);     // Max: 42
+print("Length: "); println(numbers.length); // Length: 5
 ```
 
 ### C++ Integration Example
 ```typescript
-// Comprehensive C++ Integration Demo
+// Advanced functionality with C++ integration
 println("=== C++ Integration Demo ===");
 
 // String processing
@@ -600,21 +559,16 @@ let max: i32 = array_max_i32(numbers, numbers.length);
 println("Array sum: " + sum);
 println("Array max: " + max);
 
-// Custom math functions (with custom C++ library)
-let gcd_result: i32 = math_gcd(48, 18);
-let fib_result: i32 = math_fibonacci(10);
-println("GCD(48,18): " + gcd_result);
-println("Fibonacci(10): " + fib_result);
-
 // File I/O
 file_write("data.txt", "Hello from Cypescript!");
 let content: string = file_read("data.txt");
 println("File content: " + content);
 
-// Random numbers
-random_seed(42);
-let rand: i32 = random_int(1, 100);
-println("Random number: " + rand);
+// JSON manipulation
+let user: string = json_create_object();
+user = json_add_string(user, "name", "Alice");
+user = json_add_int(user, "age", 28);
+println("JSON: " + json_prettify(user));
 ```
 
 ## Development
@@ -633,8 +587,10 @@ Cypescript/
 │   └── cypescript_stdlib.cpp # C++ standard library
 ├── example/
 │   ├── README.md     # Example organization guide
-│   ├── functions_demo.csc # 🔥 NEW! User-defined functions demo
-│   ├── basic/        # Basic examples (./compile-run.sh)
+│   ├── property_access_test.csc # 🔥 NEW! Native object property access
+│   ├── typescript_objects_native.csc # 🔥 NEW! TypeScript-style objects
+│   ├── functions_demo.csc # User-defined functions demo
+│   ├── basic/        # Basic examples (native compilation)
 │   │   ├── hello.csc # Basic variables and printing
 │   │   ├── arithmetic.csc # Arithmetic operations
 │   │   ├── control_flow.csc # If/else statements
@@ -645,6 +601,7 @@ Cypescript/
 │   │   ├── cpp_integration_basic.csc # Comprehensive C++ demo
 │   │   ├── cpp_integration_simple.csc # Simple C++ demo
 │   │   ├── cpp_integration_test.csc # C++ function test suite
+│   │   ├── json_demo.csc # JSON functions demo
 │   │   └── custom_math_demo.csc # Custom C++ library demo
 │   └── browser-only/ # Browser interpreter examples (./launch-docs.sh)
 │       ├── game_system.csc # RPG management system
@@ -654,7 +611,7 @@ Cypescript/
 │   ├── styles.css    # Documentation styling
 │   ├── script.js     # UI functionality
 │   └── cypescript-interpreter.js # Browser interpreter
-├── FUNCTIONS_IMPLEMENTATION.md # Function implementation guide
+├── NATIVE_OBJECTS_ROADMAP.md # Native TypeScript development roadmap
 ├── build.sh          # Build script
 ├── test.sh           # Test script
 ├── setup-macos.sh    # macOS setup script
@@ -839,7 +796,272 @@ extern "C" {
 let result: i32 = my_function(21); // Returns 42
 ```
 
-**📚 For detailed custom C++ integration guide, see [`CUSTOM_CPP_INTEGRATION.md`](CUSTOM_CPP_INTEGRATION.md)**
+## 🎯 Native TypeScript-Style Objects
+
+Cypescript provides native TypeScript-style object support with property access, just like TypeScript!
+
+### **Object Creation and Property Access**
+
+```typescript
+// Create objects with mixed types
+let user = {
+    name: "Alice Johnson",
+    age: 28,
+    role: "Developer",
+    active: true
+};
+
+// Access properties directly
+println(user.name);     // "Alice Johnson"
+println(user.age);      // 28
+println(user.role);     // "Developer"
+println(user.active);   // 1 (true)
+```
+
+### **Multiple Objects**
+
+```typescript
+// Create multiple objects
+let config = {
+    appName: "Cypescript IDE",
+    version: "1.0.0",
+    port: 8080,
+    debug: false
+};
+
+let settings = {
+    theme: "dark",
+    fontSize: 14,
+    autoSave: true
+};
+
+// Access properties from different objects
+println(config.appName);    // "Cypescript IDE"
+println(config.port);       // 8080
+println(settings.theme);    // "dark"
+println(settings.fontSize); // 14
+```
+
+### **Real-World Example**
+
+```typescript
+// Employee management system
+let employee = {
+    firstName: "Alice",
+    lastName: "Johnson",
+    employeeId: 12345,
+    department: "Engineering",
+    salary: 95000,
+    isActive: true,
+    isRemote: false
+};
+
+// Process employee data
+print("Employee: ");
+print(employee.firstName);
+print(" ");
+println(employee.lastName);
+
+print("ID: ");
+println(employee.employeeId);
+
+print("Department: ");
+println(employee.department);
+
+print("Status: ");
+if (employee.isActive == 1) {
+    println("Active");
+} else {
+    println("Inactive");
+}
+
+print("Work Mode: ");
+if (employee.isRemote == 1) {
+    println("Remote");
+} else {
+    println("On-site");
+}
+```
+
+### **Supported Property Types**
+
+- **Strings**: `name: "Alice Johnson"`
+- **Integers**: `age: 28`, `port: 8080`
+- **Booleans**: `active: true`, `debug: false`
+
+### **🚀 Coming Soon: Advanced Object Features**
+
+```typescript
+// Future features in development:
+let user = { name: "Alice", age: 28 };
+
+// Object printing
+println(user);  // Will print: { name: "Alice", age: 28 }
+
+// JSON conversion
+let jsonString = JSON.stringify(user);  // Convert to JSON string
+let parsed = JSON.parse(jsonString);    // Parse JSON back to object
+
+// Nested objects
+let company = {
+    name: "TechCorp",
+    employee: { name: "Alice", age: 28 }
+};
+println(company.employee.name);  // Nested property access
+```
+
+## 🔧 C++ Integration (Advanced)
+
+For programs that need additional functionality beyond native TypeScript features, Cypescript provides seamless C++ integration with 30+ standard library functions.
+
+### **Quick Start with C++ Integration**
+
+```bash
+# Compile a Cypescript program with C++ functions
+./compile-with-cpp.sh example/cpp_integration_basic.csc my_program
+
+# Run the compiled program
+./my_program
+```
+
+### **Available C++ Functions**
+
+#### String Functions
+```typescript
+let text: string = "Hello World";
+let reversed: string = string_reverse(text);        // "dlroW olleH"
+let upper: string = string_upper(text);             // "HELLO WORLD"
+let lower: string = string_lower(text);             // "hello world"
+let length: i32 = string_length(text);              // 11
+let substr: string = string_substring(text, 0, 5);  // "Hello"
+let pos: i32 = string_find(text, "World");          // 6
+let concat: string = string_concat("Hello", " C++"); // "Hello C++"
+```
+
+#### Array Functions
+```typescript
+let numbers: i32[] = [10, 5, 8, 3, 12, 7];
+let sum: i32 = array_sum_i32(numbers, numbers.length);  // 45
+let max: i32 = array_max_i32(numbers, numbers.length);  // 12
+let min: i32 = array_min_i32(numbers, numbers.length);  // 3
+```
+
+#### File I/O Functions
+```typescript
+let success: i32 = file_write("data.txt", "Hello from Cypescript!");
+let exists: i32 = file_exists("data.txt");           // 1 (true)
+let content: string = file_read("data.txt");         // "Hello from Cypescript!"
+```
+
+#### Utility Functions
+```typescript
+random_seed(42);                                     // Seed random generator
+let rand1: i32 = random_int(1, 100);                // Random number 1-100
+let rand2: i32 = random_int(1, 100);                // Another random number
+```
+
+#### JSON Functions (String-Based)
+```typescript
+// Create and manipulate JSON strings
+let jsonObj: string = json_create_object();         // Creates: {}
+jsonObj = json_add_string(jsonObj, "name", "Alice");
+jsonObj = json_add_int(jsonObj, "age", 28);
+jsonObj = json_add_boolean(jsonObj, "active", 1);
+
+// Retrieve values
+let name: string = json_get_string(jsonObj, "name");        // "Alice"
+let age: i32 = json_get_int(jsonObj, "age");                // 28
+let active: i32 = json_get_boolean(jsonObj, "active");      // 1
+
+// JSON utilities
+let isValid: i32 = json_is_valid(jsonObj);                  // 1 if valid
+let pretty: string = json_prettify(jsonObj);                // Pretty-printed
+let compact: string = json_minify(jsonObj);                 // Minified
+```
+
+### **Custom C++ Libraries**
+
+You can easily extend Cypescript with your own C++ libraries:
+
+```bash
+# Compile with custom C++ libraries
+./compile-with-custom-cpp.sh my_program.csc output src/my_custom_lib.cpp
+```
+
+**Example Custom Library:**
+```cpp
+// src/my_math_lib.cpp
+extern "C" {
+    int math_gcd(int a, int b) {
+        while (b != 0) {
+            int temp = b;
+            b = a % b;
+            a = temp;
+        }
+        return a;
+    }
+    
+    int math_fibonacci(int n) {
+        if (n <= 1) return n;
+        int a = 0, b = 1;
+        for (int i = 2; i <= n; i++) {
+            int temp = a + b;
+            a = b;
+            b = temp;
+        }
+        return b;
+    }
+}
+```
+
+**Use in Cypescript:**
+```typescript
+let gcd_result: i32 = math_gcd(48, 18);  // Returns 6
+let fib_10: i32 = math_fibonacci(10);    // Returns 55
+```
+
+### **C++ Integration Example**
+```typescript
+// Comprehensive C++ Integration Demo
+println("=== C++ Integration Demo ===");
+
+// String processing
+let text: string = "Hello World";
+let reversed: string = string_reverse(text);
+let upper: string = string_upper(text);
+println("Original: " + text);
+println("Reversed: " + reversed);
+println("Uppercase: " + upper);
+
+// Array operations
+let numbers: i32[] = [10, 5, 8, 3, 12, 7];
+let sum: i32 = array_sum_i32(numbers, numbers.length);
+let max: i32 = array_max_i32(numbers, numbers.length);
+println("Array sum: " + sum);
+println("Array max: " + max);
+
+// File I/O
+file_write("data.txt", "Hello from Cypescript!");
+let content: string = file_read("data.txt");
+println("File content: " + content);
+
+// JSON manipulation
+let user: string = json_create_object();
+user = json_add_string(user, "name", "Alice");
+user = json_add_int(user, "age", 28);
+println("JSON: " + json_prettify(user));
+```
+
+### **When to Use C++ Integration**
+
+- **File operations** - Reading/writing files
+- **String processing** - Advanced string manipulation
+- **Mathematical operations** - Complex calculations
+- **JSON interop** - Working with external JSON APIs
+- **Performance-critical code** - Optimized C++ algorithms
+- **Legacy integration** - Using existing C++ libraries
+
+**Note:** For most TypeScript-style development, use native objects. C++ integration is for advanced use cases requiring additional functionality.
 
 ## Language Features Status
 
@@ -862,9 +1084,8 @@ let result: i32 = my_function(21); // Returns 42
 - [x] Arrays with literal syntax (`[1, 2, 3]`) and access (`arr[index]`)
 - [x] Array assignment operations (`arr[index] = value`)
 - [x] Array length property (`arr.length`)
-- [x] Objects with literal syntax (`{ key: value }`) and access (`obj.property`) - Web only
-- [x] Nested data structures (arrays of objects, objects with arrays) - Web only
-- [x] **🔥 NEW! User-defined functions** - **Phase 1 Complete!**
+- [x] **🔥 NEW! Native TypeScript-style objects** with property access (`obj.property`)
+- [x] **🔥 NEW! User-defined functions** - **Complete Implementation!**
   - [x] Function declarations: `function add(a: i32, b: i32): i32 { return a + b; }`
   - [x] Function calls: `let result: i32 = add(5, 3);`
   - [x] Return statements and type checking
@@ -872,40 +1093,36 @@ let result: i32 = my_function(21); // Returns 42
   - [x] Void functions: `function greet(): void { println("Hello!"); }`
   - [x] Nested function calls and complex logic
   - [x] Integration with all existing language features
-- [x] **C++ Integration** with 20+ standard library functions
-  - [x] String functions (reverse, upper, lower, length, substring, find, concat)
-  - [x] Array functions (sum, max, min for i32 arrays)
-  - [x] File I/O functions (read, write, exists)
-  - [x] Utility functions (random numbers, seeding)
 - [x] LLVM IR code generation (for all features)
 - [x] Native executable compilation (for all features)
 - [x] Comprehensive error handling and reporting
 - [x] Interactive web documentation with runnable examples
 
 ### 🚧 Planned Features
-- [ ] **Enhanced function features** (Phase 2)
-  - [ ] Function overloading support
-  - [ ] Default parameters: `function greet(name: string = "World"): void`
-  - [ ] Recursive function optimization
-  - [ ] Local variable scoping within functions
-  - [ ] Function overloading support
+- [ ] **Object printing and debugging**
+  - [ ] Direct object printing: `println(obj)` 
+  - [ ] Object inspection and debugging tools
+- [ ] **JSON integration for native objects**
+  - [ ] `JSON.stringify(obj)` - Convert native objects to JSON strings
+  - [ ] `JSON.parse(jsonString)` - Parse JSON strings to native objects
+  - [ ] Seamless interop between native objects and JSON
 - [ ] **Enhanced string operations**
   - [ ] String concatenation operator (`+`)
   - [ ] Escape sequences (`\n`, `\t`, `\"`, `\\`)
   - [ ] String interpolation/template literals
 - [ ] **Advanced control flow**
   - [ ] `break` and `continue` statements in loops
-  - [ ] `for...in` and `for...of` loops for arrays
+  - [ ] `for...in` and `for...of` loops for arrays and objects
   - [ ] Switch/case statements
 - [ ] **Enhanced type system**
-  - [ ] Boolean literals (`true`, `false`) in native compiler
   - [ ] Floating-point support (`f64` literals and arithmetic)
   - [ ] Type inference improvements
   - [ ] Generic types and functions
-- [ ] **Data structures** (native compiler support)
-  - [ ] Objects and structures with property access
-  - [ ] Nested data structures
-  - [ ] Dynamic arrays and collections
+  - [ ] Interface definitions
+- [ ] **Advanced object features**
+  - [ ] Nested objects: `company.employee.name`
+  - [ ] Object methods and `this` keyword
+  - [ ] Object destructuring: `let { name, age } = user`
 - [ ] **Module system and imports**
   - [ ] File-based modules: `import { function } from "./module.csc"`
   - [ ] Export declarations: `export function myFunc() { }`
@@ -914,11 +1131,6 @@ let result: i32 = my_function(21); // Returns 42
   - [ ] Try/catch blocks: `try { } catch (error) { }`
   - [ ] Throw statements: `throw "Error message"`
   - [ ] Error types and handling
-- [ ] **Standard library expansion**
-  - [ ] More built-in functions and utilities
-  - [ ] File system operations
-  - [ ] Network/HTTP capabilities
-  - [ ] JSON parsing and serialization
 
 ## Function Implementation Roadmap
 

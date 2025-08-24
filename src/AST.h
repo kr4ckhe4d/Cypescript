@@ -12,6 +12,7 @@
 // Forward Declarations
 class StringLiteralNode;
 class IntegerLiteralNode;
+class BooleanLiteralNode;
 class VariableExpressionNode;
 class FunctionCallNode;
 class FunctionDeclarationNode;
@@ -83,6 +84,19 @@ public:
     {
         printIndent(os, indent);
         os << "IntegerLiteralNode: " << value << "\n";
+    }
+};
+
+class BooleanLiteralNode : public ExpressionNode
+{
+public:
+    bool value;
+    explicit BooleanLiteralNode(bool val) : value(val) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "BooleanLiteralNode: " << (value ? "true" : "false") << "\n";
     }
 };
 

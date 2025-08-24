@@ -24,6 +24,23 @@ clang output.o -o functions_demo
 - ✅ **Nested function calls** and complex logic
 - ✅ **Integration** with existing language features
 
+### 🔥 [`json_demo.csc`](json_demo.csc) - **Native JSON Support**
+**Comprehensive demonstration of native JSON operations!**
+
+**Compilation:**
+```bash
+./compile-with-cpp.sh example/json_demo.csc json_demo
+./json_demo
+```
+
+**Features Demonstrated:**
+- ✅ **JSON object creation** and manipulation
+- ✅ **String, number, and boolean** properties
+- ✅ **Data retrieval** and type conversion
+- ✅ **JSON validation** and error checking
+- ✅ **Pretty-printing and minification**
+- ✅ **Real-world configuration** examples
+
 **Sample Output:**
 ```
 🚀 Cypescript Functions Demo - Phase 1
@@ -89,7 +106,14 @@ clang output.o -o functions_demo
 ./functions_demo
 ```
 
-### 3. **Want More Power?** Try C++ Integration
+### 3. **Want JSON?** Try the JSON Demo
+```bash
+# Compile and run the comprehensive JSON example
+./compile-with-cpp.sh example/json_demo.csc json_demo
+./json_demo
+```
+
+### 4. **Want More Power?** Try C++ Integration
 ```bash
 ./compile-with-cpp.sh example/cpp-integration/cpp_integration_basic.csc demo
 ./demo

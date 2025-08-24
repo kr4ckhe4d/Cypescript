@@ -49,6 +49,7 @@ private:
     
     std::unique_ptr<StringLiteralNode> parseStringLiteral();
     std::unique_ptr<IntegerLiteralNode> parseIntegerLiteral();
+    std::unique_ptr<BooleanLiteralNode> parseBooleanLiteral();
     std::unique_ptr<ExpressionNode> parseVariableExpression();
     std::unique_ptr<VariableDeclarationNode> parseVariableDeclarationStatement();
     
