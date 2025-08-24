@@ -78,6 +78,14 @@ std::unique_ptr<StatementNode> Parser::parseStatement()
     {
         return parseVariableDeclarationStatement();
     }
+    else if (peek().type == TOK_FUNCTION)
+    {
+        return parseFunctionDeclaration();
+    }
+    else if (peek().type == TOK_RETURN)
+    {
+        return parseReturnStatement();
+    }
     else if (peek().type == TOK_IF)
     {
         return parseIfStatement();
@@ -94,16 +102,16 @@ std::unique_ptr<StatementNode> Parser::parseStatement()
     {
         return parseDoWhileStatement();
     }
-    else if (peek().type == TOK_IDENTIFIER && isKnownFunction(peek().value))
-    { // Handle function calls as expression statements
-        auto expr = parseExpression(); // This will parse the function call
-        consume(TOK_SEMICOLON, "Expected ';' after function call");
-        return std::make_unique<ExpressionStatementNode>(std::move(expr));
-    }
     else if (peek().type == TOK_IDENTIFIER)
     {
         // Look ahead to see what kind of statement this is
-        if (peek(1).type == TOK_EQUAL) {
+        if (peek(1).type == TOK_LPAREN) {
+            // Function call as expression statement
+            auto expr = parseExpression(); // This will parse the function call
+            consume(TOK_SEMICOLON, "Expected ';' after function call");
+            return std::make_unique<ExpressionStatementNode>(std::move(expr));
+        }
+        else if (peek(1).type == TOK_EQUAL) {
             // Simple variable assignment: identifier = expression
             return parseAssignmentStatement();
         }
@@ -329,6 +337,16 @@ bool Parser::isKnownFunction(const std::string& name)
         name == "neon_array_multiply_i32" || name == "neon_array_add_i32" || 
         name == "neon_dot_product_i32" || name == "neon_array_count_equal_i32" || 
         name == "neon_performance_ratio" || name == "neon_available") {
+        return true;
+    }
+    
+    // Memory-optimized functions
+    if (name == "memory_pool_init" || name == "memory_pool_alloc" || name == "memory_pool_reset" ||
+        name == "cache_optimized_sum_i32" || name == "cache_optimized_max_i32" ||
+        name == "memory_efficient_copy_i32" || name == "cache_aware_transpose_i32" ||
+        name == "memory_bandwidth_test_i32" || name == "cache_miss_comparison_i32" ||
+        name == "memory_optimized_string_compare" || name == "get_memory_stats" ||
+        name == "memory_pool_cleanup") {
         return true;
     }
     
@@ -631,8 +649,8 @@ std::unique_ptr<ExpressionNode> Parser::parseVariableExpression()
 {
     const Token &varToken = consume(TOK_IDENTIFIER, "Expected variable name.");
     
-    // Check if this is a function call
-    if (peek().type == TOK_LPAREN && isKnownFunction(varToken.value)) {
+    // Check if this is a function call (any identifier followed by '(')
+    if (peek().type == TOK_LPAREN) {
         // This is a function call in an expression context
         // Backtrack and parse as function call
         m_currentPos--; // Go back to the identifier
@@ -790,4 +808,84 @@ std::unique_ptr<ExpressionNode> Parser::parseArrayOrObjectAccess(std::unique_ptr
         }
     }
     return base;
+}
+
+// Parse function declaration: function name(param1: type1, param2: type2): returnType { ... }
+std::unique_ptr<FunctionDeclarationNode> Parser::parseFunctionDeclaration()
+{
+    consume(TOK_FUNCTION, "Expected 'function' keyword");
+    
+    // Function name
+    const Token &nameToken = consume(TOK_IDENTIFIER, "Expected function name");
+    std::string functionName = nameToken.value;
+    
+    consume(TOK_LPAREN, "Expected '(' after function name");
+    
+    // Parse parameters
+    std::vector<FunctionDeclarationNode::Parameter> parameters;
+    
+    if (peek().type != TOK_RPAREN) {
+        do {
+            // Parameter name
+            const Token &paramName = consume(TOK_IDENTIFIER, "Expected parameter name");
+            consume(TOK_COLON, "Expected ':' after parameter name");
+            
+            // Parameter type
+            if (!peek().isType()) {
+                throw std::runtime_error("Expected type after ':' in parameter declaration");
+            }
+            std::string paramType = peek().value;
+            advance(); // consume type
+            
+            parameters.emplace_back(paramName.value, paramType);
+            
+            if (peek().type == TOK_COMMA) {
+                advance(); // consume ','
+            } else {
+                break;
+            }
+        } while (peek().type != TOK_RPAREN);
+    }
+    
+    consume(TOK_RPAREN, "Expected ')' after parameters");
+    consume(TOK_COLON, "Expected ':' after parameter list");
+    
+    // Return type
+    if (!peek().isType()) {
+        throw std::runtime_error("Expected return type after ':'");
+    }
+    std::string returnType = peek().value;
+    advance(); // consume return type
+    
+    // Function body
+    consume(TOK_LBRACE, "Expected '{' to start function body");
+    
+    auto functionNode = std::make_unique<FunctionDeclarationNode>(functionName, returnType);
+    functionNode->parameters = std::move(parameters);
+    
+    // Parse body statements
+    while (peek().type != TOK_RBRACE && !isAtEnd()) {
+        functionNode->body.push_back(parseStatement());
+    }
+    
+    consume(TOK_RBRACE, "Expected '}' to end function body");
+    
+    return functionNode;
+}
+
+// Parse return statement: return [expression];
+std::unique_ptr<ReturnStatementNode> Parser::parseReturnStatement()
+{
+    consume(TOK_RETURN, "Expected 'return' keyword");
+    
+    std::unique_ptr<ExpressionNode> expression = nullptr;
+    
+    // Check if there's an expression to return
+    if (peek().type != TOK_SEMICOLON) {
+        expression = parseExpression();
+    }
+    
+    consume(TOK_SEMICOLON, "Expected ';' after return statement");
+    
+    return std::make_unique<ReturnStatementNode>(std::move(expression));
 }

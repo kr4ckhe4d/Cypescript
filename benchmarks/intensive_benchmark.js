@@ -1,5 +1,5 @@
 // JavaScript Intensive Computational Benchmark
-// Equivalent to Cypescript intensive benchmark
+// Equivalent to Cypescript intensive_benchmark.csc
 
 console.log("=== JavaScript Intensive Computational Benchmark ===");
 
@@ -8,14 +8,13 @@ console.log("Benchmark 1: Nested Loop Matrix Multiplication Simulation");
 const matrixSize = 200;
 const matrixIterations = 100;
 
-console.log("Matrix size: 200x200");
-console.log("Iterations: 100");
+console.log(`Matrix size: ${matrixSize}x${matrixSize}`);
+console.log(`Iterations: ${matrixIterations}`);
 
 let totalOperations = 0;
-console.log("Starting intensive nested loop benchmark...");
 const nestedStart = performance.now();
 
-for (let iter = 0; iter < matrixIterations; iter++) {
+for (let iteration = 0; iteration < matrixIterations; iteration++) {
     for (let i = 0; i < matrixSize; i++) {
         for (let j = 0; j < matrixSize; j++) {
             for (let k = 0; k < matrixSize; k++) {
@@ -29,6 +28,7 @@ for (let iter = 0; iter < matrixIterations; iter++) {
 
 const nestedEnd = performance.now();
 const nestedTime = nestedEnd - nestedStart;
+
 console.log("Nested loop benchmark complete");
 console.log(`Total operations: ${totalOperations}`);
 console.log(`Nested loop time: ${nestedTime.toFixed(2)}ms`);
@@ -38,16 +38,15 @@ console.log("Benchmark 2: Prime Number Generation");
 const primeLimit = 10000;
 let primeCount = 0;
 
-console.log("Finding primes up to: 10,000");
+console.log(`Finding primes up to: ${primeLimit.toLocaleString()}`);
 
-console.log("Starting prime generation benchmark...");
 const primeStart = performance.now();
 
 for (let num = 2; num <= primeLimit; num++) {
     let isPrime = true;
     
     // Check if number is prime
-    for (let divisor = 2; divisor * divisor <= num; divisor++) {
+    for (let divisor = 2; divisor <= Math.sqrt(num); divisor++) {
         if (num % divisor === 0) {
             isPrime = false;
             break;
@@ -61,35 +60,33 @@ for (let num = 2; num <= primeLimit; num++) {
 
 const primeEnd = performance.now();
 const primeTime = primeEnd - primeStart;
+
 console.log("Prime generation benchmark complete");
 console.log(`Primes found: ${primeCount}`);
 console.log(`Prime generation time: ${primeTime.toFixed(2)}ms`);
 
-// Benchmark 3: Fibonacci Sequence
+// Benchmark 3: Fibonacci Sequence Generation
 console.log("Benchmark 3: Fibonacci Sequence Generation");
 const fibCount = 35;
 const fibIterations = 1000;
 
-console.log("Fibonacci numbers to calculate: 35");
-console.log("Iterations: 1,000");
+console.log(`Fibonacci numbers to calculate: ${fibCount}`);
+console.log(`Iterations: ${fibIterations.toLocaleString()}`);
 
 let fibTotal = 0;
-console.log("Starting Fibonacci benchmark...");
 const fibStart = performance.now();
 
-for (let fibIter = 0; fibIter < fibIterations; fibIter++) {
+for (let iteration = 0; iteration < fibIterations; iteration++) {
     for (let n = 0; n <= fibCount; n++) {
         // Calculate nth Fibonacci number iteratively
-        let a = 0;
-        let b = 1;
-        let fibResult = 0;
-        
+        let fibResult;
         if (n === 0) {
             fibResult = 0;
         } else if (n === 1) {
             fibResult = 1;
         } else {
-            for (let fibI = 2; fibI <= n; fibI++) {
+            let a = 0, b = 1;
+            for (let i = 2; i <= n; i++) {
                 fibResult = a + b;
                 a = b;
                 b = fibResult;
@@ -102,6 +99,7 @@ for (let fibIter = 0; fibIter < fibIterations; fibIter++) {
 
 const fibEnd = performance.now();
 const fibTime = fibEnd - fibStart;
+
 console.log("Fibonacci benchmark complete");
 console.log(`Total Fibonacci sum: ${fibTotal}`);
 console.log(`Fibonacci time: ${fibTime.toFixed(2)}ms`);
@@ -111,36 +109,32 @@ console.log("Benchmark 4: Array Sorting Simulation");
 const sortSize = 1000;
 const sortIterations = 50;
 
-console.log("Array size: 1,000");
-console.log("Iterations: 50");
+console.log(`Array size: ${sortSize}`);
+console.log(`Iterations: ${sortIterations}`);
 
 const testArray = [64, 34, 25, 12, 22, 11, 90, 88, 76, 50, 42, 30, 18, 95, 70];
 const testSize = testArray.length;
 let sortOperations = 0;
 
-console.log("Starting sorting benchmark...");
 const sortStart = performance.now();
 
-for (let sortIter = 0; sortIter < sortIterations; sortIter++) {
+for (let iteration = 0; iteration < sortIterations; iteration++) {
     // Bubble sort implementation
+    const arr = [...testArray];
     for (let i = 0; i < testSize - 1; i++) {
         for (let j = 0; j < testSize - i - 1; j++) {
-            if (testArray[j] > testArray[j + 1]) {
+            if (arr[j] > arr[j + 1]) {
                 // Swap elements
-                const temp = testArray[j];
-                testArray[j] = testArray[j + 1];
-                testArray[j + 1] = temp;
+                [arr[j], arr[j + 1]] = [arr[j + 1], arr[j]];
                 sortOperations++;
             }
         }
     }
-    
-    // Reset array for next iteration (reverse it)
-    testArray.reverse();
 }
 
 const sortEnd = performance.now();
 const sortTime = sortEnd - sortStart;
+
 console.log("Sorting benchmark complete");
 console.log(`Sort operations: ${sortOperations}`);
 console.log(`Sorting time: ${sortTime.toFixed(2)}ms`);

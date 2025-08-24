@@ -43,6 +43,10 @@ llvm::Type *CodeGen::getLLVMType(const std::string &typeName)
     {
         return llvm::Type::getInt1Ty(m_context);
     }
+    else if (typeName == "void")
+    {
+        return llvm::Type::getVoidTy(m_context);
+    }
     else if (typeName.length() > 2 && typeName.substr(typeName.length() - 2) == "[]")
     {
         // Array type like "i32[]"
@@ -98,28 +102,59 @@ llvm::FunctionCallee CodeGen::getOrDeclarePrintf()
 
 void CodeGen::visit(ProgramNode *node)
 {
-    llvm::FunctionType *mainFuncType = llvm::FunctionType::get(llvm::Type::getInt32Ty(m_context), false);
-    llvm::Function *mainFunc = llvm::Function::Create(
-        mainFuncType, llvm::Function::ExternalLinkage, "main", m_module.get());
-
-    llvm::BasicBlock *entryBlock = llvm::BasicBlock::Create(m_context, "entry", mainFunc);
-    m_builder.SetInsertPoint(entryBlock);
-
     // Clear symbol table for each new program generation
     namedValues.clear();
     variableTypes.clear();
     arraySizes.clear();
+    declaredFunctions.clear();
 
+    // First pass: Process all function declarations at module level
     for (const auto &stmt : node->statements)
     {
-        visit(stmt.get());
+        if (auto *funcDeclNode = dynamic_cast<FunctionDeclarationNode *>(stmt.get()))
+        {
+            visit(funcDeclNode);
+        }
     }
 
-    m_builder.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), 0));
-
-    if (llvm::verifyFunction(*mainFunc, &llvm::errs()))
+    // Second pass: Create main function for non-function statements
+    std::vector<StatementNode*> mainStatements;
+    for (const auto &stmt : node->statements)
     {
-        std::cerr << "Error: main function verification failed!\n";
+        if (!dynamic_cast<FunctionDeclarationNode *>(stmt.get()))
+        {
+            mainStatements.push_back(stmt.get());
+        }
+    }
+
+    // Only create main function if there are non-function statements
+    if (!mainStatements.empty())
+    {
+        llvm::FunctionType *mainFuncType = llvm::FunctionType::get(llvm::Type::getInt32Ty(m_context), false);
+        llvm::Function *mainFunc = llvm::Function::Create(
+            mainFuncType, llvm::Function::ExternalLinkage, "main", m_module.get());
+
+        llvm::BasicBlock *entryBlock = llvm::BasicBlock::Create(m_context, "entry", mainFunc);
+        m_builder.SetInsertPoint(entryBlock);
+        
+        // Set current function context for main
+        currentFunction = mainFunc;
+
+        // Process main statements
+        for (StatementNode* stmt : mainStatements)
+        {
+            visit(stmt);
+        }
+
+        m_builder.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), 0));
+        
+        // Reset current function context
+        currentFunction = nullptr;
+
+        if (llvm::verifyFunction(*mainFunc, &llvm::errs()))
+        {
+            std::cerr << "Error: main function verification failed!\n";
+        }
     }
 }
 
@@ -128,6 +163,14 @@ void CodeGen::visit(StatementNode *node)
     if (auto *declNode = dynamic_cast<VariableDeclarationNode *>(node))
     {
         visit(declNode);
+    }
+    else if (auto *funcDeclNode = dynamic_cast<FunctionDeclarationNode *>(node))
+    {
+        visit(funcDeclNode);
+    }
+    else if (auto *returnNode = dynamic_cast<ReturnStatementNode *>(node))
+    {
+        visit(returnNode);
     }
     else if (auto *exprStmtNode = dynamic_cast<ExpressionStatementNode *>(node))
     {
@@ -714,6 +757,42 @@ void CodeGen::visit(ExpressionStatementNode *node)
 
 llvm::Value *CodeGen::visit(FunctionCallNode *node)
 {
+    // Check if it's a user-defined function first
+    auto funcIt = declaredFunctions.find(node->functionName);
+    if (funcIt != declaredFunctions.end()) {
+        // User-defined function call
+        llvm::Function* function = funcIt->second;
+        
+        // Check argument count
+        if (node->arguments.size() != function->arg_size()) {
+            throw std::runtime_error("Function '" + node->functionName + "' expects " + 
+                                   std::to_string(function->arg_size()) + " arguments, got " + 
+                                   std::to_string(node->arguments.size()));
+        }
+        
+        // Generate arguments
+        std::vector<llvm::Value*> args;
+        for (const auto& arg : node->arguments) {
+            llvm::Value* argValue = visit(arg.get());
+            if (!argValue) {
+                throw std::runtime_error("Failed to generate argument for function call");
+            }
+            args.push_back(argValue);
+        }
+        
+        // Create function call
+        llvm::Value* callResult;
+        if (function->getReturnType()->isVoidTy()) {
+            // For void functions, don't assign a name to the call
+            callResult = m_builder.CreateCall(function, args);
+            return nullptr;
+        } else {
+            // For non-void functions, assign a name
+            callResult = m_builder.CreateCall(function, args, "call");
+            return callResult;
+        }
+    }
+    
     if (node->functionName == "print" || node->functionName == "println")
     {
         if (node->arguments.size() != 1)
@@ -1279,5 +1358,187 @@ llvm::FunctionCallee CodeGen::getOrDeclareExternalFunction(const std::string& na
             llvm::Type::getInt32Ty(m_context));
     }
     
+    // Memory-optimized functions
+    else if (name == "memory_pool_init") {
+        return m_module->getOrInsertFunction("memory_pool_init",
+            llvm::Type::getVoidTy(m_context),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "memory_pool_alloc") {
+        return m_module->getOrInsertFunction("memory_pool_alloc",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "memory_pool_reset") {
+        return m_module->getOrInsertFunction("memory_pool_reset",
+            llvm::Type::getVoidTy(m_context));
+    }
+    else if (name == "cache_optimized_sum_i32") {
+        return m_module->getOrInsertFunction("cache_optimized_sum_i32",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "cache_optimized_max_i32") {
+        return m_module->getOrInsertFunction("cache_optimized_max_i32",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "memory_efficient_copy_i32") {
+        return m_module->getOrInsertFunction("memory_efficient_copy_i32",
+            llvm::Type::getVoidTy(m_context),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "cache_aware_transpose_i32") {
+        return m_module->getOrInsertFunction("cache_aware_transpose_i32",
+            llvm::Type::getVoidTy(m_context),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "memory_bandwidth_test_i32") {
+        return m_module->getOrInsertFunction("memory_bandwidth_test_i32",
+            llvm::Type::getVoidTy(m_context),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "cache_miss_comparison_i32") {
+        return m_module->getOrInsertFunction("cache_miss_comparison_i32",
+            llvm::Type::getInt64Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "memory_optimized_string_compare") {
+        return m_module->getOrInsertFunction("memory_optimized_string_compare",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+    }
+    else if (name == "get_memory_stats") {
+        return m_module->getOrInsertFunction("get_memory_stats",
+            llvm::Type::getVoidTy(m_context),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0));
+    }
+    else if (name == "memory_pool_cleanup") {
+        return m_module->getOrInsertFunction("memory_pool_cleanup",
+            llvm::Type::getVoidTy(m_context));
+    }
+    
     return nullptr; // Function not found
+}
+
+// Function Declaration Visitor
+void CodeGen::visit(FunctionDeclarationNode *node)
+{
+    // Convert parameter types to LLVM types
+    std::vector<llvm::Type*> paramTypes;
+    for (const auto& param : node->parameters) {
+        llvm::Type* paramType = getLLVMType(param.type);
+        if (!paramType) {
+            throw std::runtime_error("Unknown parameter type: " + param.type);
+        }
+        paramTypes.push_back(paramType);
+    }
+    
+    // Convert return type to LLVM type
+    llvm::Type* returnType = getLLVMType(node->returnType);
+    if (!returnType) {
+        throw std::runtime_error("Unknown return type: " + node->returnType);
+    }
+    
+    // Create function type
+    llvm::FunctionType* funcType = llvm::FunctionType::get(returnType, paramTypes, false);
+    
+    // Create function
+    llvm::Function* function = llvm::Function::Create(
+        funcType, 
+        llvm::Function::ExternalLinkage, 
+        node->functionName, 
+        m_module.get()
+    );
+    
+    // Store function in our map
+    declaredFunctions[node->functionName] = function;
+    
+    // Set parameter names
+    auto argIt = function->arg_begin();
+    for (size_t i = 0; i < node->parameters.size(); ++i, ++argIt) {
+        argIt->setName(node->parameters[i].name);
+    }
+    
+    // Create basic block for function body
+    llvm::BasicBlock* entryBlock = llvm::BasicBlock::Create(m_context, "entry", function);
+    m_builder.SetInsertPoint(entryBlock);
+    
+    // Save current function context
+    llvm::Function* prevFunction = currentFunction;
+    currentFunction = function;
+    
+    // Save current symbol table (for nested scopes later)
+    auto prevNamedValues = namedValues;
+    auto prevVariableTypes = variableTypes;
+    
+    // Create allocas for parameters
+    argIt = function->arg_begin();
+    for (size_t i = 0; i < node->parameters.size(); ++i, ++argIt) {
+        const auto& param = node->parameters[i];
+        
+        // Create alloca for parameter
+        llvm::AllocaInst* alloca = m_builder.CreateAlloca(
+            getLLVMType(param.type), 
+            nullptr, 
+            param.name
+        );
+        
+        // Store parameter value in alloca
+        m_builder.CreateStore(&*argIt, alloca);
+        
+        // Add to symbol table
+        namedValues[param.name] = alloca;
+        variableTypes[param.name] = param.type;
+    }
+    
+    // Generate function body
+    for (const auto& stmt : node->body) {
+        visit(stmt.get());
+    }
+    
+    // If function returns void and no explicit return, add return void
+    if (node->returnType == "void") {
+        // Check if the last instruction is already a return
+        llvm::BasicBlock* currentBlock = m_builder.GetInsertBlock();
+        if (currentBlock->empty() || !llvm::isa<llvm::ReturnInst>(currentBlock->back())) {
+            m_builder.CreateRetVoid();
+        }
+    }
+    
+    // Restore previous context
+    currentFunction = prevFunction;
+    namedValues = prevNamedValues;
+    variableTypes = prevVariableTypes;
+}
+
+// Return Statement Visitor
+void CodeGen::visit(ReturnStatementNode *node)
+{
+    if (!currentFunction) {
+        throw std::runtime_error("Return statement outside of function");
+    }
+    
+    if (node->expression) {
+        // Return with value
+        llvm::Value* returnValue = visit(node->expression.get());
+        m_builder.CreateRet(returnValue);
+    } else {
+        // Return void
+        m_builder.CreateRetVoid();
+    }
 }

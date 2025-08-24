@@ -95,7 +95,8 @@ Token Lexer::makeIdentifier() {
         {"string", TOK_TYPE_STRING},
         {"boolean", TOK_TYPE_BOOLEAN},
         {"i32", TOK_TYPE_I32},
-        {"f64", TOK_TYPE_F64}
+        {"f64", TOK_TYPE_F64},
+        {"void", TOK_TYPE_VOID}
     };
     
     auto it = keywords.find(value);

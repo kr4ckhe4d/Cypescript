@@ -14,6 +14,8 @@ class StringLiteralNode;
 class IntegerLiteralNode;
 class VariableExpressionNode;
 class FunctionCallNode;
+class FunctionDeclarationNode;
+class ReturnStatementNode;
 class ArrayLiteralNode;
 class ArrayAccessNode;
 class ObjectLiteralNode;
@@ -372,6 +374,68 @@ public:
         os << "ExpressionStatementNode:\n";
         if (expression) {
             expression->printNode(os, indent + 1);
+        }
+    }
+};
+
+// Function Declaration Node - for function definitions
+class FunctionDeclarationNode : public StatementNode
+{
+public:
+    struct Parameter {
+        std::string name;
+        std::string type;
+        Parameter(std::string n, std::string t) : name(std::move(n)), type(std::move(t)) {}
+    };
+    
+    std::string functionName;
+    std::vector<Parameter> parameters;
+    std::string returnType;
+    std::vector<std::unique_ptr<StatementNode>> body;
+    
+    FunctionDeclarationNode(std::string name, std::string retType) 
+        : functionName(std::move(name)), returnType(std::move(retType)) {}
+    
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "FunctionDeclarationNode: " << functionName << "(";
+        for (size_t i = 0; i < parameters.size(); ++i) {
+            if (i > 0) os << ", ";
+            os << parameters[i].name << ": " << parameters[i].type;
+        }
+        os << "): " << returnType << "\n";
+        
+        printIndent(os, indent + 1);
+        os << "Body:\n";
+        for (const auto &stmt : body) {
+            if (stmt) {
+                stmt->printNode(os, indent + 2);
+            }
+        }
+    }
+};
+
+// Return Statement Node - for return statements
+class ReturnStatementNode : public StatementNode
+{
+public:
+    std::unique_ptr<ExpressionNode> expression; // Optional - can be null for void returns
+    
+    explicit ReturnStatementNode(std::unique_ptr<ExpressionNode> expr = nullptr) 
+        : expression(std::move(expr)) {}
+    
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "ReturnStatementNode:\n";
+        if (expression) {
+            printIndent(os, indent + 1);
+            os << "Expression:\n";
+            expression->printNode(os, indent + 2);
+        } else {
+            printIndent(os, indent + 1);
+            os << "Void return\n";
         }
     }
 };

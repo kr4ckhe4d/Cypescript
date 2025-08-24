@@ -169,10 +169,24 @@ Cypescript now includes multiple optimization levels for different use cases:
 ```
 
 ### **Performance Characteristics**
-- **Small workloads:** Advanced optimization 25.8% faster than baseline
-- **Large workloads:** Cypescript 2.5x faster than JavaScript (measured)
-- **With full optimization:** Projected 40x faster than JavaScript
+- **vs JavaScript:** 3.3x slower on small workloads, 1.4x slower on intensive computation
+- **vs Python:** 2x faster on small workloads, **96x faster** on intensive computation
+- **Advanced optimization:** 36% performance improvement over basic compilation
 - **NEON SIMD:** 4x parallel processing validated on Apple Silicon
+
+**Multi-Language Benchmark Results:**
+```
+Array Processing (Small Workloads):
+🥇 JavaScript: 98ms
+🥈 Cypescript (Advanced): 323ms  
+🥉 Cypescript (Basic): 507ms
+4️⃣ Python: 644ms
+
+Intensive Computation (Large Workloads):
+🥇 JavaScript: 723ms
+🥈 Cypescript (Advanced): 986ms
+🥉 Python: 94,666ms (131x slower!)
+```
 
 See the **interactive performance documentation** for detailed benchmarks and charts!
 

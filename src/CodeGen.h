@@ -20,6 +20,8 @@ class ProgramNode;
 class StatementNode;
 class ExpressionNode; // For the general expression visitor
 class FunctionCallNode;
+class FunctionDeclarationNode;
+class ReturnStatementNode;
 class StringLiteralNode;
 class IntegerLiteralNode;      // New
 class VariableExpressionNode;  // New
@@ -53,6 +55,10 @@ private:
     
     // Array size tracking: Maps array variable names to their sizes
     std::map<std::string, size_t> arraySizes;
+    
+    // Function context tracking
+    llvm::Function *currentFunction = nullptr;  // Track current function being generated
+    std::map<std::string, llvm::Function*> declaredFunctions; // Track declared functions
 
     // Helper to get LLVM type from our string type names
     llvm::Type *getLLVMType(const std::string &typeName);
@@ -61,6 +67,8 @@ private:
     void visit(ProgramNode *node);
     void visit(StatementNode *node);           // Dispatcher
     void visit(VariableDeclarationNode *node); // New
+    void visit(FunctionDeclarationNode *node); // For function definitions
+    void visit(ReturnStatementNode *node);     // For return statements
     void visit(ExpressionStatementNode *node); // For expressions used as statements
     llvm::Value *visit(FunctionCallNode *node); // Now returns a value since it's an expression
     void visit(IfStatementNode *node);         // For if/else statements

@@ -363,24 +363,36 @@ function initializePerformanceCharts() {
     Chart.defaults.font.family = "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
     Chart.defaults.font.size = 12;
     
-    // 1. Main Performance Comparison Chart
-    const performanceCtx = document.getElementById('performanceChart');
-    if (performanceCtx) {
-        new Chart(performanceCtx, {
+    // 1. Multi-Language Performance Comparison Chart
+    const multiLanguageCtx = document.getElementById('multiLanguageChart');
+    if (multiLanguageCtx) {
+        new Chart(multiLanguageCtx, {
             type: 'bar',
             data: {
-                labels: ['Intensive Computation', 'Light Array Operations'],
+                labels: ['Array Processing', 'Intensive Computation'],
                 datasets: [{
-                    label: 'Cypescript (ms)',
-                    data: [1420, 481],
+                    label: 'JavaScript',
+                    data: [98, 723],
+                    backgroundColor: 'rgba(243, 156, 18, 0.8)',
+                    borderColor: 'rgba(243, 156, 18, 1)',
+                    borderWidth: 2
+                }, {
+                    label: 'Cypescript (Memory-Opt ✅)',
+                    data: [301, 986],
+                    backgroundColor: 'rgba(39, 174, 96, 0.8)',
+                    borderColor: 'rgba(39, 174, 96, 1)',
+                    borderWidth: 2
+                }, {
+                    label: 'Cypescript (Basic)',
+                    data: [438, null], // Only array processing tested
                     backgroundColor: 'rgba(231, 76, 60, 0.8)',
                     borderColor: 'rgba(231, 76, 60, 1)',
                     borderWidth: 2
                 }, {
-                    label: 'JavaScript (ms)',
-                    data: [555, 80],
-                    backgroundColor: 'rgba(243, 156, 18, 0.8)',
-                    borderColor: 'rgba(243, 156, 18, 1)',
+                    label: 'Python',
+                    data: [644, 94666],
+                    backgroundColor: 'rgba(52, 152, 219, 0.8)',
+                    borderColor: 'rgba(52, 152, 219, 1)',
                     borderWidth: 2
                 }]
             },
@@ -389,7 +401,7 @@ function initializePerformanceCharts() {
                 plugins: {
                     title: {
                         display: true,
-                        text: 'Performance Comparison: Cypescript vs JavaScript',
+                        text: 'Multi-Language Performance: Memory Optimization Implemented!',
                         font: { size: 16, weight: 'bold' },
                         color: 'white'
                     },
@@ -399,13 +411,22 @@ function initializePerformanceCharts() {
                 },
                 scales: {
                     y: {
+                        type: 'logarithmic',
                         beginAtZero: true,
                         title: {
                             display: true,
-                            text: 'Execution Time (ms)',
+                            text: 'Execution Time (ms) - Log Scale',
                             color: 'white'
                         },
-                        ticks: { color: 'white' },
+                        ticks: { 
+                            color: 'white',
+                            callback: function(value) {
+                                if (value >= 1000) {
+                                    return (value / 1000).toFixed(0) + 'k';
+                                }
+                                return value;
+                            }
+                        },
                         grid: { color: 'rgba(255, 255, 255, 0.2)' }
                     },
                     x: {
@@ -475,17 +496,17 @@ function initializePerformanceCharts() {
         new Chart(optimizationCtx, {
             type: 'bar',
             data: {
-                labels: ['Baseline', 'O3 + LTO', 'Process Pool', 'NEON SIMD ✅', 'PGO (Next)', 'Full Stack'],
+                labels: ['Baseline', 'Basic Opt', 'Advanced', 'Memory Opt ✅', 'NEON SIMD ✅', 'Target'],
                 datasets: [{
                     label: 'Small Workloads (ms)',
-                    data: [481, 350, 50, 45, 35, 25],
+                    data: [507, 438, 302, 301, 45, 25],
                     backgroundColor: [
-                        'rgba(231, 76, 60, 0.8)',
-                        'rgba(52, 152, 219, 0.8)',
-                        'rgba(46, 204, 113, 0.8)',
-                        'rgba(39, 174, 96, 0.8)',  // NEON - implemented
-                        'rgba(155, 89, 182, 0.8)',
-                        'rgba(241, 196, 15, 0.8)'
+                        'rgba(231, 76, 60, 0.8)',   // Baseline
+                        'rgba(52, 152, 219, 0.8)',  // Basic
+                        'rgba(46, 204, 113, 0.8)',  // Advanced
+                        'rgba(39, 174, 96, 0.8)',   // Memory - implemented
+                        'rgba(155, 89, 182, 0.8)',  // NEON - implemented
+                        'rgba(241, 196, 15, 0.8)'   // Target
                     ],
                     borderWidth: 2
                 }]
@@ -495,7 +516,7 @@ function initializePerformanceCharts() {
                 plugins: {
                     title: {
                         display: true,
-                        text: 'Optimization Impact on Small Workloads (NEON Implemented!)',
+                        text: 'Optimization Impact: Memory Optimization Implemented!',
                         font: { size: 16, weight: 'bold' }
                     },
                     legend: { display: false }
@@ -553,15 +574,16 @@ function initializePerformanceCharts() {
         new Chart(smallWorkloadCtx, {
             type: 'bar',
             data: {
-                labels: ['JavaScript', 'Cypescript (Original)', 'Cypescript (Advanced ✅)', 'Cypescript (Target)'],
+                labels: ['JavaScript', 'Cypescript (Advanced ✅)', 'Cypescript (w/ PGO)', 'Cypescript (Target)', 'Python'],
                 datasets: [{
                     label: 'Execution Time (ms)',
-                    data: [80, 481, 279, 25],
+                    data: [98, 323, 270, 25, 644],
                     backgroundColor: [
-                        'rgba(243, 156, 18, 0.8)',
-                        'rgba(231, 76, 60, 0.8)',
-                        'rgba(39, 174, 96, 0.8)',  // Advanced - achieved
-                        'rgba(46, 204, 113, 0.8)'
+                        'rgba(243, 156, 18, 0.8)',  // JavaScript
+                        'rgba(39, 174, 96, 0.8)',   // Advanced - achieved
+                        'rgba(52, 152, 219, 0.8)',  // PGO - realistic
+                        'rgba(46, 204, 113, 0.8)',  // Target
+                        'rgba(155, 89, 182, 0.8)'   // Python
                     ],
                     borderWidth: 2
                 }]
@@ -569,6 +591,11 @@ function initializePerformanceCharts() {
             options: {
                 responsive: true,
                 plugins: {
+                    title: {
+                        display: true,
+                        text: 'Multi-Language Performance Context',
+                        font: { size: 16, weight: 'bold' }
+                    },
                     legend: { display: false }
                 },
                 scales: {

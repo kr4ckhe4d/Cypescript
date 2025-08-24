@@ -35,6 +35,7 @@ enum TokenType {
     TOK_TYPE_BOOLEAN,   // boolean
     TOK_TYPE_I32,       // i32
     TOK_TYPE_F64,       // f64
+    TOK_TYPE_VOID,      // void
     
     // Punctuation
     TOK_LPAREN,         // (
@@ -109,6 +110,7 @@ inline const char* tokenTypeToString(TokenType type) {
         case TOK_TYPE_BOOLEAN: return "TYPE_BOOLEAN";
         case TOK_TYPE_I32: return "TYPE_I32";
         case TOK_TYPE_F64: return "TYPE_F64";
+        case TOK_TYPE_VOID: return "TYPE_VOID";
         
         // Punctuation
         case TOK_LPAREN: return "LPAREN";
@@ -186,7 +188,7 @@ struct Token {
     }
     
     bool isType() const {
-        return type >= TOK_TYPE_NUMBER && type <= TOK_TYPE_F64;
+        return type >= TOK_TYPE_NUMBER && type <= TOK_TYPE_VOID;
     }
 };
 
