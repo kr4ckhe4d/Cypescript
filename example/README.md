@@ -2,6 +2,43 @@
 
 This directory contains **categorized examples** demonstrating different aspects of the Cypescript language.
 
+## 🎯 **NEW!** User-Defined Functions Demo
+
+### 🔥 [`functions_demo.csc`](functions_demo.csc) - **Phase 1 Functions Implementation**
+**Comprehensive demonstration of user-defined functions!**
+
+**Compilation:**
+```bash
+./build/cscript example/functions_demo.csc
+llc -filetype=obj -relocation-model=pic output.ll -o output.o
+clang output.o -o functions_demo
+./functions_demo
+```
+
+**Features Demonstrated:**
+- ✅ **Function declarations** with parameters and return types
+- ✅ **Return statements** with expressions
+- ✅ **Local variables** and proper scoping
+- ✅ **Function calls** in expressions and statements
+- ✅ **Void functions** for side effects
+- ✅ **Nested function calls** and complex logic
+- ✅ **Integration** with existing language features
+
+**Sample Output:**
+```
+🚀 Cypescript Functions Demo - Phase 1
+================================
+Testing with x=15, y=25
+add(x, y) = 40
+multiply(x, y) = 375
+factorial(5) = 120
+power(2, 8) = 256
+Hello, Alice! You are 28 years old.
+Rectangle area (12 x 8) = 96
+complexMath(5, 10, 3) = 36
+✅ All function tests completed successfully!
+```
+
 ## 📁 Directory Structure
 
 ### 🔧 [`basic/`](basic/) - Native Compiler Examples
@@ -43,7 +80,16 @@ Examples using **advanced features** only available in the browser.
 ./compile-run.sh example/basic/control_flow.csc
 ```
 
-### 2. **Want More Power?** Try C++ Integration
+### 2. **Want Functions?** Try the Functions Demo
+```bash
+# Compile and run the comprehensive functions example
+./build/cscript example/functions_demo.csc
+llc -filetype=obj -relocation-model=pic output.ll -o output.o
+clang output.o -o functions_demo
+./functions_demo
+```
+
+### 3. **Want More Power?** Try C++ Integration
 ```bash
 ./compile-with-cpp.sh example/cpp-integration/cpp_integration_basic.csc demo
 ./demo
