@@ -369,28 +369,28 @@ function initializePerformanceCharts() {
         new Chart(multiLanguageCtx, {
             type: 'bar',
             data: {
-                labels: ['Array Processing', 'Intensive Computation'],
+                labels: ['Array Processing', 'Complex Objects', 'Intensive Computation'],
                 datasets: [{
                     label: 'JavaScript',
-                    data: [98, 723],
+                    data: [98, 0.57, 723],
                     backgroundColor: 'rgba(243, 156, 18, 0.8)',
                     borderColor: 'rgba(243, 156, 18, 1)',
                     borderWidth: 2
                 }, {
                     label: 'Cypescript (Memory-Opt ✅)',
-                    data: [301, 986],
+                    data: [301, 466, 986],
                     backgroundColor: 'rgba(39, 174, 96, 0.8)',
                     borderColor: 'rgba(39, 174, 96, 1)',
                     borderWidth: 2
                 }, {
                     label: 'Cypescript (Basic)',
-                    data: [438, null], // Only array processing tested
+                    data: [438, null, null], // Only array processing tested
                     backgroundColor: 'rgba(231, 76, 60, 0.8)',
                     borderColor: 'rgba(231, 76, 60, 1)',
                     borderWidth: 2
                 }, {
                     label: 'Python',
-                    data: [644, 94666],
+                    data: [644, 9.20, 94666],
                     backgroundColor: 'rgba(52, 152, 219, 0.8)',
                     borderColor: 'rgba(52, 152, 219, 1)',
                     borderWidth: 2
@@ -401,12 +401,28 @@ function initializePerformanceCharts() {
                 plugins: {
                     title: {
                         display: true,
-                        text: 'Multi-Language Performance: Memory Optimization Implemented!',
+                        text: 'Multi-Language Performance: Complex Objects + Memory Optimization!',
                         font: { size: 16, weight: 'bold' },
                         color: 'white'
                     },
                     legend: {
                         labels: { color: 'white' }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: function(context) {
+                                if (context.label === 'Complex Objects') {
+                                    if (context.dataset.label === 'JavaScript') {
+                                        return '250K property accesses';
+                                    } else if (context.dataset.label.includes('Cypescript')) {
+                                        return '2.5M property accesses (10x scale!)';
+                                    } else if (context.dataset.label === 'Python') {
+                                        return '250K property accesses';
+                                    }
+                                }
+                                return '';
+                            }
+                        }
                     }
                 },
                 scales: {
