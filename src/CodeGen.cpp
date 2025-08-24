@@ -1223,5 +1223,61 @@ llvm::FunctionCallee CodeGen::getOrDeclareExternalFunction(const std::string& na
             llvm::Type::getDoubleTy(m_context));
     }
     
+    // SIMD-optimized functions (ARM NEON)
+    else if (name == "neon_array_sum_i32") {
+        return m_module->getOrInsertFunction("neon_array_sum_i32",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "neon_array_max_i32") {
+        return m_module->getOrInsertFunction("neon_array_max_i32",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "neon_array_min_i32") {
+        return m_module->getOrInsertFunction("neon_array_min_i32",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "neon_array_multiply_i32") {
+        return m_module->getOrInsertFunction("neon_array_multiply_i32",
+            llvm::Type::getVoidTy(m_context),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "neon_array_add_i32") {
+        return m_module->getOrInsertFunction("neon_array_add_i32",
+            llvm::Type::getVoidTy(m_context),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "neon_dot_product_i32") {
+        return m_module->getOrInsertFunction("neon_dot_product_i32",
+            llvm::Type::getInt64Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "neon_array_count_equal_i32") {
+        return m_module->getOrInsertFunction("neon_array_count_equal_i32",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context),
+            llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "neon_performance_ratio") {
+        return m_module->getOrInsertFunction("neon_performance_ratio",
+            llvm::Type::getDoubleTy(m_context));
+    }
+    else if (name == "neon_available") {
+        return m_module->getOrInsertFunction("neon_available",
+            llvm::Type::getInt32Ty(m_context));
+    }
+    
     return nullptr; // Function not found
 }

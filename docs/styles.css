@@ -619,6 +619,162 @@ body {
     margin-bottom: 2rem;
 }
 
+/* Chart Containers */
+.chart-container {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 2rem;
+    border-radius: 12px;
+    margin: 2rem 0;
+    backdrop-filter: blur(10px);
+}
+
+.chart-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin: 2rem 0;
+}
+
+.chart-half {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.chart-half h3 {
+    text-align: center;
+    color: #2c3e50;
+    margin-bottom: 1rem;
+}
+
+/* Optimization Impact Styles */
+.optimization-impact {
+    margin: 3rem 0;
+    background: #f8f9fa;
+    padding: 2rem;
+    border-radius: 12px;
+}
+
+.optimization-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-top: 2rem;
+}
+
+.opt-detail {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.opt-detail h4 {
+    color: #2c3e50;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+}
+
+.opt-detail ul {
+    list-style: none;
+    padding: 0;
+}
+
+.opt-detail li {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #eee;
+}
+
+.opt-detail li:last-child {
+    border-bottom: none;
+}
+
+/* NEON Success Styles */
+.neon-success {
+    margin-top: 2rem;
+    background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+    color: white;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(39, 174, 96, 0.3);
+}
+
+.neon-success h3 {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    font-size: 1.3rem;
+}
+
+.neon-results {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+}
+
+.neon-stat {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 1.5rem;
+    border-radius: 8px;
+    text-align: center;
+    backdrop-filter: blur(10px);
+}
+
+.neon-stat h4 {
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+}
+
+.neon-stat p {
+    margin: 0;
+    opacity: 0.9;
+}
+
+/* Future Performance Projections */
+.future-performance {
+    margin: 3rem 0;
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    color: white;
+    padding: 2rem;
+    border-radius: 12px;
+}
+
+.projection-charts {
+    margin: 2rem 0;
+}
+
+.projection-summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-top: 2rem;
+}
+
+.projection-card {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 1.5rem;
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+}
+
+.projection-card h4 {
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+}
+
+.projection-card .improvement {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #f39c12;
+    margin-top: 1rem;
+}
+
+/* C++ Integration Chart Styles */
+.cpp-performance .chart-container {
+    background: rgba(255, 255, 255, 0.1);
+    margin: 1.5rem 0;
+}
+
 .results-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1034,6 +1190,23 @@ body {
         grid-template-columns: 1fr;
     }
     
+    .optimization-details,
+    .projection-summary {
+        grid-template-columns: 1fr;
+    }
+    
+    .chart-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .chart-container {
+        padding: 1rem;
+    }
+    
+    .chart-half {
+        padding: 1rem;
+    }
+    
     .cpp-bar {
         flex-direction: column;
         align-items: flex-start;
@@ -1048,6 +1221,44 @@ body {
         margin-left: 0;
         width: 100%;
     }
+}
+
+/* Chart Animation */
+.chart-container canvas {
+    transition: all 0.3s ease;
+}
+
+.chart-container:hover canvas {
+    transform: scale(1.02);
+}
+
+/* Performance Highlights */
+.performance-highlight {
+    background: linear-gradient(45deg, #f39c12, #e67e22);
+    color: white;
+    padding: 1rem;
+    border-radius: 8px;
+    margin: 1rem 0;
+    text-align: center;
+    font-weight: bold;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.performance-highlight.winner {
+    background: linear-gradient(45deg, #27ae60, #2ecc71);
+}
+
+.performance-highlight.future {
+    background: linear-gradient(45deg, #9b59b6, #8e44ad);
+}
+
+/* Interactive Chart Tooltips */
+.chart-tooltip {
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 0.5rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
 }
 
 /* Utility Classes */

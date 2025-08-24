@@ -324,6 +324,14 @@ bool Parser::isKnownFunction(const std::string& name)
         return true;
     }
     
+    // SIMD-optimized functions (ARM NEON)
+    if (name == "neon_array_sum_i32" || name == "neon_array_max_i32" || name == "neon_array_min_i32" ||
+        name == "neon_array_multiply_i32" || name == "neon_array_add_i32" || 
+        name == "neon_dot_product_i32" || name == "neon_array_count_equal_i32" || 
+        name == "neon_performance_ratio" || name == "neon_available") {
+        return true;
+    }
+    
     // External C++ functions - String
     if (name == "string_reverse" || name == "string_upper" || name == "string_lower" ||
         name == "string_length" || name == "string_substring" || name == "string_find" ||
