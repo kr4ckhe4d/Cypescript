@@ -60,6 +60,33 @@ public:
     // Inherits printNode
 };
 
+class VariableDeclarationNode : public StatementNode
+{
+public:
+    std::string variableName;
+    std::string typeName;
+    std::unique_ptr<ExpressionNode> initializer;
+    bool isConst;
+
+    VariableDeclarationNode(std::string varName, std::string type, std::unique_ptr<ExpressionNode> init, bool isConstVal = false)
+        : variableName(std::move(varName)), typeName(std::move(type)), initializer(std::move(init)), isConst(isConstVal) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "VariableDeclarationNode: " << (isConst ? "const " : "let ") << variableName << " : " << typeName << " =\n";
+        if (initializer)
+        {
+            initializer->printNode(os, indent + 1);
+        }
+        else
+        {
+            printIndent(os, indent + 1);
+            os << "NullInitializerNode\n";
+        }
+    }
+};
+
 // --- Concrete Expression Node Types ---
 
 class StringLiteralNode : public ExpressionNode
@@ -347,6 +374,42 @@ public:
     }
 };
 
+// For-of statement (for (const item of array))
+class ForOfStatementNode : public StatementNode
+{
+public:
+    std::unique_ptr<VariableDeclarationNode> iteratorVariable;
+    std::unique_ptr<ExpressionNode> iterable;
+    std::vector<std::unique_ptr<StatementNode>> bodyStatements;
+
+    ForOfStatementNode(std::unique_ptr<VariableDeclarationNode> itVar,
+                       std::unique_ptr<ExpressionNode> iter)
+        : iteratorVariable(std::move(itVar)), iterable(std::move(iter)) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "ForOfStatementNode:\n";
+        printIndent(os, indent + 1);
+        os << "Iterator Variable:\n";
+        if (iteratorVariable) {
+            iteratorVariable->printNode(os, indent + 2);
+        }
+        printIndent(os, indent + 1);
+        os << "Iterable:\n";
+        if (iterable) {
+            iterable->printNode(os, indent + 2);
+        }
+        printIndent(os, indent + 1);
+        os << "Body:\n";
+        for (const auto &stmt : bodyStatements) {
+            if (stmt) {
+                stmt->printNode(os, indent + 2);
+            }
+        }
+    }
+};
+
 // Do-while statement (post-condition loop)
 class DoWhileStatementNode : public StatementNode
 {
@@ -616,33 +679,6 @@ public:
         }
         printIndent(os, indent);
         os << ")\n";
-    }
-};
-
-class VariableDeclarationNode : public StatementNode
-{
-public:
-    std::string variableName;
-    std::string typeName;
-    std::unique_ptr<ExpressionNode> initializer;
-    bool isConst;
-
-    VariableDeclarationNode(std::string varName, std::string type, std::unique_ptr<ExpressionNode> init, bool isConstVal = false)
-        : variableName(std::move(varName)), typeName(std::move(type)), initializer(std::move(init)), isConst(isConstVal) {}
-
-    void printNode(llvm::raw_ostream &os, int indent = 0) const override
-    {
-        printIndent(os, indent);
-        os << "VariableDeclarationNode: " << (isConst ? "const " : "let ") << variableName << " : " << typeName << " =\n";
-        if (initializer)
-        {
-            initializer->printNode(os, indent + 1);
-        }
-        else
-        {
-            printIndent(os, indent + 1);
-            os << "NullInitializerNode\n";
-        }
     }
 };
 

@@ -28,6 +28,7 @@ enum TokenType {
     TOK_FALSE,          // false
     TOK_NULL,           // null
     TOK_UNDEFINED,      // undefined
+    TOK_OF,             // of
     
     // Type keywords
     TOK_TYPE_NUMBER,    // number
@@ -103,6 +104,7 @@ inline const char* tokenTypeToString(TokenType type) {
         case TOK_FALSE: return "FALSE";
         case TOK_NULL: return "NULL";
         case TOK_UNDEFINED: return "UNDEFINED";
+        case TOK_OF: return "OF";
         
         // Type keywords
         case TOK_TYPE_NUMBER: return "TYPE_NUMBER";

@@ -35,6 +35,7 @@ class ObjectAccessNode;        // For object access
 class IfStatementNode;         // For if/else statements
 class WhileStatementNode;      // For while loops
 class ForStatementNode;        // For traditional for loops
+class ForOfStatementNode;      // For for-of loops
 class DoWhileStatementNode;    // For do-while loops
 class AssignmentStatementNode; // For variable assignments
 class ArrayAssignmentStatementNode; // For array element assignments
@@ -93,6 +94,7 @@ private:
     void visit(IfStatementNode *node);         // For if/else statements
     void visit(WhileStatementNode *node);      // For while loops
     void visit(ForStatementNode *node);        // For traditional for loops
+    void visit(ForOfStatementNode *node);      // For for-of loops
     void visit(DoWhileStatementNode *node);    // For do-while loops
     void visit(AssignmentStatementNode *node); // For variable assignments
     void visit(ArrayAssignmentStatementNode *node); // For array element assignments

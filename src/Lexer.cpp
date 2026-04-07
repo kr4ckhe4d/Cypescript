@@ -91,6 +91,7 @@ Token Lexer::makeIdentifier() {
         {"false", TOK_FALSE},
         {"null", TOK_NULL},
         {"undefined", TOK_UNDEFINED},
+        {"of", TOK_OF},
         {"number", TOK_TYPE_NUMBER},
         {"string", TOK_TYPE_STRING},
         {"boolean", TOK_TYPE_BOOLEAN},

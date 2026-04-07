@@ -276,6 +276,11 @@ queue.push("NodeC");
 println(queue.length);   // 3
 println(queue.shift());  // "NodeA"
 println(queue.length);   // 2
+
+// For-of Iteration
+for (const item of queue) {
+    println(item);
+}
 ```
 
 ### Arithmetic Operations

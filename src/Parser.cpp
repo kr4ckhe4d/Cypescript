@@ -398,19 +398,53 @@ bool Parser::isKnownFunction(const std::string& name)
     return false;
 }
 
-std::unique_ptr<ForStatementNode> Parser::parseForStatement()
+std::unique_ptr<StatementNode> Parser::parseForStatement()
 {
     consume(TOK_FOR, "Expected 'for' keyword");
     consume(TOK_LPAREN, "Expected '(' after 'for'");
-    
+
+    // Check if it's a for-of loop: for (let item of array) or for (const item of array)
+    if ((peek().type == TOK_LET || peek().type == TOK_CONST) && peek(2).type == TOK_OF) {
+        // Parse For-Of Loop
+        bool isConst = false;
+        if (peek().type == TOK_CONST) {
+            consume(TOK_CONST, "Expected 'const' keyword");
+            isConst = true;
+        } else {
+            consume(TOK_LET, "Expected 'let' keyword");
+        }
+
+        const Token &varNameToken = consume(TOK_IDENTIFIER, "Expected variable name after declaration keyword");
+        std::string varName = varNameToken.value;
+
+        // Auto infer type
+        auto iterVar = std::make_unique<VariableDeclarationNode>(varName, "auto", nullptr, isConst);
+
+        consume(TOK_OF, "Expected 'of' keyword after iterator variable");
+
+        auto iterable = parseExpression();
+
+        consume(TOK_RPAREN, "Expected ')' after for-of header");
+        consume(TOK_LBRACE, "Expected '{' to start for-of loop body");
+
+        auto forOfNode = std::make_unique<ForOfStatementNode>(std::move(iterVar), std::move(iterable));
+
+        while (peek().type != TOK_RBRACE && !isAtEnd()) {
+            forOfNode->bodyStatements.push_back(parseStatement());
+        }
+
+        consume(TOK_RBRACE, "Expected '}' to end for-of loop body");
+
+        return forOfNode;
+    }
+
     // Parse initialization (can be variable declaration or assignment)
     std::unique_ptr<StatementNode> initialization = nullptr;
-    if (peek().type == TOK_LET) {
+    if (peek().type == TOK_LET || peek().type == TOK_CONST) {
         initialization = parseVariableDeclarationStatement();
     } else if (peek().type == TOK_IDENTIFIER && peek(1).type == TOK_EQUAL) {
         initialization = parseAssignmentStatement();
-    } else if (peek().type != TOK_SEMICOLON) {
-        throw std::runtime_error("Expected variable declaration or assignment in for loop initialization");
+    } else if (peek().type != TOK_SEMICOLON) {        throw std::runtime_error("Expected variable declaration or assignment in for loop initialization");
     }
     
     // If no initialization, consume the semicolon

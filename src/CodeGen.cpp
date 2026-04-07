@@ -182,6 +182,10 @@ void CodeGen::visit(StatementNode *node)
     {
         visit(forNode);
     }
+    else if (auto *forOfNode = dynamic_cast<ForOfStatementNode *>(node))
+    {
+        visit(forOfNode);
+    }
     else if (auto *doWhileNode = dynamic_cast<DoWhileStatementNode *>(node))
     {
         visit(doWhileNode);
@@ -757,6 +761,107 @@ void CodeGen::visit(ForStatementNode *node)
     m_builder.CreateBr(condBlock); // Loop back to condition
     
     // Continue with exit block
+    m_builder.SetInsertPoint(exitBlock);
+}
+
+void CodeGen::visit(ForOfStatementNode *node)
+{
+    // 1. Evaluate iterable expression to get the array pointer
+    llvm::Value *arrPtr = visit(node->iterable.get());
+    if (!arrPtr) {
+        throw std::runtime_error("Codegen Error: Failed to evaluate iterable in for-of loop");
+    }
+
+    // 2. Determine element type of the iterable
+    std::string elemType = "i32"; // default
+    if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(node->iterable.get())) {
+        auto typeIt = variableTypes.find(varExpr->name);
+        if (typeIt != variableTypes.end()) {
+            std::string varType = typeIt->second;
+            if (varType.length() > 2 && varType.substr(varType.length() - 2) == "[]") {
+                elemType = varType.substr(0, varType.length() - 2);
+            }
+        }
+    }
+
+    // 3. Get current function and create basic blocks
+    llvm::Function *currentFunction = m_builder.GetInsertBlock()->getParent();
+    llvm::BasicBlock *condBlock = llvm::BasicBlock::Create(m_context, "forof_cond", currentFunction);
+    llvm::BasicBlock *bodyBlock = llvm::BasicBlock::Create(m_context, "forof_body", currentFunction);
+    llvm::BasicBlock *incrBlock = llvm::BasicBlock::Create(m_context, "forof_incr", currentFunction);
+    llvm::BasicBlock *exitBlock = llvm::BasicBlock::Create(m_context, "forof_exit", currentFunction);
+
+    // 4. Initialize loop index: let i = 0
+    llvm::Value *indexAlloca = m_builder.CreateAlloca(llvm::Type::getInt32Ty(m_context), nullptr, "forof_index");
+    m_builder.CreateStore(llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), 0), indexAlloca);
+    
+    // 5. Get array length
+    llvm::FunctionCallee lenFunc = m_module->getOrInsertFunction("array_length",
+        llvm::Type::getInt32Ty(m_context),
+        llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+    llvm::Value *len = m_builder.CreateCall(lenFunc, {arrPtr}, "arr_len");
+
+    m_builder.CreateBr(condBlock);
+
+    // 6. Condition block: i < len
+    m_builder.SetInsertPoint(condBlock);
+    llvm::Value *currentIndex = m_builder.CreateLoad(llvm::Type::getInt32Ty(m_context), indexAlloca, "current_index");
+    llvm::Value *cond = m_builder.CreateICmpSLT(currentIndex, len, "forof_cond_val");
+    m_builder.CreateCondBr(cond, bodyBlock, exitBlock);
+
+    // 7. Body block
+    m_builder.SetInsertPoint(bodyBlock);
+    
+    // Save current symbol table for loop scope
+    auto oldNamedValues = namedValues;
+    auto oldVariableTypes = variableTypes;
+    auto oldConstVariables = constVariables;
+
+    // Load current element from dynamic array
+    llvm::Value *element;
+    if (elemType == "string") {
+        llvm::FunctionCallee getFunc = m_module->getOrInsertFunction("array_get_string",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+        element = m_builder.CreateCall(getFunc, {arrPtr, currentIndex}, "iter_element");
+    } else {
+        llvm::FunctionCallee getFunc = m_module->getOrInsertFunction("array_get_i32",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+        element = m_builder.CreateCall(getFunc, {arrPtr, currentIndex}, "iter_element");
+    }
+
+    // Allocate memory for the iterator variable and store the loaded element
+    llvm::Type *varType = getLLVMType(elemType);
+    llvm::AllocaInst *varAlloca = m_builder.CreateAlloca(varType, nullptr, node->iteratorVariable->variableName);
+    m_builder.CreateStore(element, varAlloca);
+    
+    // Register iterator variable in local scope
+    namedValues[node->iteratorVariable->variableName] = varAlloca;
+    variableTypes[node->iteratorVariable->variableName] = elemType;
+    constVariables[node->iteratorVariable->variableName] = node->iteratorVariable->isConst;
+
+    // Visit body statements
+    for (const auto &stmt : node->bodyStatements) {
+        visit(stmt.get());
+    }
+
+    // Restore scope
+    namedValues = oldNamedValues;
+    variableTypes = oldVariableTypes;
+    constVariables = oldConstVariables;
+
+    m_builder.CreateBr(incrBlock);
+
+    // 8. Increment block: i = i + 1
+    m_builder.SetInsertPoint(incrBlock);
+    llvm::Value *nextIndex = m_builder.CreateAdd(currentIndex, llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), 1));
+    m_builder.CreateStore(nextIndex, indexAlloca);
+    m_builder.CreateBr(condBlock);
+
+    // 9. Exit loop
     m_builder.SetInsertPoint(exitBlock);
 }
 
