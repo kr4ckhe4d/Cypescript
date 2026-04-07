@@ -270,9 +270,9 @@ std::unique_ptr<StatementNode> Parser::parseForStatement()
 {
     consume(TOK_FOR, "Expected 'for'");
     consume(TOK_LPAREN, "Expected '('");
-    if ((peek().type == TOK_LET || peek().type == TOK_CONST) && peek(2).type == TOK_OF) {
+    if ((peek().type == TOK_LET || peek().type == TOK_CONST) && (peek(1).type == TOK_IDENTIFIER && peek(2).type == TOK_OF)) {
         bool isConst = (peek().type == TOK_CONST);
-        advance();
+        advance(); // consume let/const
         const Token &varNameToken = consume(TOK_IDENTIFIER, "Expected variable name");
         auto iterVar = std::make_unique<VariableDeclarationNode>(varNameToken.value, "auto", nullptr, isConst);
         consume(TOK_OF, "Expected 'of'");
@@ -287,10 +287,24 @@ std::unique_ptr<StatementNode> Parser::parseForStatement()
         return forOfNode;
     }
     std::unique_ptr<StatementNode> initialization = nullptr;
-    if (peek().type == TOK_LET || peek().type == TOK_CONST) initialization = parseVariableDeclarationStatement();
-    else if (peek().type == TOK_IDENTIFIER && peek(1).type == TOK_EQUAL) initialization = parseAssignmentStatement();
-    else if (peek().type != TOK_SEMICOLON) throw std::runtime_error("Expected init in for loop");
-    if (!initialization) consume(TOK_SEMICOLON, "Expected ';'");
+    if (peek().type == TOK_LET || peek().type == TOK_CONST) {
+        // Parse variable declaration inline (without consuming semicolon)
+        bool isConst = false;
+        if (peek().type == TOK_CONST) { consume(TOK_CONST, "Expected 'const'"); isConst = true; }
+        else { consume(TOK_LET, "Expected 'let'"); }
+        const Token &varNameToken = consume(TOK_IDENTIFIER, "Expected variable name");
+        std::string typeName = "auto";
+        if (peek().type == TOK_COLON) { consume(TOK_COLON, "Expected ':'"); typeName = parseType(); }
+        consume(TOK_EQUAL, "Expected '='");
+        auto initExpr = parseExpression();
+        initialization = std::make_unique<VariableDeclarationNode>(varNameToken.value, typeName, std::move(initExpr), isConst);
+    } else if (peek().type == TOK_IDENTIFIER && peek(1).type == TOK_EQUAL) {
+        // Parse assignment inline (without consuming semicolon)
+        const Token &varNameToken = consume(TOK_IDENTIFIER, "Expected variable name");
+        consume(TOK_EQUAL, "Expected '='");
+        initialization = std::make_unique<AssignmentStatementNode>(varNameToken.value, parseExpression());
+    }
+    consume(TOK_SEMICOLON, "Expected ';' after for-loop init");
     std::unique_ptr<ExpressionNode> condition = nullptr;
     if (peek().type != TOK_SEMICOLON) condition = parseExpression();
     consume(TOK_SEMICOLON, "Expected ';'");
@@ -300,6 +314,16 @@ std::unique_ptr<StatementNode> Parser::parseForStatement()
             const Token &varNameToken = consume(TOK_IDENTIFIER, "Expected variable name");
             consume(TOK_EQUAL, "Expected '='");
             increment = std::make_unique<AssignmentStatementNode>(varNameToken.value, parseExpression());
+        } else if (peek().type == TOK_IDENTIFIER && peek(1).type == TOK_LBRACKET) {
+            // Array assignment in for increment
+            const Token &arrayNameToken = consume(TOK_IDENTIFIER, "Expected array name");
+            auto arrayExpr = std::make_unique<VariableExpressionNode>(arrayNameToken.value);
+            consume(TOK_LBRACKET, "Expected '['");
+            auto indexExpr = parseExpression();
+            consume(TOK_RBRACKET, "Expected ']'");
+            consume(TOK_EQUAL, "Expected '='");
+            auto valueExpr = parseExpression();
+            increment = std::make_unique<ArrayAssignmentStatementNode>(std::move(arrayExpr), std::move(indexExpr), std::move(valueExpr));
         } else throw std::runtime_error("Expected assignment in for increment");
     }
     consume(TOK_RPAREN, "Expected ')'");
@@ -455,26 +479,34 @@ std::unique_ptr<ExpressionNode> Parser::parseVariableExpression()
     const Token &varToken = consume(TOK_IDENTIFIER, "Expected variable name.");
     
     // Generic function call: func<T>(...)
-    if (peek().type == TOK_LESS) {
+    // Only treat '<' as generic if followed by a type name (identifier), not a number/expression
+    if (peek().type == TOK_LESS && peek(1).type == TOK_IDENTIFIER) {
+        // Save position in case this isn't actually a generic call
+        size_t savedPos = m_currentPos;
         advance(); // consume '<'
         std::vector<std::string> genericArgs;
-        while (peek().type != TOK_GREATER) {
+        bool isGeneric = true;
+        while (peek().type != TOK_GREATER && !isAtEnd()) {
             genericArgs.push_back(parseType());
             if (peek().type == TOK_COMMA) advance();
+            else if (peek().type != TOK_GREATER) { isGeneric = false; break; }
         }
-        consume(TOK_GREATER, "Expected '>'");
-        
-        if (peek().type == TOK_LPAREN) {
-            auto callNode = std::make_unique<FunctionCallNode>(varToken.value);
-            // We could store genericArgs in FunctionCallNode if needed
-            consume(TOK_LPAREN, "Expected '('");
-            while (peek().type != TOK_RPAREN) {
-                callNode->arguments.push_back(parseExpression());
-                if (peek().type == TOK_COMMA) advance();
+        if (isGeneric && peek().type == TOK_GREATER) {
+            consume(TOK_GREATER, "Expected '>'");
+            if (peek().type == TOK_LPAREN) {
+                auto callNode = std::make_unique<FunctionCallNode>(varToken.value);
+                consume(TOK_LPAREN, "Expected '('");
+                while (peek().type != TOK_RPAREN && !isAtEnd()) {
+                    callNode->arguments.push_back(parseExpression());
+                    if (peek().type == TOK_COMMA) advance();
+                    else break;
+                }
+                consume(TOK_RPAREN, "Expected ')'");
+                return callNode;
             }
-            consume(TOK_RPAREN, "Expected ')'");
-            return callNode;
         }
+        // Not a generic call, backtrack
+        m_currentPos = savedPos;
     }
 
     if (varToken.value == "JSON" && peek().type == TOK_DOT) {
@@ -492,17 +524,17 @@ std::unique_ptr<ExpressionNode> Parser::parseVariableExpression()
         return callNode;
     }
     if (peek().type == TOK_LPAREN) {
-        m_currentPos--;
-        const Token &funcNameToken = consume(TOK_IDENTIFIER, "Expected function name");
-        auto callNode = std::make_unique<FunctionCallNode>(funcNameToken.value);
+        auto callNode = std::make_unique<FunctionCallNode>(varToken.value);
         consume(TOK_LPAREN, "Expected '('");
-        while (peek().type != TOK_RPAREN) {
+        while (peek().type != TOK_RPAREN && !isAtEnd()) {
             callNode->arguments.push_back(parseExpression());
             if (peek().type == TOK_COMMA) advance();
+            else break;
         }
         consume(TOK_RPAREN, "Expected ')'");
         return callNode;
-    } else {
+    }
+ else {
         return parseArrayOrObjectAccess(std::make_unique<VariableExpressionNode>(varToken.value));
     }
 }
@@ -511,9 +543,10 @@ std::string Parser::parseType() {
     std::string typeName = advance().value;
     if (peek().type == TOK_LESS) {
         advance(); typeName += "<";
-        while (peek().type != TOK_GREATER) {
+        while (peek().type != TOK_GREATER && !isAtEnd()) {
             typeName += parseType();
             if (peek().type == TOK_COMMA) { advance(); typeName += ","; }
+            else if (peek().type != TOK_GREATER) break;
         }
         consume(TOK_GREATER, "Expected '>'"); typeName += ">";
     }
@@ -590,9 +623,10 @@ std::unique_ptr<ExpressionNode> Parser::parseArrayOrObjectAccess(std::unique_ptr
             if (peek().type == TOK_LPAREN) {
                 auto methodCall = std::make_unique<MethodCallNode>(std::move(base), property);
                 advance();
-                while (peek().type != TOK_RPAREN) {
+                while (peek().type != TOK_RPAREN && !isAtEnd()) {
                     methodCall->arguments.push_back(parseExpression());
                     if (peek().type == TOK_COMMA) advance();
+                    else break;
                 }
                 consume(TOK_RPAREN, "Expected ')'");
                 base = std::move(methodCall);
