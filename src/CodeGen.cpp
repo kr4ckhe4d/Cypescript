@@ -1416,6 +1416,29 @@ llvm::Value *CodeGen::createObjectWithProperties(ObjectLiteralNode *node)
     return objectId;
 }
 
+std::string CodeGen::getExpressionObjectKey(ExpressionNode* expr) {
+    if (auto* varExpr = dynamic_cast<VariableExpressionNode*>(expr)) {
+        auto it = variableToObjectKey.find(varExpr->name);
+        if (it != variableToObjectKey.end()) return it->second;
+    } else if (auto* objAccess = dynamic_cast<ObjectAccessNode*>(expr)) {
+        std::string parentKey = getExpressionObjectKey(objAccess->object.get());
+        if (!parentKey.empty()) {
+            auto layoutIt = objectLayouts.find(parentKey);
+            if (layoutIt != objectLayouts.end()) {
+                const ObjectOptimizer::ObjectLayout& layout = layoutIt->second;
+                auto idxIt = layout.propertyIndices.find(objAccess->property);
+                if (idxIt != layout.propertyIndices.end()) {
+                    const ObjectOptimizer::PropertyInfo& propInfo = layout.properties[idxIt->second].second;
+                    if (propInfo.typeName.substr(0, 7) == "object:") {
+                        return propInfo.typeName.substr(7);
+                    }
+                }
+            }
+        }
+    }
+    return "";
+}
+
 // OPTIMIZED: Phase 1 object creation with direct struct access
 llvm::Value *CodeGen::createOptimizedObjectWithProperties(ObjectLiteralNode *node)
 {
@@ -1451,6 +1474,14 @@ llvm::Value *CodeGen::createOptimizedObjectWithProperties(ObjectLiteralNode *nod
         else if (auto* boolLit = dynamic_cast<BooleanLiteralNode*>(prop.value.get())) {
             propertyType = "boolean";
             propValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), boolLit->value ? 1 : 0);
+        }
+        else if (auto* objLit = dynamic_cast<ObjectLiteralNode*>(prop.value.get())) {
+            propValue = visit(objLit);
+            std::string childKey = "opt_obj_" + std::to_string(reinterpret_cast<uintptr_t>(objLit));
+            propertyType = "object:" + childKey;
+            
+            // Cast to generic pointer for storage
+            propValue = m_builder.CreateBitCast(propValue, llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
         }
         else {
             // Default case
@@ -1519,56 +1550,56 @@ llvm::Value *CodeGen::visit(ObjectAccessNode *node)
     }
     
     // PHASE 1 OPTIMIZATION: Handle optimized object property access
-    if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(node->object.get())) {
-        // First, try optimized object access
-        auto objectKeyIt = variableToObjectKey.find(varExpr->name);
+    std::string objectKey = getExpressionObjectKey(node->object.get());
+    if (!objectKey.empty()) {
+        auto layoutIt = objectLayouts.find(objectKey);
         
-        if (objectKeyIt != variableToObjectKey.end()) {
-            std::string objectKey = objectKeyIt->second;
-            auto layoutIt = objectLayouts.find(objectKey);
+        if (layoutIt != objectLayouts.end()) {
+            // OPTIMIZED PATH: Use direct struct access instead of hash map lookups
+            const ObjectOptimizer::ObjectLayout& layout = layoutIt->second;
             
-            if (layoutIt != objectLayouts.end()) {
-                // OPTIMIZED PATH: Use direct struct access instead of hash map lookups
-                const ObjectOptimizer::ObjectLayout& layout = layoutIt->second;
-                
-                // Get the object pointer from named values
+            llvm::Value* objectPtr = nullptr;
+            
+            if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(node->object.get())) {
                 auto namedValueIt = namedValues.find(varExpr->name);
                 if (namedValueIt != namedValues.end()) {
                     llvm::Value* objectPtrAlloca = namedValueIt->second;
-                    
-                    // Load the actual object pointer from the variable
-                    llvm::Value* objectPtr = m_builder.CreateLoad(
+                    objectPtr = m_builder.CreateLoad(
                         llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
                         objectPtrAlloca,
                         "obj_ptr_load"
                     );
-                    
-                    // Cast the generic pointer back to the struct type
-                    llvm::Value* structPtr = m_builder.CreateBitCast(
-                        objectPtr,
-                        llvm::PointerType::get(layout.structType, 0),
-                        "struct_cast"
-                    );
-                    
-                    // Use optimized property access (10-50x faster than hash maps)
-                    llvm::Value* optimizedValue = objectOptimizer.generateDirectPropertyAccess(
-                        m_builder,
-                        structPtr,
-                        node->property,
-                        layout
-                    );
-                    
-                    if (optimizedValue) {
-                        return optimizedValue;
-                    }
+                }
+            } else if (auto *objAccess = dynamic_cast<ObjectAccessNode*>(node->object.get())) {
+                objectPtr = visit(objAccess);
+            }
+            
+            if (objectPtr) {
+                // Cast the generic pointer back to the struct type
+                llvm::Value* structPtr = m_builder.CreateBitCast(
+                    objectPtr,
+                    llvm::PointerType::get(layout.structType, 0),
+                    "struct_cast"
+                );
+                
+                // Use optimized property access (10-50x faster than hash maps)
+                llvm::Value* optimizedValue = objectOptimizer.generateDirectPropertyAccess(
+                    m_builder,
+                    structPtr,
+                    node->property,
+                    layout
+                );
+                
+                if (optimizedValue) {
+                    return optimizedValue;
                 }
             }
         }
-        
-        // FALLBACK: Legacy object property access (for compatibility)
-        if (objectKeyIt == variableToObjectKey.end()) {
-            objectKeyIt = variableToObjectKey.find(varExpr->name);
-        }
+    }
+    
+    // FALLBACK: Legacy object property access (for compatibility)
+    if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(node->object.get())) {
+        auto objectKeyIt = variableToObjectKey.find(varExpr->name);
         
         if (objectKeyIt != variableToObjectKey.end()) {
             std::string objectKey = objectKeyIt->second;

@@ -68,6 +68,9 @@ private:
     
     // Object variable tracking: Maps variable names to their object keys
     std::map<std::string, std::string> variableToObjectKey;
+
+    // Helper to get the object key for an expression
+    std::string getExpressionObjectKey(ExpressionNode* expr);
     
     // Function context tracking
     llvm::Function *currentFunction = nullptr;  // Track current function being generated

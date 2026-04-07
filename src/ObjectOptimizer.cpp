@@ -22,6 +22,9 @@ ObjectOptimizer::ObjectLayout ObjectOptimizer::createObjectLayout(
         if (prop.second == "string") {
             info.type = llvm::PointerType::get(llvm::Type::getInt8Ty(context), 0);
             currentOffset += sizeof(void*); // Pointer size
+        } else if (prop.second.substr(0, 7) == "object:") {
+            info.type = llvm::PointerType::get(llvm::Type::getInt8Ty(context), 0);
+            currentOffset += sizeof(void*); // Generic pointer for nested object
         } else if (prop.second == "i32" || prop.second == "boolean") {
             info.type = llvm::Type::getInt32Ty(context);
             currentOffset += 4; // 32-bit integer

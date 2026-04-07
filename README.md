@@ -252,6 +252,13 @@ println(config.appName);  // "Cypescript IDE"
 println(config.port);     // 8080
 println(config);          // {"appName":"Cypescript IDE","version":"1.0.0","port":8080,"debug":false}
 
+// Nested Objects
+let company = {
+    name: "TechCorp",
+    employee: { name: "Alice", age: 28 }
+};
+println(company.employee.name);  // "Alice"
+
 // JSON Stringification (requires C++ integration)
 let jsonStr: string = JSON.stringify(config);
 println(jsonStr);         // {"appName":"Cypescript IDE","version":"1.0.0","port":8080,"debug":false}
