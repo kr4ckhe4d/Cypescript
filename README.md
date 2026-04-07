@@ -26,19 +26,21 @@ The web documentation includes:
 - **Variable declarations** with `let`, `const`, and type inference
 - **Built-in types**: `string`, `i32`, `f64`, `boolean`, `void`, arrays (`i32[]`), objects
 - **Complete arithmetic operations** (`+`, `-`, `*`, `/`, `%`)
-- **Comparison operators** (`==`, `!=`, `<`, `<=`, `>`, `>=`)
+- **Comparison & logical operators** (`==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `!`)
 - **Control flow** with `if`/`else` statements and nesting
-- **All loop constructs**: `while`, `for`, `do-while`
-- **Variable assignments** and complex expressions
-- **🔥 NEW! Native TypeScript-style objects** with property access (`obj.property`)
-- **Arrays and objects** with access syntax (`arr[index]`, `obj.property`)
-- **Array length property** (`arr.length`) for dynamic programming
-- **🔥 NEW! User-defined functions** with parameters, return values, and local scoping
+- **All loop constructs**: `while`, `for`, `do-while`, `for...of`
+- **User-defined functions** with parameters, return values, and local scoping
+- **Generic functions and type aliases** (`function bfs<T>(...)`, `type Graph<T> = Map<T, T[]>`)
+- **Native TypeScript-style objects** with property access, nested objects, and object printing
+- **JSON integration**: `JSON.stringify(obj)` and `JSON.parse(str)` with native objects
+- **Arrays**: literal syntax, index access, `.length`, `.push()`, `.shift()`
+- **Advanced collections** via C++ stdlib: `Map<K,V>`, `Set<T>` with `.get()`, `.set()`, `.has()`, `.add()`
+- **String operations**: concatenation (`+`), escape sequences (`\n`, `\t`, `\\`, `\"`)
+- **`const` keyword** for immutable bindings
 - **Built-in functions** (`print` and `println`)
-- **String and numeric literals**
 - **Comments** (single-line `//` and multi-line `/* */`)
-- **Comprehensive error handling** and reporting
-- **LLVM IR generation** for efficient native code compilation
+- **LLVM -O2 native compilation** (3–17x faster than Node.js)
+- **C++ integration** with 30+ stdlib functions (strings, arrays, file I/O, JSON, random)
 - **VSCode Extension** with syntax highlighting and IntelliSense
 
 ## Quick Start
@@ -959,27 +961,6 @@ if (employee.isRemote == 1) {
 - **Integers**: `age: 28`, `port: 8080`
 - **Booleans**: `active: true`, `debug: false`
 
-### **🚀 Coming Soon: Advanced Object Features**
-
-```typescript
-// Future features in development:
-let user = { name: "Alice", age: 28 };
-
-// Object printing
-println(user);  // Will print: { name: "Alice", age: 28 }
-
-// JSON conversion
-let jsonString = JSON.stringify(user);  // Convert to JSON string
-let parsed = JSON.parse(jsonString);    // Parse JSON back to object
-
-// Nested objects
-let company = {
-    name: "TechCorp",
-    employee: { name: "Alice", age: 28 }
-};
-println(company.employee.name);  // Nested property access
-```
-
 ## 🔧 C++ Integration (Advanced)
 
 For programs that need additional functionality beyond native TypeScript features, Cypescript provides seamless C++ integration with 30+ standard library functions.
@@ -1137,174 +1118,62 @@ println("JSON: " + json_prettify(user));
 
 ### ✅ Implemented Features
 - [x] Lexical analysis with comprehensive token support
-- [x] Variable declarations (`let`) with type annotations
+- [x] Variable declarations (`let`, `const`) with type annotations
 - [x] Variable assignments with type checking
 - [x] All arithmetic operators (`+`, `-`, `*`, `/`, `%`)
 - [x] All comparison operators (`==`, `!=`, `<`, `<=`, `>`, `>=`)
-- [x] Control flow with `if`/`else` statements
-- [x] Nested conditional statements
+- [x] Logical operators (`&&`, `||`) with short-circuit evaluation
+- [x] Unary operators (`!`, `-`)
+- [x] Control flow with `if`/`else` statements and nesting
 - [x] While loops with complex conditions
 - [x] Traditional for loops (`for (init; condition; increment)`)
 - [x] Do-while loops (post-condition loops)
+- [x] `for...of` loops for arrays and collections
 - [x] Nested loops of all types
 - [x] Built-in `print` and `println` functions
-- [x] String and integer literal support
-- [x] Boolean literals (`true`, `false`)
+- [x] String literals with escape sequences (`\n`, `\t`, `\\`, `\"`)
+- [x] String concatenation with `+` operator
+- [x] Integer and boolean literal support (`true`, `false`)
 - [x] Single-line (`//`) and multi-line (`/* */`) comments
-- [x] Arrays with literal syntax (`[1, 2, 3]`) and access (`arr[index]`)
-- [x] Array assignment operations (`arr[index] = value`)
-- [x] Array length property (`arr.length`)
-- [x] **🔥 NEW! Native TypeScript-style objects** with property access (`obj.property`)
-- [x] **🔥 NEW! User-defined functions** - **Complete Implementation!**
-  - [x] Function declarations: `function add(a: i32, b: i32): i32 { return a + b; }`
-  - [x] Function calls: `let result: i32 = add(5, 3);`
-  - [x] Return statements and type checking
-  - [x] Local variable scoping within functions
-  - [x] Void functions: `function greet(): void { println("Hello!"); }`
-  - [x] Nested function calls and complex logic
-  - [x] Integration with all existing language features
-- [x] LLVM IR code generation (for all features)
-- [x] Native executable compilation (for all features)
+- [x] Arrays with literal syntax (`[1, 2, 3]`), index access, and assignment
+- [x] Array `.length` property
+- [x] Dynamic arrays with `.push()` and `.shift()` (via C++ stdlib)
+- [x] Native TypeScript-style objects with property access (`obj.property`)
+- [x] Nested objects (`company.employee.name`)
+- [x] Object printing (`println(obj)` outputs JSON representation)
+- [x] `JSON.stringify(obj)` and `JSON.parse(str)` with native objects
+- [x] `const` keyword for immutable bindings
+- [x] User-defined functions with parameters, return values, and local scoping
+- [x] Void functions and nested function calls
+- [x] Generic functions (`function bfs<T>(...)`)
+- [x] Type aliases (`type Graph<T> = Map<T, T[]>`)
+- [x] `Map<K,V>` and `Set<T>` collections (via C++ stdlib)
+- [x] Non-null assertion operator (`!`)
+- [x] `new` expressions (`new Set<T>()`, `new Map<K,V>()`)
+- [x] Method calls (`.get()`, `.set()`, `.has()`, `.add()`)
+- [x] LLVM IR code generation with `-O2` optimizations
+- [x] Native executable compilation (3–17x faster than Node.js)
+- [x] C++ integration with 30+ stdlib functions
 - [x] Comprehensive error handling and reporting
 - [x] Interactive web documentation with runnable examples
 
 ### 🚧 Planned Features
-- [ ] **Object printing and debugging**
-  - [ ] Direct object printing: `println(obj)` 
-  - [ ] Object inspection and debugging tools
-- [ ] **JSON integration for native objects**
-  - [ ] `JSON.stringify(obj)` - Convert native objects to JSON strings
-  - [ ] `JSON.parse(jsonString)` - Parse JSON strings to native objects
-  - [ ] Seamless interop between native objects and JSON
-- [ ] **Enhanced string operations**
-  - [ ] String concatenation operator (`+`)
-  - [ ] Escape sequences (`\n`, `\t`, `\"`, `\\`)
-  - [ ] String interpolation/template literals
-- [ ] **Advanced control flow**
-  - [ ] `break` and `continue` statements in loops
-  - [ ] `for...in` and `for...of` loops for arrays and objects
-  - [ ] Switch/case statements
-- [ ] **Enhanced type system**
-  - [ ] Floating-point support (`f64` literals and arithmetic)
-  - [ ] Type inference improvements
-  - [ ] Generic types and functions
-  - [ ] Interface definitions
-- [ ] **Advanced object features**
-  - [ ] Nested objects: `company.employee.name`
-  - [ ] Object methods and `this` keyword
-  - [ ] Object destructuring: `let { name, age } = user`
-- [ ] **Module system and imports**
-  - [ ] File-based modules: `import { function } from "./module.csc"`
-  - [ ] Export declarations: `export function myFunc() { }`
-  - [ ] Standard library modules
-- [ ] **Exception handling**
-  - [ ] Try/catch blocks: `try { } catch (error) { }`
-  - [ ] Throw statements: `throw "Error message"`
-  - [ ] Error types and handling
-
-## Function Implementation Roadmap
-
-### **✅ Phase 1: Basic Function Support - COMPLETE!**
-```typescript
-// Function declaration
-function add(a: i32, b: i32): i32 {
-    return a + b;
-}
-
-// Function call
-let result: i32 = add(5, 3);
-println(result); // 8
-```
-
-**Implementation Status:**
-- [x] **Lexer**: Add `function` and `return` keywords ✅
-- [x] **Parser**: Parse function declarations and calls ✅
-- [x] **AST**: Add `FunctionDeclarationNode` and `ReturnStatementNode` ✅
-- [x] **CodeGen**: Generate LLVM function definitions and calls ✅
-- [x] **Symbol Table**: Track function names and signatures ✅
-- [x] **Type Checking**: Validate parameter and return types ✅
-
-**🎯 See [`example/functions_demo.csc`](example/functions_demo.csc) for a comprehensive demonstration!**
-
-### **🚧 Phase 2: Advanced Function Features - PLANNED**
-```typescript
-// Multiple parameters
-function greet(name: string, age: i32): string {
-    print("Hello ");
-    print(name);
-    print(", you are ");
-    print(age);
-    println(" years old");
-    return "greeting_complete";
-}
-
-// Void functions
-function printHeader(): void {
-    println("=== Program Start ===");
-}
-
-// Local variables
-function calculate(x: i32): i32 {
-    let temp: i32 = x * 2;
-    let result: i32 = temp + 10;
-    return result;
-}
-```
-
-**Implementation Requirements:**
-- [x] **Local Scoping**: Variables local to function scope ✅
-- [x] **Void Functions**: Functions that don't return values ✅
-- [x] **Multiple Parameters**: Support for 0-N parameters ✅
-- [x] **Stack Management**: Proper LLVM stack frame handling ✅
-- [ ] **Void Functions**: Functions that don't return values
-- [ ] **Multiple Parameters**: Support for 0-N parameters
-- [ ] **Stack Management**: Proper LLVM stack frame handling
-
-### **Phase 3: Function Overloading**
-```typescript
-// Same name, different signatures
-function process(value: i32): i32 {
-    return value * 2;
-}
-
-function process(text: string): string {
-    return string_upper(text);
-}
-
-// Usage
-let num: i32 = process(42);        // Calls i32 version
-let str: string = process("hello"); // Calls string version
-```
-
-**Implementation Requirements:**
-- [ ] **Name Mangling**: Generate unique LLVM function names
-- [ ] **Overload Resolution**: Choose correct function based on parameters
-- [ ] **Type System**: Enhanced type matching for overloads
-
-### **Phase 4: Recursive Functions**
-```typescript
-// Factorial example
-function factorial(n: i32): i32 {
-    if (n <= 1) {
-        return 1;
-    } else {
-        return n * factorial(n - 1);
-    }
-}
-
-let result: i32 = factorial(5); // 120
-```
-
-**Implementation Requirements:**
-- [ ] **Call Stack**: Proper recursive call handling
-- [ ] **Tail Recursion**: Optimization for tail-recursive functions
-- [ ] **Stack Overflow**: Protection against infinite recursion
+- [ ] `break` and `continue` statements in loops
+- [ ] Switch/case statements
+- [ ] `else if` chains (currently requires nested `if` inside `else`)
+- [ ] Floating-point arithmetic (`f64` literals and operations)
+- [ ] String interpolation / template literals
+- [ ] Interface definitions
+- [ ] Object methods and `this` keyword
+- [ ] Object destructuring (`let { name, age } = user`)
+- [ ] Module system (`import` / `export`)
+- [ ] Exception handling (`try` / `catch` / `throw`)
 
 ## Contributing
 
 This is a learning project, but contributions are welcome! Areas that need work:
 
-1. **Language features** - Implement advanced features (function overloading, recursion optimization, etc.)
+1. **Language features** - Implement planned features (`break`/`continue`, `else if`, `switch`, interfaces)
 2. **Standard library** - Add more built-in functions
 3. **Optimization** - Improve LLVM IR generation
 4. **Error messages** - Better error reporting with line numbers
