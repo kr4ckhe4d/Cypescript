@@ -56,25 +56,29 @@ This extension provides comprehensive language support for **Cypescript** - a Ty
 
 ### ✅ **Fully Supported (Native Compiler)**
 - Variables: `let name: string = "value";`
-- Types: `string`, `i32`, arrays (`i32[]`, `string[]`)
+- Types: `string`, `i32`, `f64`, `boolean`, arrays (`i32[]`, `string[]`)
+- Native Objects: `let user = { name: "Alice", age: 28 };`
+- Nested Objects: `company.employee.name`
 - Arithmetic: `+`, `-`, `*`, `/`, `%`
 - Comparisons: `==`, `!=`, `<`, `<=`, `>`, `>=`
 - Control flow: `if`/`else`, `while`, `for`, `do-while`
 - Arrays: creation, access, assignment, `.length`
 - Built-in functions: `print()`, `println()`
+- User-defined functions with parameters and return values
 
 ### 🚀 **C++ Integration Functions**
 - **String functions**: `string_reverse()`, `string_upper()`, `string_lower()`
 - **Array functions**: `array_sum_i32()`, `array_max_i32()`, `array_min_i32()`
 - **File I/O**: `file_read()`, `file_write()`, `file_exists()`
 - **Utilities**: `random_int()`, `random_seed()`, `math_abs_i32()`
+- **JSON Functions**: `json_stringify()`, `json_parse()`, `json_prettify()`
 - **Custom libraries**: Support for user-defined C++ functions
 
-### 🌐 **Browser Interpreter Only**
-- Object literals: `{ key: value }`
-- Boolean literals: `true`, `false`
-- Float literals: `3.14`
-- Complex nested structures
+### 🌐 **Interactive Documentation Only**
+- Complex real-time performance charts
+- In-browser code execution playground
+- Interactive tutorial modules
+
 
 ## Code Examples
 

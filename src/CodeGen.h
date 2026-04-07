@@ -88,6 +88,7 @@ private:
     void visit(StatementNode *node);           // Dispatcher
     void visit(VariableDeclarationNode *node); // New
     void visit(FunctionDeclarationNode *node); // For function definitions
+    void visit(TypeAliasNode *node);           // For type aliases
     void visit(ReturnStatementNode *node);     // For return statements
     void visit(ExpressionStatementNode *node); // For expressions used as statements
     llvm::Value *visit(FunctionCallNode *node); // Now returns a value since it's an expression
@@ -105,6 +106,7 @@ private:
     llvm::Value *visit(BooleanLiteralNode *node);     // New
     llvm::Value *visit(VariableExpressionNode *node); // New
     llvm::Value *visit(BinaryExpressionNode *node);   // For arithmetic operations
+    llvm::Value *visit(UnaryExpressionNode *node);    // For unary operations
     llvm::Value *visit(ArrayLiteralNode *node);       // For array literals
     llvm::Value *visit(ObjectLiteralNode *node);      // For object literals
     llvm::Value *visit(ArrayAccessNode *node);        // For array access
@@ -125,6 +127,9 @@ private:
     
     // OPTIMIZED: Phase 1 object creation with direct struct access
     llvm::Value *createOptimizedObjectWithProperties(ObjectLiteralNode *node);
+
+    // Truthy check helper
+    llvm::Value *ensureI1(llvm::Value *val);
 
 public:
     CodeGen(llvm::LLVMContext &context);

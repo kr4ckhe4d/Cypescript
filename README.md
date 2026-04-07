@@ -291,6 +291,34 @@ let graph: Map<string, string[]> = new Map<string, string[]>();
 graph.set("NodeA", ["NodeB", "NodeC"]);
 let neighbors: string[] = graph.get("NodeA");
 println(neighbors.length);     // 2
+
+// Full Algorithm Example: Breadth-First Search
+type Graph<T> = Map<T, T[]>;
+
+function breadthFirstSearch<T>(graph: Graph<T>, startNode: T): T[] {
+    const visited: Set<T> = new Set<T>();
+    const queue: T[] = [];
+    const traversalOrder: T[] = [];
+
+    visited.add(startNode);
+    queue.push(startNode);
+
+    while (queue.length > 0) {
+        const currentNode: T = queue.shift()!;
+        traversalOrder.push(currentNode);
+
+        const neighbors: T[] = graph.get(currentNode) || [];
+
+        for (const neighbor of neighbors) {
+            if (!visited.has(neighbor)) {
+                visited.add(neighbor);
+                queue.push(neighbor);
+            }
+        }
+    }
+
+    return traversalOrder;
+}
 ```
 
 ### Arithmetic Operations

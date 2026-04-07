@@ -22,6 +22,18 @@ CodeGen::CodeGen(llvm::LLVMContext &context) : m_context(context),
     m_module = std::make_unique<llvm::Module>("CypescriptModule", m_context);
 }
 
+llvm::Value *CodeGen::ensureI1(llvm::Value *val)
+{
+    if (!val) return nullptr;
+    if (val->getType()->isIntegerTy(1)) return val;
+    
+    if (val->getType()->isPointerTy()) {
+        return m_builder.CreateICmpNE(val, llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(val->getType())), "truthy_ptr");
+    } else {
+        return m_builder.CreateICmpNE(val, llvm::ConstantInt::get(val->getType(), 0), "truthy_val");
+    }
+}
+
 // --- Helper Methods ---
 
 llvm::Type *CodeGen::getLLVMType(const std::string &typeName)
@@ -47,9 +59,9 @@ llvm::Type *CodeGen::getLLVMType(const std::string &typeName)
     {
         return llvm::Type::getVoidTy(m_context);
     }
-    else if (typeName.length() > 4 && (typeName.substr(0, 4) == "Set<" || typeName.substr(0, 4) == "Map<"))
+    else if (typeName.find('<') != std::string::npos || typeName.length() == 1)
     {
-        // Generic collections are opaque pointers
+        // Generic types (Map, Set, Graph, etc.) or type parameters (T, K, V) are opaque pointers
         return llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
     }
     else if (typeName.length() > 2 && typeName.substr(typeName.length() - 2) == "[]")
@@ -166,6 +178,10 @@ void CodeGen::visit(StatementNode *node)
     else if (auto *funcDeclNode = dynamic_cast<FunctionDeclarationNode *>(node))
     {
         visit(funcDeclNode);
+    }
+    else if (auto *typeAliasNode = dynamic_cast<TypeAliasNode *>(node))
+    {
+        visit(typeAliasNode);
     }
     else if (auto *returnNode = dynamic_cast<ReturnStatementNode *>(node))
     {
@@ -388,9 +404,13 @@ llvm::Value *CodeGen::visit(ExpressionNode *node)
     {
         return visit(varNode);
     }
-    else if (auto *binNode = dynamic_cast<BinaryExpressionNode *>(node))
+    else if (auto *binOpNode = dynamic_cast<BinaryExpressionNode *>(node))
     {
-        return visit(binNode);
+        return visit(binOpNode);
+    }
+    else if (auto *unaryOpNode = dynamic_cast<UnaryExpressionNode *>(node))
+    {
+        return visit(unaryOpNode);
     }
     else if (auto *arrLitNode = dynamic_cast<ArrayLiteralNode *>(node))
     {
@@ -455,8 +475,69 @@ llvm::Value *CodeGen::visit(VariableExpressionNode *node)
     return m_builder.CreateLoad(allocaInst->getAllocatedType(), allocaInst, node->name + "_val");
 }
 
+llvm::Value *CodeGen::visit(UnaryExpressionNode *node)
+{
+    llvm::Value *operand = visit(node->operand.get());
+    if (!operand) return nullptr;
+
+    switch (node->op) {
+        case UnaryExpressionNode::NOT:
+            if (operand->getType()->isPointerTy()) {
+                // Null check
+                llvm::Value *isNull = m_builder.CreateICmpEQ(operand, llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(operand->getType())), "isnull");
+                return m_builder.CreateZExt(isNull, llvm::Type::getInt32Ty(m_context), "nottmp");
+            } else {
+                llvm::Value *isZero = m_builder.CreateICmpEQ(operand, llvm::ConstantInt::get(operand->getType(), 0), "iszero");
+                return m_builder.CreateZExt(isZero, llvm::Type::getInt32Ty(m_context), "nottmp");
+            }
+        case UnaryExpressionNode::MINUS:
+            return m_builder.CreateNeg(operand, "negtmp");
+        default:
+            throw std::runtime_error("Unknown unary operator");
+    }
+}
+
 llvm::Value *CodeGen::visit(BinaryExpressionNode *node)
 {
+    // Special handling for logical OR/AND (short-circuiting)
+    if (node->op == BinaryExpressionNode::LOGICAL_OR || node->op == BinaryExpressionNode::LOGICAL_AND) {
+        llvm::Value *leftVal = visit(node->left.get());
+        if (!leftVal) return nullptr;
+
+        llvm::Function *currentFunction = m_builder.GetInsertBlock()->getParent();
+        llvm::BasicBlock *rightBlock = llvm::BasicBlock::Create(m_context, "log_right", currentFunction);
+        llvm::BasicBlock *mergeBlock = llvm::BasicBlock::Create(m_context, "log_merge", currentFunction);
+
+        llvm::Value *isTruthy;
+        if (leftVal->getType()->isPointerTy()) {
+            isTruthy = m_builder.CreateICmpNE(leftVal, llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(leftVal->getType())), "ptr_truthy");
+        } else {
+            isTruthy = m_builder.CreateICmpNE(leftVal, llvm::ConstantInt::get(leftVal->getType(), 0), "val_truthy");
+        }
+
+        if (node->op == BinaryExpressionNode::LOGICAL_OR) {
+            m_builder.CreateCondBr(isTruthy, mergeBlock, rightBlock);
+        } else { // LOGICAL_AND
+            m_builder.CreateCondBr(isTruthy, rightBlock, mergeBlock);
+        }
+
+        // Left block end (it already branched)
+        llvm::BasicBlock *leftEndBlock = m_builder.GetInsertBlock();
+
+        // Right block
+        m_builder.SetInsertPoint(rightBlock);
+        llvm::Value *rightVal = visit(node->right.get());
+        m_builder.CreateBr(mergeBlock);
+        llvm::BasicBlock *rightEndBlock = m_builder.GetInsertBlock();
+
+        // Merge block
+        m_builder.SetInsertPoint(mergeBlock);
+        llvm::PHINode *phi = m_builder.CreatePHI(leftVal->getType(), 2, "log_phi");
+        phi->addIncoming(leftVal, leftEndBlock);
+        phi->addIncoming(rightVal, rightEndBlock);
+        return phi;
+    }
+
     // Generate code for left and right operands
     llvm::Value *leftVal = visit(node->left.get());
     llvm::Value *rightVal = visit(node->right.get());
@@ -544,7 +625,7 @@ llvm::Value *CodeGen::visit(BinaryExpressionNode *node)
 void CodeGen::visit(IfStatementNode *node)
 {
     // Generate code for the condition
-    llvm::Value *conditionVal = visit(node->condition.get());
+    llvm::Value *conditionVal = ensureI1(visit(node->condition.get()));
     if (!conditionVal) {
         throw std::runtime_error("Codegen Error: Failed to generate condition for if statement");
     }
@@ -609,7 +690,7 @@ void CodeGen::visit(WhileStatementNode *node)
     
     // Generate condition block
     m_builder.SetInsertPoint(condBlock);
-    llvm::Value *conditionVal = visit(node->condition.get());
+    llvm::Value *conditionVal = ensureI1(visit(node->condition.get()));
     if (!conditionVal) {
         throw std::runtime_error("Codegen Error: Failed to generate condition for while statement");
     }
@@ -745,7 +826,7 @@ void CodeGen::visit(ForStatementNode *node)
     // Generate condition block
     m_builder.SetInsertPoint(condBlock);
     if (node->condition) {
-        llvm::Value *conditionVal = visit(node->condition.get());
+        llvm::Value *conditionVal = ensureI1(visit(node->condition.get()));
         if (!conditionVal) {
             throw std::runtime_error("Codegen Error: Failed to generate condition for for statement");
         }
@@ -828,7 +909,7 @@ void CodeGen::visit(ForOfStatementNode *node)
 
     // Load current element from dynamic array
     llvm::Value *element;
-    if (elemType == "string") {
+    if (elemType == "string" || elemType.length() == 1 || elemType.find('<') != std::string::npos) {
         llvm::FunctionCallee getFunc = m_module->getOrInsertFunction("array_get_string",
             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
@@ -892,11 +973,10 @@ void CodeGen::visit(DoWhileStatementNode *node)
     for (const auto &stmt : node->bodyStatements) {
         visit(stmt.get());
     }
+    // Generate condition check after body
     m_builder.CreateBr(condBlock);
-    
-    // Generate condition block
     m_builder.SetInsertPoint(condBlock);
-    llvm::Value *conditionVal = visit(node->condition.get());
+    llvm::Value *conditionVal = ensureI1(visit(node->condition.get()));
     if (!conditionVal) {
         throw std::runtime_error("Codegen Error: Failed to generate condition for do-while statement");
     }
@@ -1326,7 +1406,7 @@ llvm::Value *CodeGen::visit(ArrayLiteralNode *node)
             throw std::runtime_error("Codegen Error: Failed to generate array element " + std::to_string(i));
         }
         
-        if (elemType == "string") {
+        if (elemType == "string" || elementValue->getType()->isPointerTy()) {
             llvm::FunctionCallee pushFunc = m_module->getOrInsertFunction("array_push_string",
                 llvm::Type::getVoidTy(m_context),
                 llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
@@ -1809,7 +1889,7 @@ llvm::Value *CodeGen::visit(MethodCallNode *node)
             if (node->arguments.size() != 1) throw std::runtime_error("push() expects 1 argument");
             llvm::Value *argValue = visit(node->arguments[0].get());
             
-            if (elemType == "string") {
+            if (elemType == "string" || argValue->getType()->isPointerTy()) {
                 llvm::FunctionCallee pushFunc = m_module->getOrInsertFunction("array_push_string",
                     llvm::Type::getVoidTy(m_context),
                     llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
@@ -1826,7 +1906,7 @@ llvm::Value *CodeGen::visit(MethodCallNode *node)
             if (node->arguments.size() != 0) throw std::runtime_error("shift/pop expects 0 arguments");
             
             // For simplicity, we route pop/shift to shift
-            if (elemType == "string") {
+            if (elemType == "string" || elemType.length() == 1 || elemType.find('<') != std::string::npos) {
                 llvm::FunctionCallee shiftFunc = m_module->getOrInsertFunction("array_shift_string",
                     llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
                     llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
@@ -1848,29 +1928,26 @@ llvm::Value *CodeGen::visit(MethodCallNode *node)
             if (node->arguments.size() != 1) throw std::runtime_error("Set.add() expects 1 argument");
             llvm::Value *argValue = visit(node->arguments[0].get());
             
-            if (elemType == "string") {
-                llvm::FunctionCallee addFunc = m_module->getOrInsertFunction("set_add_string",
-                    llvm::Type::getVoidTy(m_context),
-                    llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
-                    llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
-                return m_builder.CreateCall(addFunc, {objectValue, argValue});
-            }
+            // For now, default to string/pointer handling for Set
+            llvm::FunctionCallee addFunc = m_module->getOrInsertFunction("set_add_string",
+                llvm::Type::getVoidTy(m_context),
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+            return m_builder.CreateCall(addFunc, {objectValue, argValue});
         } else if (node->methodName == "has") {
             if (node->arguments.size() != 1) throw std::runtime_error("Set.has() expects 1 argument");
             llvm::Value *argValue = visit(node->arguments[0].get());
             
-            if (elemType == "string") {
-                llvm::FunctionCallee hasFunc = m_module->getOrInsertFunction("set_has_string",
-                    llvm::Type::getInt32Ty(m_context),
-                    llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
-                    llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
-                return m_builder.CreateCall(hasFunc, {objectValue, argValue}, "set_has_val");
-            }
+            llvm::FunctionCallee hasFunc = m_module->getOrInsertFunction("set_has_string",
+                llvm::Type::getInt32Ty(m_context),
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+            return m_builder.CreateCall(hasFunc, {objectValue, argValue}, "set_has_val");
         }
     }
     
     // Is it a Map method?
-    if (varType.substr(0, 4) == "Map<") {
+    if (varType.find("Map<") != std::string::npos || varType.find("Graph<") != std::string::npos) {
         if (node->methodName == "set") {
             if (node->arguments.size() != 2) throw std::runtime_error("Map.set() expects 2 arguments");
             llvm::Value *keyVal = visit(node->arguments[0].get());
@@ -2465,7 +2542,7 @@ void CodeGen::visit(FunctionDeclarationNode *node)
     }
     
     // Generate function body
-    for (const auto& stmt : node->body) {
+    for (const auto& stmt : node->bodyStatements) {
         visit(stmt.get());
     }
     
@@ -2499,4 +2576,9 @@ void CodeGen::visit(ReturnStatementNode *node)
         // Return void
         m_builder.CreateRetVoid();
     }
+}
+
+void CodeGen::visit(TypeAliasNode *node)
+{
+    // Type aliases are a compile-time construct only and don't generate code
 }

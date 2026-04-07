@@ -40,11 +40,12 @@ bool starts_with(const std::string& str, const std::string& prefix) {
 class CompilerOptions {
 public:
     std::string inputFile;
-    std::string outputFile = "output.ll";
+    std::string outputFile = "";
     bool verbose = false;
     bool printTokens = false;
     bool printAST = false;
     bool help = false;
+    bool run = false;
     
     static CompilerOptions parseArgs(int argc, char** argv) {
         CompilerOptions opts;
@@ -56,6 +57,8 @@ public:
                 opts.help = true;
             } else if (arg == "-v" || arg == "--verbose") {
                 opts.verbose = true;
+            } else if (arg == "-r" || arg == "--run") {
+                opts.run = true;
             } else if (arg == "--print-tokens") {
                 opts.printTokens = true;
             } else if (arg == "--print-ast") {
@@ -86,13 +89,14 @@ public:
         std::cout << Colors::BOLD << "OPTIONS:" << Colors::RESET << "\n";
         std::cout << "    -h, --help          Show this help message\n";
         std::cout << "    -v, --verbose       Enable verbose output\n";
-        std::cout << "    -o, --output FILE   Specify output file (default: output.ll)\n";
+        std::cout << "    -r, --run           Compile and run the program immediately\n";
+        std::cout << "    -o, --output FILE   Specify output executable name\n";
         std::cout << "    --print-tokens      Print lexer tokens\n";
         std::cout << "    --print-ast         Print abstract syntax tree\n\n";
         std::cout << Colors::BOLD << "EXAMPLES:" << Colors::RESET << "\n";
         std::cout << "    cscript hello.csc\n";
-        std::cout << "    cscript -v --print-ast hello.csc\n";
-        std::cout << "    cscript -o my_output.ll hello.csc\n";
+        std::cout << "    cscript -r hello.csc\n";
+        std::cout << "    cscript -o my_app hello.csc\n";
     }
 };
 
@@ -232,35 +236,112 @@ int main(int argc, char** argv) {
         // Write LLVM IR
         printStageHeader("Writing Output", opts.verbose);
         Timer writeTimer;
+        
+        std::string irFile = opts.outputFile;
+        bool isExecutable = true;
+        
+        if (irFile.empty()) {
+            irFile = "temp_output.ll";
+        } else if (irFile.size() > 3 && irFile.substr(irFile.size() - 3) == ".ll") {
+            isExecutable = false;
+        } else {
+            // Specified an executable name, use a temp .ll file
+            irFile += ".ll";
+        }
+
         std::error_code EC;
-        llvm::raw_fd_ostream dest(opts.outputFile, EC, llvm::sys::fs::OF_None);
+        llvm::raw_fd_ostream dest(irFile, EC, llvm::sys::fs::OF_None);
         
         if (EC) {
-            printError("Could not open output file '" + opts.outputFile + "': " + EC.message());
+            printError("Could not open IR file '" + irFile + "': " + EC.message());
             return 1;
         }
         
         module->print(dest, nullptr);
         dest.flush();
-        printSuccess("LLVM IR written to " + opts.outputFile + " (" + std::to_string(writeTimer.elapsed()) + "ms)", opts.verbose);
+        printSuccess("LLVM IR written to " + irFile + " (" + std::to_string(writeTimer.elapsed()) + "ms)", opts.verbose);
         
+        std::string executableName = opts.outputFile;
+        if (executableName.empty()) {
+            // Default executable name: input filename without extension
+            fs::path p(opts.inputFile);
+            executableName = p.stem().string();
+        }
+
+        if (isExecutable) {
+            printStageHeader("Compiling to Executable", opts.verbose);
+            Timer compileTimer;
+            
+            // Find stdlib path - assume it's in the same directory as src/
+            // For a distributed app, this would be in a fixed location
+            std::string stdlibPath = "src/cypescript_stdlib.cpp";
+            
+            std::string compileCmd = "clang++ " + irFile + " " + stdlibPath + " -o " + executableName + " -std=c++17";
+            if (opts.verbose) {
+                llvm::outs() << "Running: " << Colors::CYAN << compileCmd << Colors::RESET << "\n";
+            }
+            
+            int result = std::system(compileCmd.c_str());
+            if (result != 0) {
+                printError("Failed to compile executable");
+                return 1;
+            }
+            
+            // Clean up temp IR file if it wasn't requested
+            if (opts.outputFile != irFile) {
+                fs::remove(irFile);
+            }
+            
+            printSuccess("Executable created: " + executableName + " (" + std::to_string(compileTimer.elapsed()) + "ms)", opts.verbose);
+        }
+
         // Print compilation summary
         if (opts.verbose) {
             llvm::outs() << "\n" << Colors::BOLD << "=== Compilation Summary ===" << Colors::RESET << "\n";
             llvm::outs() << "Total time: " << Colors::GREEN << totalTimer.elapsed() << "ms" << Colors::RESET << "\n";
             llvm::outs() << "Input: " << opts.inputFile << " (" << sourceCode.size() << " bytes)\n";
-            llvm::outs() << "Output: " << opts.outputFile << "\n";
+            if (isExecutable) {
+                llvm::outs() << "Executable: " << executableName << "\n";
+            } else {
+                llvm::outs() << "Output IR: " << irFile << "\n";
+            }
             llvm::outs() << "Status: " << Colors::GREEN << "SUCCESS" << Colors::RESET << "\n\n";
         } else {
-            llvm::outs() << Colors::GREEN << "✓ Compilation successful" << Colors::RESET << "\n";
+            if (isExecutable) {
+                llvm::outs() << Colors::GREEN << "✓ Compiled to: " << Colors::BOLD << executableName << Colors::RESET << "\n";
+            } else {
+                llvm::outs() << Colors::GREEN << "✓ IR written to: " << irFile << Colors::RESET << "\n";
+            }
         }
         
-        // Print next steps
-        llvm::outs() << Colors::BOLD << "Next steps:" << Colors::RESET << "\n";
-        llvm::outs() << "1. Compile to object: " << Colors::CYAN << "llc -filetype=obj -relocation-model=pic " 
-                   << opts.outputFile << " -o output.o" << Colors::RESET << "\n";
-        llvm::outs() << "2. Link executable:   " << Colors::CYAN << "clang output.o -o my_program" << Colors::RESET << "\n";
-        llvm::outs() << "3. Run program:       " << Colors::CYAN << "./my_program" << Colors::RESET << "\n";
+        if (opts.run && isExecutable) {
+            printStageHeader("Running Program", opts.verbose);
+            std::string runCmd = "./" + executableName;
+            if (opts.verbose) {
+                llvm::outs() << "Executing: " << Colors::CYAN << runCmd << Colors::RESET << "\n";
+                llvm::outs() << "----------------------------------------\n";
+            }
+            
+            int result = std::system(runCmd.c_str());
+            
+            if (opts.verbose) {
+                llvm::outs() << "----------------------------------------\n";
+                if (result == 0) {
+                    printSuccess("Program exited successfully", true);
+                } else {
+                    printError("Program exited with code " + std::to_string(result));
+                }
+            }
+            
+            // Optional: remove executable after running if it was just a temporary run
+            // fs::remove(executableName);
+        } else if (!opts.verbose && !isExecutable) {
+            // Print next steps for IR mode only if not verbose
+            llvm::outs() << Colors::BOLD << "Next steps:" << Colors::RESET << "\n";
+            llvm::outs() << "1. Compile to executable: " << Colors::CYAN << "clang++ " << irFile 
+                       << " src/cypescript_stdlib.cpp -o " << executableName << Colors::RESET << "\n";
+            llvm::outs() << "2. Run program:           " << Colors::CYAN << "./" << executableName << Colors::RESET << "\n";
+        }
         
         return 0;
         

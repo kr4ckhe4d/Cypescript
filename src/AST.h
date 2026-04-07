@@ -16,6 +16,7 @@ class BooleanLiteralNode;
 class VariableExpressionNode;
 class FunctionCallNode;
 class FunctionDeclarationNode;
+class UnaryExpressionNode;
 class MethodCallNode;
 class NewExpressionNode;
 class ReturnStatementNode;
@@ -24,6 +25,7 @@ class ArrayAccessNode;
 class ObjectLiteralNode;
 class ObjectAccessNode;
 class VariableDeclarationNode;
+class TypeAliasNode;
 class AssignmentStatementNode;
 class ArrayAssignmentStatementNode;
 class StatementNode;
@@ -85,6 +87,32 @@ public:
             printIndent(os, indent + 1);
             os << "NullInitializerNode\n";
         }
+    }
+};
+
+class TypeAliasNode : public StatementNode
+{
+public:
+    std::string aliasName;
+    std::vector<std::string> genericParams;
+    std::string targetType;
+
+    TypeAliasNode(std::string name, std::string target)
+        : aliasName(std::move(name)), targetType(std::move(target)) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "TypeAliasNode: type " << aliasName;
+        if (!genericParams.empty()) {
+            os << "<";
+            for (size_t i = 0; i < genericParams.size(); ++i) {
+                if (i > 0) os << ", ";
+                os << genericParams[i];
+            }
+            os << ">";
+        }
+        os << " = " << targetType << "\n";
     }
 };
 
@@ -160,7 +188,11 @@ public:
         LESS_THAN,      // <
         LESS_EQUAL,     // <=
         GREATER_THAN,   // >
-        GREATER_EQUAL   // >=
+        GREATER_EQUAL,  // >=
+        
+        // Logical operators
+        LOGICAL_AND,    // &&
+        LOGICAL_OR      // ||
     };
     
     Operator op;
@@ -202,8 +234,38 @@ private:
             case LESS_EQUAL: return "<=";
             case GREATER_THAN: return ">";
             case GREATER_EQUAL: return ">=";
+            case LOGICAL_AND: return "&&";
+            case LOGICAL_OR: return "||";
             default: return "UNKNOWN";
         }
+    }
+};
+
+class UnaryExpressionNode : public ExpressionNode
+{
+public:
+    enum Operator { NOT, MINUS };
+    Operator op;
+    std::unique_ptr<ExpressionNode> operand;
+
+    UnaryExpressionNode(Operator op, std::unique_ptr<ExpressionNode> operand)
+        : op(op), operand(std::move(operand)) {}
+
+    const char* operatorToString(Operator op) const
+    {
+        switch (op)
+        {
+            case NOT: return "!";
+            case MINUS: return "-";
+            default: return "unknown";
+        }
+    }
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "UnaryExpressionNode: " << operatorToString(op) << "\n";
+        if (operand) operand->printNode(os, indent + 1);
     }
 };
 
@@ -468,17 +530,27 @@ public:
     };
     
     std::string functionName;
+    std::vector<std::string> genericParams;
     std::vector<Parameter> parameters;
     std::string returnType;
-    std::vector<std::unique_ptr<StatementNode>> body;
-    
-    FunctionDeclarationNode(std::string name, std::string retType) 
+    std::vector<std::unique_ptr<StatementNode>> bodyStatements;
+
+    FunctionDeclarationNode(std::string name, std::string retType)
         : functionName(std::move(name)), returnType(std::move(retType)) {}
-    
+
     void printNode(llvm::raw_ostream &os, int indent = 0) const override
     {
         printIndent(os, indent);
-        os << "FunctionDeclarationNode: " << functionName << "(";
+        os << "FunctionDeclarationNode: " << functionName;
+        if (!genericParams.empty()) {
+            os << "<";
+            for (size_t i = 0; i < genericParams.size(); ++i) {
+                if (i > 0) os << ", ";
+                os << genericParams[i];
+            }
+            os << ">";
+        }
+        os << "(";
         for (size_t i = 0; i < parameters.size(); ++i) {
             if (i > 0) os << ", ";
             os << parameters[i].name << ": " << parameters[i].type;
@@ -487,7 +559,7 @@ public:
         
         printIndent(os, indent + 1);
         os << "Body:\n";
-        for (const auto &stmt : body) {
+        for (const auto &stmt : bodyStatements) {
             if (stmt) {
                 stmt->printNode(os, indent + 2);
             }

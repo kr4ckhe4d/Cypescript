@@ -102,19 +102,27 @@ extern "C" {
     int32_t array_length(void* arr_ptr) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
         if (!arr) return 0;
-        if (arr->type == DynamicArray::Type::I32) return arr->i32_data.size();
-        if (arr->type == DynamicArray::Type::String) return arr->string_data.size();
-        return arr->object_data.size();
+        return std::max({arr->i32_data.size(), arr->string_data.size(), arr->object_data.size()});
     }
 
     void array_push_i32(void* arr_ptr, int32_t val) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
-        if (arr) arr->i32_data.push_back(val);
+        if (arr) {
+            if (arr->i32_data.empty() && arr->string_data.empty() && arr->object_data.empty()) {
+                arr->type = DynamicArray::Type::I32;
+            }
+            arr->i32_data.push_back(val);
+        }
     }
 
     void array_push_string(void* arr_ptr, const char* val) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
-        if (arr && val) arr->string_data.push_back(val);
+        if (arr && val) {
+            if (arr->i32_data.empty() && arr->string_data.empty() && arr->object_data.empty()) {
+                arr->type = DynamicArray::Type::String;
+            }
+            arr->string_data.push_back(val);
+        }
     }
 
     int32_t array_shift_i32(void* arr_ptr) {

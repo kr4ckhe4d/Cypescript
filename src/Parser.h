@@ -29,6 +29,7 @@ private:
     std::unique_ptr<StatementNode> parseStatement();
     std::unique_ptr<FunctionCallNode> parseFunctionCallStatement(); // Specific for print(...)
     std::unique_ptr<FunctionDeclarationNode> parseFunctionDeclaration(); // For function definitions
+    std::unique_ptr<TypeAliasNode> parseTypeAliasStatement();       // For type aliases
     std::unique_ptr<ReturnStatementNode> parseReturnStatement();    // For return statements
     std::unique_ptr<IfStatementNode> parseIfStatement();            // For if/else statements
     std::unique_ptr<WhileStatementNode> parseWhileStatement();      // For while loops
@@ -42,9 +43,12 @@ private:
     
     // Expression parsing with operator precedence
     std::unique_ptr<ExpressionNode> parseExpression();
+    std::unique_ptr<ExpressionNode> parseLogicalOrExpression();     // ||
+    std::unique_ptr<ExpressionNode> parseLogicalAndExpression();    // &&
     std::unique_ptr<ExpressionNode> parseComparisonExpression();    // == != < <= > >=
     std::unique_ptr<ExpressionNode> parseAdditionExpression();      // + -
     std::unique_ptr<ExpressionNode> parseMultiplicationExpression(); // * / %
+    std::unique_ptr<ExpressionNode> parseUnaryExpression();          // ! -
     std::unique_ptr<ExpressionNode> parsePrimaryExpression();       // literals, variables, (expr)
     
     std::unique_ptr<StringLiteralNode> parseStringLiteral();
