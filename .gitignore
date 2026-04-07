@@ -150,17 +150,17 @@ FUNCTIONS_*.md
 CUSTOM_*.md
 BALANCED_*.md
 
-# Benchmark and test artifacts
-benchmarks/
-*.json
+# Benchmark and test artifacts (not the source files)
+benchmarks/*.profraw
+benchmarks/*.ll
 profile.profdata
 *.profraw
 
-# Temporary scripts
-run_*.sh
-validate_*.sh
-benchmark_*.sh
-compile-*-optimized.sh
-compile-pgo*.sh
-compile-static.sh
-cypescript-pool.sh
+# Temporary scripts (root level only)
+/run_*.sh
+/validate_*.sh
+/benchmark_*.sh
+/compile-*-optimized.sh
+/compile-pgo*.sh
+/compile-static.sh
+/cypescript-pool.sh
