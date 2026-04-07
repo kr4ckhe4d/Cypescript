@@ -49,15 +49,9 @@ llvm::Type *CodeGen::getLLVMType(const std::string &typeName)
     }
     else if (typeName.length() > 2 && typeName.substr(typeName.length() - 2) == "[]")
     {
-        // Array type like "i32[]"
-        std::string elementTypeName = typeName.substr(0, typeName.length() - 2);
-        llvm::Type *elementType = getLLVMType(elementTypeName);
-        
-        // For now, return a pointer to the element type (representing a dynamic array)
-        // In a full implementation, we might use a struct with size and data pointer
-        return llvm::PointerType::get(elementType, 0);
-    }
-    else if (typeName == "auto")
+        // For dynamic arrays implemented via cypescript_stdlib, it's an opaque pointer
+        return llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+    }    else if (typeName == "auto")
     {
         // Type inference - for now, default to i32
         // In a full implementation, we'd analyze the initializer
@@ -405,6 +399,10 @@ llvm::Value *CodeGen::visit(ExpressionNode *node)
     {
         return visit(objAccNode);
     }
+    else if (auto *methodCallNode = dynamic_cast<MethodCallNode *>(node))
+    {
+        return visit(methodCallNode);
+    }
     else if (auto *funcCallNode = dynamic_cast<FunctionCallNode *>(node))
     {
         return visit(funcCallNode);
@@ -671,8 +669,8 @@ void CodeGen::visit(ArrayAssignmentStatementNode *node)
         throw std::runtime_error("Codegen Error: Array index must be an integer");
     }
     
-    // Determine element type by looking up the variable type (similar to array access)
-    llvm::Type *elementType = llvm::Type::getInt32Ty(m_context); // default
+    // Determine element type by looking up the variable type
+    std::string elemType = "i32"; // default
     
     // Try to get the variable name from the array expression
     if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(node->array.get())) {
@@ -681,15 +679,7 @@ void CodeGen::visit(ArrayAssignmentStatementNode *node)
             std::string varType = typeIt->second;
             // Extract element type from array type (e.g., "string[]" -> "string")
             if (varType.length() > 2 && varType.substr(varType.length() - 2) == "[]") {
-                std::string elemType = varType.substr(0, varType.length() - 2);
-                if (elemType == "string") {
-                    elementType = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
-                } else if (elemType == "i32") {
-                    elementType = llvm::Type::getInt32Ty(m_context);
-                } else if (elemType == "f64") {
-                    elementType = llvm::Type::getDoubleTy(m_context);
-                }
-                // Add more types as needed
+                elemType = varType.substr(0, varType.length() - 2);
             }
         }
     }
@@ -698,25 +688,23 @@ void CodeGen::visit(ArrayAssignmentStatementNode *node)
     if (!arrayValue->getType()->isPointerTy()) {
         throw std::runtime_error("Codegen Error: Array assignment requires a pointer type");
     }
-    
-    // Create GEP to get pointer to array element
-    llvm::Value *elementPtr;
-    
-    // If this is a direct array access (not through a variable), handle differently
-    if (auto *allocaInst = llvm::dyn_cast<llvm::AllocaInst>(arrayValue)) {
-        // Direct access to allocated array
-        llvm::Value *indices[] = {
-            llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), 0),  // Array base
-            indexValue  // Element index
-        };
-        elementPtr = m_builder.CreateGEP(allocaInst->getAllocatedType(), arrayValue, indices, "array_assign_ptr");
+
+    // Use dynamic array functions
+    if (elemType == "string") {
+        llvm::FunctionCallee setFunc = m_module->getOrInsertFunction("array_set_string",
+            llvm::Type::getVoidTy(m_context),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+        m_builder.CreateCall(setFunc, {arrayValue, indexValue, valueToAssign});
     } else {
-        // Access through pointer (e.g., from variable)
-        elementPtr = m_builder.CreateGEP(elementType, arrayValue, indexValue, "array_assign_ptr");
+        llvm::FunctionCallee setFunc = m_module->getOrInsertFunction("array_set_i32",
+            llvm::Type::getVoidTy(m_context),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context),
+            llvm::Type::getInt32Ty(m_context));
+        m_builder.CreateCall(setFunc, {arrayValue, indexValue, valueToAssign});
     }
-    
-    // Store the value at the array element location
-    m_builder.CreateStore(valueToAssign, elementPtr);
 }
 
 void CodeGen::visit(ForStatementNode *node)
@@ -1201,50 +1189,45 @@ llvm::Module *CodeGen::generate(ProgramNode *astRoot)
 // Array literal implementation - proper version with dynamic allocation
 llvm::Value *CodeGen::visit(ArrayLiteralNode *node)
 {
-    if (node->elements.empty()) {
-        // Empty array - return null pointer
-        return llvm::ConstantPointerNull::get(llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0));
-    }
-    
     // Determine element type based on first element or explicit type
-    llvm::Type *elementType;
-    if (node->elementType == "i32") {
-        elementType = llvm::Type::getInt32Ty(m_context);
-    } else if (node->elementType == "string") {
-        elementType = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+    std::string elemType = node->elementType;
+    
+    llvm::FunctionCallee createFunc;
+    if (elemType == "string") {
+        createFunc = m_module->getOrInsertFunction("array_create_string",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
     } else {
         // Default to i32
-        elementType = llvm::Type::getInt32Ty(m_context);
+        createFunc = m_module->getOrInsertFunction("array_create_i32",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
     }
     
-    size_t arraySize = node->elements.size();
-    
-    // Create array type
-    llvm::ArrayType *arrayType = llvm::ArrayType::get(elementType, arraySize);
-    
-    // Allocate array on stack
-    llvm::AllocaInst *arrayAlloca = m_builder.CreateAlloca(arrayType, nullptr, "array_literal");
+    // Create the dynamic array
+    llvm::Value* arrPtr = m_builder.CreateCall(createFunc, {}, "array_ptr");
     
     // Initialize array elements
-    for (size_t i = 0; i < arraySize; ++i) {
+    for (size_t i = 0; i < node->elements.size(); ++i) {
         llvm::Value *elementValue = visit(node->elements[i].get());
         if (!elementValue) {
             throw std::runtime_error("Codegen Error: Failed to generate array element " + std::to_string(i));
         }
         
-        // Get pointer to array element using GEP
-        llvm::Value *indices[] = {
-            llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), 0),  // Array base
-            llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), i)   // Element index
-        };
-        llvm::Value *elementPtr = m_builder.CreateGEP(arrayType, arrayAlloca, indices, "element_ptr_" + std::to_string(i));
-        
-        // Store the value
-        m_builder.CreateStore(elementValue, elementPtr);
+        if (elemType == "string") {
+            llvm::FunctionCallee pushFunc = m_module->getOrInsertFunction("array_push_string",
+                llvm::Type::getVoidTy(m_context),
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+            m_builder.CreateCall(pushFunc, {arrPtr, elementValue});
+        } else {
+            llvm::FunctionCallee pushFunc = m_module->getOrInsertFunction("array_push_i32",
+                llvm::Type::getVoidTy(m_context),
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                llvm::Type::getInt32Ty(m_context));
+            m_builder.CreateCall(pushFunc, {arrPtr, elementValue});
+        }
     }
     
-    // Return pointer to the array (cast to generic pointer for compatibility)
-    return m_builder.CreateBitCast(arrayAlloca, llvm::PointerType::get(elementType, 0), "array_ptr");
+    return arrPtr;
 }
 
 // Array access implementation - proper version with type tracking
@@ -1268,7 +1251,7 @@ llvm::Value *CodeGen::visit(ArrayAccessNode *node)
     }
     
     // Determine element type by looking up the variable type
-    llvm::Type *elementType = llvm::Type::getInt32Ty(m_context); // default
+    std::string elemType = "i32"; // default
     
     // Try to get the variable name from the array expression
     if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(node->array.get())) {
@@ -1277,42 +1260,25 @@ llvm::Value *CodeGen::visit(ArrayAccessNode *node)
             std::string varType = typeIt->second;
             // Extract element type from array type (e.g., "string[]" -> "string")
             if (varType.length() > 2 && varType.substr(varType.length() - 2) == "[]") {
-                std::string elemType = varType.substr(0, varType.length() - 2);
-                if (elemType == "string") {
-                    elementType = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
-                } else if (elemType == "i32") {
-                    elementType = llvm::Type::getInt32Ty(m_context);
-                } else if (elemType == "f64") {
-                    elementType = llvm::Type::getDoubleTy(m_context);
-                }
-                // Add more types as needed
+                elemType = varType.substr(0, varType.length() - 2);
             }
         }
     }
     
-    // Check if arrayValue is a pointer type
-    if (!arrayValue->getType()->isPointerTy()) {
-        throw std::runtime_error("Codegen Error: Array access requires a pointer type");
-    }
-    
-    // Create GEP to access array element
-    llvm::Value *elementPtr;
-    
-    // If this is a direct array access (not through a variable), handle differently
-    if (auto *allocaInst = llvm::dyn_cast<llvm::AllocaInst>(arrayValue)) {
-        // Direct access to allocated array
-        llvm::Value *indices[] = {
-            llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), 0),  // Array base
-            indexValue  // Element index
-        };
-        elementPtr = m_builder.CreateGEP(allocaInst->getAllocatedType(), arrayValue, indices, "array_element_ptr");
+    // Call the appropriate C++ dynamic array function
+    if (elemType == "string") {
+        llvm::FunctionCallee getFunc = m_module->getOrInsertFunction("array_get_string",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+        return m_builder.CreateCall(getFunc, {arrayValue, indexValue}, "array_element");
     } else {
-        // Access through pointer (e.g., from variable)
-        elementPtr = m_builder.CreateGEP(elementType, arrayValue, indexValue, "array_element_ptr");
+        llvm::FunctionCallee getFunc = m_module->getOrInsertFunction("array_get_i32",
+            llvm::Type::getInt32Ty(m_context),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+        return m_builder.CreateCall(getFunc, {arrayValue, indexValue}, "array_element");
     }
-    
-    // Load and return the value using the correct element type
-    return m_builder.CreateLoad(elementType, elementPtr, "array_element");
 }
 
 // Object literal implementation - basic version
@@ -1536,11 +1502,19 @@ llvm::Value *CodeGen::visit(ObjectAccessNode *node)
                 std::string varType = typeIt->second;
                 // Check if it's an array type
                 if (varType.length() > 2 && varType.substr(varType.length() - 2) == "[]") {
-                    // Look up the array size
-                    auto sizeIt = arraySizes.find(varExpr->name);
-                    if (sizeIt != arraySizes.end()) {
-                        // Return the array size as an i32 constant
-                        return llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), sizeIt->second, false);
+                    auto namedValueIt = namedValues.find(varExpr->name);
+                    if (namedValueIt != namedValues.end()) {
+                        llvm::Value* arrPtrAlloca = namedValueIt->second;
+                        llvm::Value* arrPtr = m_builder.CreateLoad(
+                            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                            arrPtrAlloca,
+                            "arr_ptr_load"
+                        );
+                        
+                        llvm::FunctionCallee lenFunc = m_module->getOrInsertFunction("array_length",
+                            llvm::Type::getInt32Ty(m_context),
+                            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+                        return m_builder.CreateCall(lenFunc, {arrPtr}, "array_len");
                     } else {
                         throw std::runtime_error("Codegen Error: Array size not found for variable '" + varExpr->name + "'");
                     }
@@ -1683,6 +1657,76 @@ llvm::Value *CodeGen::visit(ObjectAccessNode *node)
     
     // For other cases, property access is not yet supported
     throw std::runtime_error("Codegen Error: Complex object property access is not yet supported. Only simple variable.property access is currently implemented.");
+}
+
+llvm::Value *CodeGen::visit(MethodCallNode *node)
+{
+    // Evaluate the object/base expression
+    llvm::Value *objectValue = nullptr;
+    std::string varType = "";
+
+    if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(node->object.get())) {
+        auto typeIt = variableTypes.find(varExpr->name);
+        if (typeIt != variableTypes.end()) {
+            varType = typeIt->second;
+        }
+        auto namedValueIt = namedValues.find(varExpr->name);
+        if (namedValueIt != namedValues.end()) {
+            llvm::Value* ptrAlloca = namedValueIt->second;
+            objectValue = m_builder.CreateLoad(
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                ptrAlloca,
+                "obj_ptr_load"
+            );
+        }
+    } else {
+        objectValue = visit(node->object.get());
+    }
+
+    if (!objectValue) {
+        throw std::runtime_error("Codegen Error: Failed to evaluate object for method call");
+    }
+
+    // Is it an array method?
+    if (varType.length() > 2 && varType.substr(varType.length() - 2) == "[]") {
+        std::string elemType = varType.substr(0, varType.length() - 2);
+        
+        if (node->methodName == "push") {
+            if (node->arguments.size() != 1) throw std::runtime_error("push() expects 1 argument");
+            llvm::Value *argValue = visit(node->arguments[0].get());
+            
+            if (elemType == "string") {
+                llvm::FunctionCallee pushFunc = m_module->getOrInsertFunction("array_push_string",
+                    llvm::Type::getVoidTy(m_context),
+                    llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                    llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+                return m_builder.CreateCall(pushFunc, {objectValue, argValue});
+            } else {
+                llvm::FunctionCallee pushFunc = m_module->getOrInsertFunction("array_push_i32",
+                    llvm::Type::getVoidTy(m_context),
+                    llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                    llvm::Type::getInt32Ty(m_context));
+                return m_builder.CreateCall(pushFunc, {objectValue, argValue});
+            }
+        } else if (node->methodName == "shift" || node->methodName == "pop") {
+            if (node->arguments.size() != 0) throw std::runtime_error("shift/pop expects 0 arguments");
+            
+            // For simplicity, we route pop/shift to shift
+            if (elemType == "string") {
+                llvm::FunctionCallee shiftFunc = m_module->getOrInsertFunction("array_shift_string",
+                    llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                    llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+                return m_builder.CreateCall(shiftFunc, {objectValue}, "shifted_val");
+            } else {
+                llvm::FunctionCallee shiftFunc = m_module->getOrInsertFunction("array_shift_i32",
+                    llvm::Type::getInt32Ty(m_context),
+                    llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+                return m_builder.CreateCall(shiftFunc, {objectValue}, "shifted_val");
+            }
+        }
+    }
+    
+    throw std::runtime_error("Codegen Error: Method '" + node->methodName + "' not supported on type '" + varType + "'");
 }
 
 // External function call support

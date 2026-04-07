@@ -16,6 +16,7 @@ class BooleanLiteralNode;
 class VariableExpressionNode;
 class FunctionCallNode;
 class FunctionDeclarationNode;
+class MethodCallNode;
 class ReturnStatementNode;
 class ArrayLiteralNode;
 class ArrayAccessNode;
@@ -585,6 +586,36 @@ public:
         }
         printIndent(os, indent + 1);
         os << "Property: " << property << "\n";
+    }
+};
+
+class MethodCallNode : public ExpressionNode
+{
+public:
+    std::unique_ptr<ExpressionNode> object;
+    std::string methodName;
+    std::vector<std::unique_ptr<ExpressionNode>> arguments;
+
+    MethodCallNode(std::unique_ptr<ExpressionNode> obj, std::string method)
+        : object(std::move(obj)), methodName(std::move(method)) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "MethodCallNode: ." << methodName << "(\n";
+        printIndent(os, indent + 1);
+        os << "Object:\n";
+        if (object) {
+            object->printNode(os, indent + 2);
+        }
+        printIndent(os, indent + 1);
+        os << "Arguments:\n";
+        for (const auto &arg : arguments)
+        {
+            if (arg) arg->printNode(os, indent + 2);
+        }
+        printIndent(os, indent);
+        os << ")\n";
     }
 };
 

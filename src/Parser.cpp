@@ -135,11 +135,17 @@ std::unique_ptr<StatementNode> Parser::parseStatement()
             if (pos < m_tokens.size() && m_tokens[m_currentPos + pos].type == TOK_EQUAL) {
                 return parseArrayAssignmentStatement();
             } else {
-                // Not an assignment, this is an unexpected statement
-                std::string errorMsg = std::string("Unexpected token at start of statement: ") + 
-                                     tokenTypeToString(peek().type) + " ('" + peek().value + "')";
-                throw std::runtime_error(errorMsg);
+                // Just an expression statement
+                auto expr = parseExpression();
+                consume(TOK_SEMICOLON, "Expected ';' after array access statement");
+                return std::make_unique<ExpressionStatementNode>(std::move(expr));
             }
+        }
+        else if (peek(1).type == TOK_DOT) {
+            // Method call or property access as expression statement
+            auto expr = parseExpression();
+            consume(TOK_SEMICOLON, "Expected ';' after method call");
+            return std::make_unique<ExpressionStatementNode>(std::move(expr));
         }
         else {
             // Could be other expression statements in the future
@@ -853,14 +859,32 @@ std::unique_ptr<ExpressionNode> Parser::parseArrayOrObjectAccess(std::unique_ptr
             consume(TOK_RBRACKET, "Expected ']' after array index");
             base = std::make_unique<ArrayAccessNode>(std::move(base), std::move(index));
         } else if (peek().type == TOK_DOT) {
-            // Object property access: base.property
+            // Object property access or method call: base.property
             advance(); // consume '.'
             if (peek().type != TOK_IDENTIFIER) {
                 throw std::runtime_error("Expected property name after '.'");
             }
             std::string property = peek().value;
             advance(); // consume property name
-            base = std::make_unique<ObjectAccessNode>(std::move(base), property);
+            
+            if (peek().type == TOK_LPAREN) {
+                // Method call: base.method(...)
+                auto methodCall = std::make_unique<MethodCallNode>(std::move(base), property);
+                advance(); // consume '('
+                
+                while (peek().type != TOK_RPAREN) {
+                    methodCall->arguments.push_back(parseExpression());
+                    if (peek().type == TOK_COMMA) {
+                        advance(); // consume ','
+                    } else if (peek().type != TOK_RPAREN) {
+                        throw std::runtime_error("Expected ',' or ')' in method call arguments");
+                    }
+                }
+                consume(TOK_RPAREN, "Expected ')' after method call arguments");
+                base = std::move(methodCall);
+            } else {
+                base = std::make_unique<ObjectAccessNode>(std::move(base), property);
+            }
         }
     }
     return base;

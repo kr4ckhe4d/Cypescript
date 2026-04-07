@@ -267,6 +267,15 @@ println(jsonStr);         // {"appName":"Cypescript IDE","version":"1.0.0","port
 let parsed = JSON.parse(jsonStr);
 println(parsed.appName);  // "Cypescript IDE"
 println(parsed.port);     // 8080
+
+// Dynamic Arrays (requires C++ integration)
+let queue: string[] = ["NodeA"];
+queue.push("NodeB");
+queue.push("NodeC");
+
+println(queue.length);   // 3
+println(queue.shift());  // "NodeA"
+println(queue.length);   // 2
 ```
 
 ### Arithmetic Operations

@@ -107,6 +107,7 @@ private:
     llvm::Value *visit(ObjectLiteralNode *node);      // For object literals
     llvm::Value *visit(ArrayAccessNode *node);        // For array access
     llvm::Value *visit(ObjectAccessNode *node);       // For object access
+    llvm::Value *visit(MethodCallNode *node);         // For method calls
 
     llvm::FunctionCallee getOrDeclarePuts();
     llvm::FunctionCallee getOrDeclarePrintf(); // New: For printf for integers

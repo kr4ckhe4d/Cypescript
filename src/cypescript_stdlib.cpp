@@ -15,7 +15,87 @@
 #include <map>
 #include <cctype>
 
+class DynamicArray {
+public:
+    enum class Type { I32, String, Object };
+    Type type;
+    std::vector<int32_t> i32_data;
+    std::vector<std::string> string_data;
+    std::vector<void*> object_data;
+    
+    DynamicArray(Type t) : type(t) {}
+};
+
 extern "C" {
+    // ===================
+    // DYNAMIC ARRAY FUNCTIONS
+    // ===================
+    void* array_create_i32() { return new DynamicArray(DynamicArray::Type::I32); }
+    void* array_create_string() { return new DynamicArray(DynamicArray::Type::String); }
+    void* array_create_object() { return new DynamicArray(DynamicArray::Type::Object); }
+
+    int32_t array_length(void* arr_ptr) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (!arr) return 0;
+        if (arr->type == DynamicArray::Type::I32) return arr->i32_data.size();
+        if (arr->type == DynamicArray::Type::String) return arr->string_data.size();
+        return arr->object_data.size();
+    }
+
+    void array_push_i32(void* arr_ptr, int32_t val) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (arr) arr->i32_data.push_back(val);
+    }
+
+    void array_push_string(void* arr_ptr, const char* val) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (arr && val) arr->string_data.push_back(val);
+    }
+
+    int32_t array_shift_i32(void* arr_ptr) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (!arr || arr->i32_data.empty()) return 0;
+        int32_t val = arr->i32_data.front();
+        arr->i32_data.erase(arr->i32_data.begin());
+        return val;
+    }
+    
+    const char* array_shift_string(void* arr_ptr) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (!arr || arr->string_data.empty()) return nullptr;
+        std::string val = arr->string_data.front();
+        arr->string_data.erase(arr->string_data.begin());
+        std::string* result = new std::string(val);
+        return result->c_str();
+    }
+
+    int32_t array_get_i32(void* arr_ptr, int32_t index) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (!arr || index < 0 || index >= arr->i32_data.size()) return 0;
+        return arr->i32_data[index];
+    }
+    
+    const char* array_get_string(void* arr_ptr, int32_t index) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (!arr || index < 0 || index >= arr->string_data.size()) return nullptr;
+        std::string* result = new std::string(arr->string_data[index]);
+        return result->c_str();
+    }
+
+    void array_set_i32(void* arr_ptr, int32_t index, int32_t val) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (!arr || index < 0) return;
+        if (index >= arr->i32_data.size()) arr->i32_data.resize(index + 1);
+        arr->i32_data[index] = val;
+    }
+    
+    void array_set_string(void* arr_ptr, int32_t index, const char* val) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (!arr || index < 0 || !val) return;
+        if (index >= arr->string_data.size()) arr->string_data.resize(index + 1);
+        arr->string_data[index] = val;
+    }
+
     // ===================
     // MATH FUNCTIONS
     // ===================
