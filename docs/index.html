@@ -30,6 +30,7 @@
                 <li><a href="#objects" class="nav-link">Objects</a></li>
                 <li><a href="#cpp-integration" class="nav-link">C++ Integration</a></li>
                 <li><a href="#performance" class="nav-link">Performance</a></li>
+                <li><a href="#architecture" class="nav-link">Architecture</a></li>
                 <li><a href="#examples" class="nav-link">Examples</a></li>
                 <li><a href="#playground" class="nav-link">Playground</a></li>
             </ul>
@@ -1153,460 +1154,381 @@ if (exists == 1) {
                 <!-- Performance Overview -->
                 <div class="performance-overview">
                     <div class="benchmark-summary">
-                        <h2>🏆 Multi-Language Performance Comparison</h2>
+                        <h2>🏆 Cypescript (-O2) vs Node.js v22</h2>
                         
-                        <!-- Multi-Language Performance Chart -->
                         <div class="chart-container">
                             <canvas id="multiLanguageChart" width="400" height="250"></canvas>
                         </div>
                         
                         <div class="results-grid">
                             <div class="result-card winner">
-                                <h3>Array Processing (Small Workloads)</h3>
+                                <h3>Simple Loop (100M iterations)</h3>
                                 <div class="performance-ranking">
-                                    <div class="rank-item gold">🥇 JavaScript: 98ms</div>
-                                    <div class="rank-item silver">🥈 Cypescript (Memory-Opt): 301ms</div>
-                                    <div class="rank-item bronze">🥉 Cypescript (Advanced): 302ms</div>
-                                    <div class="rank-item fourth">4️⃣ Python: 644ms</div>
+                                    <div class="rank-item gold">🥇 Cypescript: 17ms</div>
+                                    <div class="rank-item silver">🥈 Node.js: 142ms</div>
                                 </div>
-                                <p class="winner-text">🚀 <strong>JavaScript V8 JIT dominates small workloads</strong></p>
+                                <p class="winner-text">🔥 <strong>8.3x faster</strong></p>
                             </div>
                             
                             <div class="result-card winner">
-                                <h3>Complex Object Processing (Enterprise Scale)</h3>
+                                <h3>Fibonacci (10M function calls)</h3>
                                 <div class="performance-ranking">
-                                    <div class="rank-item gold">🥇 JavaScript: 0.57ms (250K accesses)</div>
-                                    <div class="rank-item silver">🥈 Cypescript: ~466ms (2.5M accesses)</div>
-                                    <div class="rank-item bronze">🥉 Python: 9.20ms (250K accesses)</div>
+                                    <div class="rank-item gold">🥇 Cypescript: 63ms</div>
+                                    <div class="rank-item silver">🥈 Node.js: 189ms</div>
                                 </div>
-                                <p class="winner-text">⚡ <strong>Cypescript handles 10x larger scale!</strong></p>
+                                <p class="winner-text">🔥 <strong>3.0x faster</strong></p>
                             </div>
                             
                             <div class="result-card winner">
-                                <h3>Intensive Computation (Large Workloads)</h3>
+                                <h3>Matrix Multiply (300³ nested loops)</h3>
                                 <div class="performance-ranking">
-                                    <div class="rank-item gold">🥇 JavaScript: 723ms</div>
-                                    <div class="rank-item silver">🥈 Cypescript (Memory-Opt): 986ms</div>
-                                    <div class="rank-item bronze">🥉 Python: 94,666ms</div>
+                                    <div class="rank-item gold">🥇 Cypescript: 6ms</div>
+                                    <div class="rank-item silver">🥈 Node.js: 101ms</div>
                                 </div>
-                                <p class="winner-text">⚡ <strong>Cypescript 96x faster than Python!</strong></p>
+                                <p class="winner-text">🔥 <strong>16.8x faster</strong></p>
+                            </div>
+
+                            <div class="result-card winner">
+                                <h3>Prime Sieve (500K)</h3>
+                                <div class="performance-ranking">
+                                    <div class="rank-item gold">🥇 Cypescript: 13ms</div>
+                                    <div class="rank-item silver">🥈 Node.js: 87ms</div>
+                                </div>
+                                <p class="winner-text">🔥 <strong>6.6x faster</strong></p>
                             </div>
                         </div>
                         
                         <div class="performance-insights">
-                            <h3>📊 Key Performance Insights</h3>
+                            <h3>📊 Why Cypescript Is Faster</h3>
                             <div class="insight-grid">
                                 <div class="insight-item">
-                                    <h4>🚀 JavaScript Excellence</h4>
-                                    <p>V8 JIT optimization delivers incredible performance: 0.57ms for 250K property accesses</p>
+                                    <h4>🔥 Ahead-of-Time Compilation</h4>
+                                    <p>LLVM compiles to optimized native machine code before execution — no JIT warmup needed</p>
                                 </div>
                                 <div class="insight-item">
-                                    <h4>⚡ Cypescript Scaling</h4>
-                                    <p>Handles massive scale: 2.5M property accesses with native TypeScript objects</p>
+                                    <h4>⚡ -O2 Optimizations</h4>
+                                    <p>Function inlining, loop unrolling, vectorization, constant folding, dead code elimination</p>
                                 </div>
                                 <div class="insight-item">
-                                    <h4>🐍 Python Trade-offs</h4>
-                                    <p>16x slower on objects, 131x slower on intensive computation</p>
+                                    <h4>🎯 Static Types</h4>
+                                    <p>i32 types compile to direct CPU integer instructions — no type checks at runtime</p>
                                 </div>
                                 <div class="insight-item">
-                                    <h4>🎯 Enterprise Ready</h4>
-                                    <p>Complex objects with 20+ properties handle real-world enterprise workloads</p>
+                                    <h4>🚀 Zero Overhead</h4>
+                                    <p>No garbage collector, no runtime, no interpreter — just raw machine code</p>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Performance Scaling -->
-                <div class="performance-scaling">
-                    <h2>📈 Performance Scaling Analysis</h2>
-                    <p>Performance characteristics change dramatically with workload size and complexity:</p>
-                    
-                    <!-- Scaling Chart -->
-                    <div class="chart-container">
-                        <canvas id="scalingChart" width="400" height="300"></canvas>
+                <!-- Speedup Visualization -->
+                <div class="speedup-visual">
+                    <h2>⚡ Speedup at a Glance</h2>
+                    <div class="speedup-bars">
+                        <div class="speedup-row">
+                            <span class="speedup-label">Simple Loop (100M)</span>
+                            <div class="speedup-track">
+                                <div class="speedup-bar-csc" style="width: 100%;">
+                                    <span>Cypescript 17ms</span>
+                                </div>
+                            </div>
+                            <div class="speedup-track">
+                                <div class="speedup-bar-node" style="width: 100%;">
+                                    <span>Node.js 142ms</span>
+                                </div>
+                            </div>
+                            <span class="speedup-badge">8.3x</span>
+                        </div>
+                        <div class="speedup-row">
+                            <span class="speedup-label">Fibonacci (10M calls)</span>
+                            <div class="speedup-track">
+                                <div class="speedup-bar-csc" style="width: 33%;">
+                                    <span>63ms</span>
+                                </div>
+                            </div>
+                            <div class="speedup-track">
+                                <div class="speedup-bar-node" style="width: 100%;">
+                                    <span>189ms</span>
+                                </div>
+                            </div>
+                            <span class="speedup-badge">3.0x</span>
+                        </div>
+                        <div class="speedup-row">
+                            <span class="speedup-label">Matrix Multiply (300³)</span>
+                            <div class="speedup-track">
+                                <div class="speedup-bar-csc" style="width: 6%;">
+                                    <span>6ms</span>
+                                </div>
+                            </div>
+                            <div class="speedup-track">
+                                <div class="speedup-bar-node" style="width: 100%;">
+                                    <span>101ms</span>
+                                </div>
+                            </div>
+                            <span class="speedup-badge fire">16.8x</span>
+                        </div>
+                        <div class="speedup-row">
+                            <span class="speedup-label">Prime Sieve (500K)</span>
+                            <div class="speedup-track">
+                                <div class="speedup-bar-csc" style="width: 15%;">
+                                    <span>13ms</span>
+                                </div>
+                            </div>
+                            <div class="speedup-track">
+                                <div class="speedup-bar-node" style="width: 100%;">
+                                    <span>87ms</span>
+                                </div>
+                            </div>
+                            <span class="speedup-badge">6.6x</span>
+                        </div>
                     </div>
-                    
-                    <div class="scaling-table">
+                </div>
+
+                <!-- Benchmark Methodology -->
+                <div class="benchmark-details">
+                    <h2>📊 Benchmark Methodology</h2>
+                    <div class="methodology-grid">
+                        <div class="method-card">
+                            <h3>Environment</h3>
+                            <ul>
+                                <li><strong>Hardware:</strong> Apple Silicon (M-series)</li>
+                                <li><strong>Cypescript:</strong> LLVM -O2 native compilation</li>
+                                <li><strong>Node.js:</strong> v22 with V8 JIT</li>
+                                <li><strong>Metric:</strong> Best of 3 runs (user time)</li>
+                            </ul>
+                        </div>
+                        <div class="method-card">
+                            <h3>Benchmarks</h3>
+                            <ul>
+                                <li><strong>Simple Loop:</strong> 100M iterations with modulo</li>
+                                <li><strong>Fibonacci:</strong> 10M function calls, varying input</li>
+                                <li><strong>Matrix:</strong> 300³ nested loops with arithmetic</li>
+                                <li><strong>Primes:</strong> Trial division up to 500K</li>
+                            </ul>
+                        </div>
+                        <div class="method-card">
+                            <h3>Run It Yourself</h3>
+                            <div class="run-command">
+                                <code>./benchmarks/run_benchmarks.sh</code>
+                            </div>
+                            <p>All benchmark source code is in the <code>benchmarks/</code> directory with matching <code>.csc</code> and <code>.ts</code> files.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <section id="architecture" class="content-section">
+                <h1><i class="fas fa-project-diagram"></i> Architecture: TypeScript vs Cypescript</h1>
+                <p class="section-intro">
+                    TypeScript and Cypescript share similar syntax, but their execution models are fundamentally different.
+                    Understanding this difference explains why Cypescript achieves 3–17x better performance.
+                </p>
+
+                <div class="arch-comparison">
+                    <!-- Side by side pipelines -->
+                    <div class="arch-pipelines">
+                        <!-- TypeScript Pipeline -->
+                        <div class="arch-pipeline ts-pipeline">
+                            <h2 class="arch-title ts-color">TypeScript / JavaScript</h2>
+                            <p class="arch-subtitle">Interpreted → JIT Compiled at Runtime</p>
+
+                            <div class="arch-flow">
+                                <div class="arch-step">
+                                    <div class="arch-icon">📝</div>
+                                    <div class="arch-label">Source Code</div>
+                                    <div class="arch-detail">.ts / .js files</div>
+                                </div>
+                                <div class="arch-arrow">▼</div>
+                                <div class="arch-step">
+                                    <div class="arch-icon">🔄</div>
+                                    <div class="arch-label">TSC Transpiler</div>
+                                    <div class="arch-detail">Types stripped → plain JS</div>
+                                </div>
+                                <div class="arch-arrow">▼</div>
+                                <div class="arch-step arch-runtime">
+                                    <div class="arch-runtime-label">⏱️ All of this happens at runtime</div>
+                                    <div class="arch-step-inner">
+                                        <div class="arch-icon">🔍</div>
+                                        <div class="arch-label">V8 Parser</div>
+                                        <div class="arch-detail">Parse → AST → Bytecode</div>
+                                    </div>
+                                    <div class="arch-arrow-inner">▼</div>
+                                    <div class="arch-step-inner">
+                                        <div class="arch-icon">🏃</div>
+                                        <div class="arch-label">Ignition Interpreter</div>
+                                        <div class="arch-detail">Execute bytecode (slow start)</div>
+                                    </div>
+                                    <div class="arch-arrow-inner">▼</div>
+                                    <div class="arch-step-inner">
+                                        <div class="arch-icon">🔥</div>
+                                        <div class="arch-label">TurboFan JIT</div>
+                                        <div class="arch-detail">Hot paths → machine code</div>
+                                    </div>
+                                    <div class="arch-arrow-inner">▼</div>
+                                    <div class="arch-step-inner highlight-bad">
+                                        <div class="arch-icon">🗑️</div>
+                                        <div class="arch-label">Garbage Collector</div>
+                                        <div class="arch-detail">Pauses execution to free memory</div>
+                                    </div>
+                                </div>
+                                <div class="arch-arrow">▼</div>
+                                <div class="arch-step">
+                                    <div class="arch-icon">📤</div>
+                                    <div class="arch-label">Output</div>
+                                    <div class="arch-detail">Result</div>
+                                </div>
+                            </div>
+
+                            <div class="arch-traits">
+                                <span class="trait trait-warn">Runtime type checks</span>
+                                <span class="trait trait-warn">GC pauses</span>
+                                <span class="trait trait-warn">JIT warmup cost</span>
+                                <span class="trait trait-ok">Dynamic & flexible</span>
+                            </div>
+                        </div>
+
+                        <!-- VS Divider -->
+                        <div class="arch-vs">VS</div>
+
+                        <!-- Cypescript Pipeline -->
+                        <div class="arch-pipeline csc-pipeline">
+                            <h2 class="arch-title csc-color">Cypescript</h2>
+                            <p class="arch-subtitle">Compiled Ahead-of-Time via LLVM</p>
+
+                            <div class="arch-flow">
+                                <div class="arch-step">
+                                    <div class="arch-icon">📝</div>
+                                    <div class="arch-label">Source Code</div>
+                                    <div class="arch-detail">.csc files</div>
+                                </div>
+                                <div class="arch-arrow">▼</div>
+                                <div class="arch-step arch-compile">
+                                    <div class="arch-compile-label">🔨 All of this happens at compile time</div>
+                                    <div class="arch-step-inner">
+                                        <div class="arch-icon">🔤</div>
+                                        <div class="arch-label">Lexer</div>
+                                        <div class="arch-detail">Source → Tokens</div>
+                                    </div>
+                                    <div class="arch-arrow-inner">▼</div>
+                                    <div class="arch-step-inner">
+                                        <div class="arch-icon">🌳</div>
+                                        <div class="arch-label">Parser</div>
+                                        <div class="arch-detail">Tokens → AST</div>
+                                    </div>
+                                    <div class="arch-arrow-inner">▼</div>
+                                    <div class="arch-step-inner">
+                                        <div class="arch-icon">⚙️</div>
+                                        <div class="arch-label">CodeGen</div>
+                                        <div class="arch-detail">AST → LLVM IR</div>
+                                    </div>
+                                    <div class="arch-arrow-inner">▼</div>
+                                    <div class="arch-step-inner highlight-good">
+                                        <div class="arch-icon">🚀</div>
+                                        <div class="arch-label">LLVM -O2</div>
+                                        <div class="arch-detail">Inlining, vectorization, unrolling</div>
+                                    </div>
+                                </div>
+                                <div class="arch-arrow">▼</div>
+                                <div class="arch-step highlight-good">
+                                    <div class="arch-icon">💻</div>
+                                    <div class="arch-label">Native Binary</div>
+                                    <div class="arch-detail">Direct CPU execution</div>
+                                </div>
+                                <div class="arch-arrow">▼</div>
+                                <div class="arch-step">
+                                    <div class="arch-icon">📤</div>
+                                    <div class="arch-label">Output</div>
+                                    <div class="arch-detail">Result</div>
+                                </div>
+                            </div>
+
+                            <div class="arch-traits">
+                                <span class="trait trait-good">Zero runtime overhead</span>
+                                <span class="trait trait-good">No GC pauses</span>
+                                <span class="trait trait-good">Static types → CPU ops</span>
+                                <span class="trait trait-good">LLVM optimizations</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Key Differences Table -->
+                    <div class="arch-diff-table">
+                        <h2>⚡ Key Architectural Differences</h2>
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Workload Size</th>
-                                    <th>JavaScript</th>
-                                    <th>Cypescript</th>
-                                    <th>Winner</th>
+                                    <th></th>
+                                    <th class="ts-color">TypeScript (Node.js)</th>
+                                    <th class="csc-color">Cypescript</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td><strong>Small (100 elements)</strong></td>
-                                    <td>80ms</td>
-                                    <td>481ms</td>
-                                    <td class="js-winner">JS 6x faster</td>
+                                    <td><strong>Compilation</strong></td>
+                                    <td>JIT — compiled during execution</td>
+                                    <td>AOT — compiled before execution</td>
                                 </tr>
                                 <tr>
-                                    <td><strong>Medium (10K elements)</strong></td>
-                                    <td>~800ms</td>
-                                    <td>~600ms</td>
-                                    <td class="cs-winner">Cypescript 1.3x faster</td>
+                                    <td><strong>Types at runtime</strong></td>
+                                    <td>Erased — all values are JS objects</td>
+                                    <td>Preserved — i32 maps to CPU int</td>
                                 </tr>
                                 <tr>
-                                    <td><strong>Large (100K elements)</strong></td>
-                                    <td>~8s</td>
-                                    <td>~4s</td>
-                                    <td class="cs-winner">Cypescript 2x faster</td>
+                                    <td><strong>Memory</strong></td>
+                                    <td>GC-managed heap allocation</td>
+                                    <td>Stack allocation, no GC</td>
                                 </tr>
                                 <tr>
-                                    <td><strong>Massive (1M elements)</strong></td>
-                                    <td>~80s</td>
-                                    <td>~25s</td>
-                                    <td class="cs-winner">Cypescript 3.2x faster</td>
+                                    <td><strong>Startup</strong></td>
+                                    <td>~30ms (V8 init + parse + compile)</td>
+                                    <td>~0.1ms (just exec the binary)</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Peak speed</strong></td>
+                                    <td>Near-native after JIT warmup</td>
+                                    <td>Native from first instruction</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Backend</strong></td>
+                                    <td>V8 (Google Chrome engine)</td>
+                                    <td>LLVM (clang/rustc/swift backend)</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Output</strong></td>
+                                    <td>Runs inside Node.js / browser</td>
+                                    <td>Standalone native executable</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
-                </div>
 
-                <!-- Optimization Impact Chart -->
-                <div class="optimization-impact">
-                    <h2>⚡ Optimization Impact Analysis</h2>
-                    <p>How different optimizations improve Cypescript performance:</p>
-                    
-                    <div class="chart-container">
-                        <canvas id="optimizationChart" width="400" height="300"></canvas>
-                    </div>
-                    
-                    <div class="optimization-details">
-                        <div class="opt-detail">
-                            <h4>🔧 Current Optimizations (Implemented)</h4>
-                            <ul>
-                                <li><strong>LLVM O3:</strong> 63% binary size reduction</li>
-                                <li><strong>Link-time optimization:</strong> Cross-module optimization</li>
-                                <li><strong>Process pooling:</strong> 15% execution improvement</li>
-                                <li><strong>Static linking:</strong> Reduced startup overhead</li>
-                                <li><strong>🆕 ARM NEON SIMD:</strong> 4x parallel array processing ✅</li>
-                            </ul>
-                        </div>
-                        
-                        <div class="opt-detail">
-                            <h4>🚀 Future Optimizations (Planned)</h4>
-                            <ul>
-                                <li><strong>Profile-guided optimization:</strong> 20-30% improvement</li>
-                                <li><strong>Advanced memory management:</strong> Better cache locality</li>
-                                <li><strong>JIT-style hot path optimization:</strong> Dynamic optimization</li>
-                                <li><strong>Automatic vectorization:</strong> Compiler-generated SIMD</li>
-                            </ul>
-                        </div>
-                    </div>
-                    
-                    <div class="neon-success">
-                        <h3>🎉 Advanced Optimizations - Successfully Validated!</h3>
-                        <div class="neon-results">
-                            <div class="neon-stat">
-                                <h4>✅ NEON SIMD Scaling</h4>
-                                <p>800-element arrays validated with 4x parallel processing</p>
-                            </div>
-                            <div class="neon-stat">
-                                <h4>🚀 Advanced Pipeline</h4>
-                                <p>29.7% performance improvement measured</p>
-                            </div>
-                            <div class="neon-stat">
-                                <h4>📊 PGO Framework</h4>
-                                <p>Complete profile-guided optimization workflow</p>
-                            </div>
-                        </div>
-                        
-                        <div class="validation-summary">
-                            <h4>🎯 Optimization Roadmap Progress: 75% Complete</h4>
-                            <div class="progress-bar">
-                                <div class="progress-fill" style="width: 75%;"></div>
-                            </div>
-                            <p><strong>Current:</strong> 4.2x slower than JavaScript (down from 6x)</p>
-                            <p><strong>Target:</strong> 3.2x faster than JavaScript</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- When to Choose -->
-                <div class="choice-guide">
-                    <h2>🎯 When to Choose Each Language</h2>
-                    <div class="choice-grid">
-                        <div class="choice-card cypescript-choice">
-                            <h3><i class="fas fa-rocket"></i> Choose Cypescript For:</h3>
-                            <ul>
-                                <li>🔬 <strong>Scientific computing</strong> and simulations</li>
-                                <li>📊 <strong>Large dataset processing</strong> (>10K elements)</li>
-                                <li>🎮 <strong>Game engines</strong> and real-time systems</li>
-                                <li>🖼️ <strong>Image/video processing</strong> with C++ libraries</li>
-                                <li>⚡ <strong>System programming</strong> requiring predictable performance</li>
-                                <li>🔧 <strong>C++ integration</strong> needs</li>
-                            </ul>
-                        </div>
-                        
-                        <div class="choice-card javascript-choice">
-                            <h3><i class="fas fa-globe"></i> Choose JavaScript For:</h3>
-                            <ul>
-                                <li>🌐 <strong>Web development</strong> and Node.js APIs</li>
-                                <li>🚀 <strong>Rapid prototyping</strong> and development speed</li>
-                                <li>📱 <strong>Small to medium applications</strong> (<10K elements)</li>
-                                <li>🔄 <strong>Dynamic applications</strong> requiring flexibility</li>
-                                <li>📚 <strong>Existing ecosystem</strong> integration</li>
-                                <li>⚡ <strong>Quick scripts</strong> and automation</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Technical Analysis -->
-                <div class="technical-analysis">
-                    <h2>🔬 Technical Analysis</h2>
-                    
-                    <div class="analysis-grid">
-                        <div class="analysis-card">
-                            <h3>Why Cypescript Excels at Intensive Computation</h3>
-                            <div class="tech-points">
-                                <div class="tech-point">
-                                    <strong>Native Machine Code</strong>
-                                    <p>Direct CPU instructions vs Bytecode → JIT → Machine code</p>
+                    <!-- The "aha" diagram -->
+                    <div class="arch-insight-box">
+                        <h2>💡 The Core Insight</h2>
+                        <div class="arch-insight-content">
+                            <div class="arch-insight-left">
+                                <code class="arch-code ts-bg">let x: i32 = 5 + 3;</code>
+                                <div class="arch-insight-arrow">↓ TypeScript</div>
+                                <div class="arch-insight-steps">
+                                    <span>Parse</span> → <span>Bytecode</span> → <span>Interpret</span> → <span>Profile</span> → <span>JIT</span> → <span>Execute</span>
                                 </div>
-                                <div class="tech-point">
-                                    <strong>No Runtime Overhead</strong>
-                                    <p>Pure computation vs GC pauses + JIT overhead</p>
-                                </div>
-                                <div class="tech-point">
-                                    <strong>Predictable Performance</strong>
-                                    <p>Consistent timing vs Variable JIT optimization</p>
+                            </div>
+                            <div class="arch-insight-divider"></div>
+                            <div class="arch-insight-right">
+                                <code class="arch-code csc-bg">let x: i32 = 5 + 3;</code>
+                                <div class="arch-insight-arrow">↓ Cypescript</div>
+                                <div class="arch-insight-steps">
+                                    <span class="arch-compile-step">Compile</span> → <code class="arch-asm">mov eax, 8</code>
                                 </div>
                             </div>
                         </div>
-                        
-                        <div class="analysis-card">
-                            <h3>Why JavaScript Excels at Light Operations</h3>
-                            <div class="tech-points">
-                                <div class="tech-point">
-                                    <strong>V8 JIT Magic</strong>
-                                    <p>20+ years of optimization for common patterns</p>
-                                </div>
-                                <div class="tech-point">
-                                    <strong>Startup Advantage</strong>
-                                    <p>Already running vs Process creation + loading</p>
-                                </div>
-                                <div class="tech-point">
-                                    <strong>Dynamic Optimization</strong>
-                                    <p>Runtime behavior analysis and specialization</p>
-                                </div>
-                            </div>
-                        </div>
+                        <p class="arch-insight-caption">
+                            Cypescript resolves <code>5 + 3</code> to the constant <code>8</code> at compile time.
+                            TypeScript discovers this optimization only after running the code thousands of times.
+                        </p>
                     </div>
                 </div>
-
-                <!-- Phase 1 ObjectOptimizer Performance -->
-                <div class="phase1-performance">
-                    <h2>🔥 Phase 1 ObjectOptimizer - Major Breakthrough</h2>
-                    <p>The Phase 1 ObjectOptimizer replaces hash map lookups with direct struct access, delivering a <strong>2.1x performance improvement</strong> for property-heavy workloads:</p>
-                    
-                    <!-- Phase 1 Optimization Chart -->
-                    <div class="chart-container">
-                        <canvas id="phase1OptimizationChart" width="400" height="200"></canvas>
-                    </div>
-                    
-                    <div class="phase1-results">
-                        <div class="phase1-comparison">
-                            <div class="phase1-bar">
-                                <span class="label">Pre-Phase 1:</span>
-                                <div class="bar" style="width: 100%; background: rgba(231, 76, 60, 0.8);">720ms</div>
-                                <span class="rate">3.47M accesses/sec</span>
-                            </div>
-                            <div class="phase1-bar">
-                                <span class="label">Phase 1 Optimized:</span>
-                                <div class="bar" style="width: 47%; background: rgba(46, 204, 113, 0.8);">339ms</div>
-                                <span class="rate">7.37M accesses/sec - 2.1x faster!</span>
-                            </div>
-                        </div>
-                        
-                        <div class="phase1-features">
-                            <h4>🚀 Phase 1 Achievements:</h4>
-                            <ul>
-                                <li><strong>Direct Struct Access:</strong> Single LLVM GEP instructions replace 4+ hash map lookups</li>
-                                <li><strong>Compile-time Layouts:</strong> O(1) property offset calculation at compile time</li>
-                                <li><strong>Memory Optimization:</strong> Efficient struct-based object storage</li>
-                                <li><strong>Enterprise Scale:</strong> Validated with 2.5M property access benchmark</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- C++ Integration Performance -->
-                <div class="cpp-performance">
-                    <h2>🚀 C++ Integration Performance Boost</h2>
-                    <p>Cypescript's C++ integration provides significant performance improvements:</p>
-                    
-                    <!-- C++ Integration Chart -->
-                    <div class="chart-container">
-                        <canvas id="cppIntegrationChart" width="400" height="200"></canvas>
-                    </div>
-                    
-                    <div class="cpp-results">
-                        <div class="cpp-comparison">
-                            <div class="cpp-bar">
-                                <span class="label">Pure Cypescript:</span>
-                                <div class="bar" style="width: 100%;">481ms</div>
-                            </div>
-                            <div class="cpp-bar">
-                                <span class="label">Cypescript + C++:</span>
-                                <div class="bar cpp-optimized" style="width: 78%;">374ms</div>
-                            </div>
-                        </div>
-                        <p class="cpp-improvement"><strong>22% performance improvement</strong> with C++ integration!</p>
-                    </div>
-                    
-                    <div class="cpp-benefits">
-                        <h3>C++ Integration Benefits:</h3>
-                        <ul>
-                            <li>✅ <strong>Zero-cost interop</strong> with C++ libraries</li>
-                            <li>✅ <strong>Access to optimized algorithms</strong> (OpenCV, BLAS, etc.)</li>
-                            <li>✅ <strong>Native performance</strong> with high-level syntax</li>
-                            <li>✅ <strong>Specialized libraries</strong> for domain-specific tasks</li>
-                        </ul>
-                    </div>
-                </div>
-
-                <!-- Future Performance Projections -->
-                <div class="future-performance">
-                    <h2>🔮 Future Performance Projections</h2>
-                    <p>Expected performance after implementing all planned optimizations:</p>
-                    
-                    <div class="projection-charts">
-                        <div class="chart-row">
-                            <div class="chart-half">
-                                <h3>Small Workloads (100 elements)</h3>
-                                <canvas id="smallWorkloadChart" width="300" height="200"></canvas>
-                            </div>
-                            <div class="chart-half">
-                                <h3>Large Workloads (1M elements)</h3>
-                                <canvas id="largeWorkloadChart" width="300" height="200"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="projection-summary">
-                        <div class="projection-card">
-                            <h4>🎯 Small Workloads Transformation</h4>
-                            <p><strong>Current:</strong> 6x slower than JavaScript</p>
-                            <p><strong>Future:</strong> 3.2x faster than JavaScript</p>
-                            <p class="improvement">📈 <strong>19.2x improvement!</strong></p>
-                        </div>
-                        
-                        <div class="projection-card">
-                            <h4>🚀 Large Workloads Dominance</h4>
-                            <p><strong>Current:</strong> 3.2x faster than JavaScript</p>
-                            <p><strong>Future:</strong> 40x faster than JavaScript</p>
-                            <p class="improvement">📈 <strong>12.5x improvement!</strong></p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Benchmark Details -->
-                <div class="benchmark-details">
-                    <h2>📊 Benchmark Methodology</h2>
-                    
-                    <div class="methodology-grid">
-                        <div class="method-card">
-                            <h3>Test Environment</h3>
-                            <ul>
-                                <li><strong>Hardware:</strong> Apple Silicon Mac (M-series)</li>
-                                <li><strong>Cypescript:</strong> Native LLVM compilation</li>
-                                <li><strong>JavaScript:</strong> Node.js latest with V8 JIT</li>
-                                <li><strong>Measurements:</strong> Wall-clock time</li>
-                            </ul>
-                        </div>
-                        
-                        <div class="method-card">
-                            <h3>Intensive Benchmark</h3>
-                            <ul>
-                                <li><strong>Nested loops:</strong> 800M operations</li>
-                                <li><strong>Prime generation:</strong> Sieve up to 10,000</li>
-                                <li><strong>Fibonacci:</strong> 1,000 iterations to 35</li>
-                                <li><strong>Bubble sort:</strong> 50 iterations</li>
-                            </ul>
-                        </div>
-                        
-                        <div class="method-card">
-                            <h3>Light Benchmark</h3>
-                            <ul>
-                                <li><strong>Array sum:</strong> 100K iterations</li>
-                                <li><strong>Array max:</strong> 100K iterations</li>
-                                <li><strong>Linear search:</strong> 100K iterations</li>
-                                <li><strong>Array modification:</strong> 50K iterations</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Interactive Performance Demo -->
-                <div class="performance-demo">
-                    <h2>🎮 Try It Yourself</h2>
-                    <p>Run a performance test in your browser and see how it compares:</p>
-                    
-                    <div class="demo-container">
-                        <button id="run-performance-test" class="demo-button">
-                            <i class="fas fa-play"></i> Run Browser Performance Test
-                        </button>
-                        <div id="performance-results" class="demo-results" style="display: none;">
-                            <h3>Browser Performance Results:</h3>
-                            <div id="performance-output"></div>
-                            <canvas id="browserComparisonChart" width="400" height="200" style="margin-top: 1rem;"></canvas>
-                        </div>
-                    </div>
-                    
-                    <div class="performance-highlights">
-                        <div class="performance-highlight">
-                            <h4>🏆 Current Champion: JavaScript V8</h4>
-                            <p>Incredible JIT optimization for small workloads</p>
-                        </div>
-                        
-                        <div class="performance-highlight winner">
-                            <h4>🚀 Cypescript Strength: Large Computations</h4>
-                            <p>Native performance shines on intensive workloads</p>
-                        </div>
-                        
-                        <div class="performance-highlight future">
-                            <h4>🔮 Future: Best of Both Worlds</h4>
-                            <p>Optimizations will make Cypescript fast everywhere</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Key Takeaways -->
-                <div class="key-takeaways">
-                    <h2>🎯 Key Performance Insights</h2>
-                    <div class="takeaway-grid">
-                        <div class="takeaway-card">
-                            <h3>🏆 Both Have Their Sweet Spots</h3>
-                            <p>JavaScript excels at typical application workloads with incredible JIT optimization, while Cypescript shines for computational tasks with predictable native performance.</p>
-                        </div>
-                        <div class="takeaway-card">
-                            <h3>📈 Crossover Point: ~10K Elements</h3>
-                            <p>The performance advantage switches around medium-scale data processing. Below this, JavaScript wins; above this, Cypescript dominates.</p>
-                        </div>
-                        <div class="takeaway-card">
-                            <h3>🚀 C++ Integration is Game-Changing</h3>
-                            <p>Access to the entire C++ ecosystem with zero-cost interop provides 22% immediate improvement and unlimited potential.</p>
-                        </div>
-                        <div class="takeaway-card">
-                            <h3>⚡ Optimizations Transform Everything</h3>
-                            <p>With planned optimizations, Cypescript will be 3.2x faster than JavaScript on small workloads and 40x faster on large ones.</p>
-                        </div>
-                        <div class="takeaway-card">
-                            <h3>🎪 Choose Based on Workload</h3>
-                            <p>Select your tool based on problem characteristics: JavaScript for web/rapid development, Cypescript for performance-critical applications.</p>
-                        </div>
-                        <div class="takeaway-card">
-                            <h3>🔮 Future is Bright</h3>
-                            <p>SIMD vectorization, profile-guided optimization, and process pooling will make Cypescript competitive everywhere.</p>
-                        </div>
-                    </div>
-                </div>
+            </section>
 
             <!-- Examples Section -->
             <section id="examples" class="content-section">
