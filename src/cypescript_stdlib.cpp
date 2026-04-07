@@ -434,6 +434,50 @@ extern "C" {
         return result->c_str();
     }
     
+    // Get any value from JSON object as a string
+    const char* json_get_any(const char* json_obj, const char* key) {
+        std::string json_str(json_obj);
+        std::string key_str = "\"" + std::string(key) + "\""; // Just add quotes
+        
+        size_t key_pos = json_str.find(key_str);
+        if (key_pos == std::string::npos) {
+            return nullptr;
+        }
+        
+        size_t colon_pos = json_str.find(':', key_pos);
+        if (colon_pos == std::string::npos) {
+            return nullptr;
+        }
+        
+        size_t value_start = skip_whitespace(json_str, colon_pos + 1);
+        if (value_start >= json_str.length()) {
+            return nullptr;
+        }
+        
+        if (json_str[value_start] == '"') {
+            auto [value_str, end_pos] = parse_json_string(json_str, value_start);
+            if (value_str.empty()) return nullptr;
+            std::string unescaped = unescape_json_string(value_str);
+            std::string* result = new std::string(unescaped);
+            return result->c_str();
+        } else {
+            // For numbers, booleans, null
+            size_t value_end = value_start;
+            while (value_end < json_str.length() && 
+                   json_str[value_end] != ',' && 
+                   json_str[value_end] != '}' && 
+                   json_str[value_end] != ']' && 
+                   !std::isspace(json_str[value_end])) {
+                value_end++;
+            }
+            if (value_end <= value_start) return nullptr;
+            
+            std::string val_str = json_str.substr(value_start, value_end - value_start);
+            std::string* result = new std::string(val_str);
+            return result->c_str();
+        }
+    }
+
     // Get string value from JSON object
     const char* json_get_string(const char* json_obj, const char* key) {
         std::string json_str(json_obj);

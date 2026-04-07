@@ -26,7 +26,7 @@ CodeGen::CodeGen(llvm::LLVMContext &context) : m_context(context),
 
 llvm::Type *CodeGen::getLLVMType(const std::string &typeName)
 {
-    if (typeName == "string")
+    if (typeName == "string" || typeName == "json")
     {
         // In LLVM 20+, use PointerType::get instead of getInt8PtrTy
         return llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
@@ -242,6 +242,12 @@ void CodeGen::visit(VariableDeclarationNode *node)
             } else if (auto *arrAccess = dynamic_cast<ArrayAccessNode*>(node->initializer.get())) {
                 // Array access - infer from context, default to i32
                 varLLVMType = llvm::Type::getInt32Ty(m_context);
+            } else if (auto *callNode = dynamic_cast<FunctionCallNode*>(node->initializer.get())) {
+                if (callNode->functionName == "JSON.parse" || callNode->functionName == "JSON.stringify") {
+                    varLLVMType = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+                } else {
+                    varLLVMType = llvm::Type::getInt32Ty(m_context);
+                }
             } else {
                 // Default to i32 for unknown types
                 varLLVMType = llvm::Type::getInt32Ty(m_context);
@@ -282,6 +288,14 @@ void CodeGen::visit(VariableDeclarationNode *node)
             typeToStore = arrLit->elementType + "[]";
             // Store array size for .length property access
             arraySizes[node->variableName] = arrLit->elements.size();
+        } else if (auto *callNode = dynamic_cast<FunctionCallNode*>(node->initializer.get())) {
+            if (callNode->functionName == "JSON.parse") {
+                typeToStore = "json";
+            } else if (callNode->functionName == "JSON.stringify") {
+                typeToStore = "string";
+            } else {
+                typeToStore = "i32"; // default
+            }
         } else {
             typeToStore = "i32"; // default
         }
@@ -829,8 +843,19 @@ llvm::Value *CodeGen::visit(FunctionCallNode *node)
             callResult = m_builder.CreateCall(function, args, "call");
             return callResult;
         }
+        }
+
+    if (node->functionName == "JSON.parse") {
+        if (node->arguments.size() != 1) {
+            throw std::runtime_error("JSON.parse expects exactly one argument.");
+        }
+        llvm::Value* argValue = visit(node->arguments[0].get());
+        if (!argValue) {
+            throw std::runtime_error("Failed to generate code for JSON.parse argument.");
+        }
+        return argValue;
     }
-    
+
     if (node->functionName == "JSON.stringify") {
         if (node->arguments.size() != 1) {
             throw std::runtime_error("JSON.stringify expects exactly one argument.");
@@ -1590,6 +1615,28 @@ llvm::Value *CodeGen::visit(ObjectAccessNode *node)
             auto typeIt = variableTypes.find(varExpr->name);
             if (typeIt != variableTypes.end()) {
                 std::string varType = typeIt->second;
+                
+                if (varType == "json") {
+                    auto namedValueIt = namedValues.find(varExpr->name);
+                    if (namedValueIt != namedValues.end()) {
+                        llvm::Value* jsonStrPtrAlloca = namedValueIt->second;
+                        llvm::Value* jsonStrPtr = m_builder.CreateLoad(
+                            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                            jsonStrPtrAlloca,
+                            "json_str_load"
+                        );
+                        
+                        llvm::Value* keyStr = m_builder.CreateGlobalString(node->property, ".json_key");
+                        
+                        llvm::FunctionCallee getAnyFunc = m_module->getOrInsertFunction("json_get_any",
+                            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+                            
+                        return m_builder.CreateCall(getAnyFunc, {jsonStrPtr, keyStr}, "json_get_any_call");
+                    }
+                }
+                
                 throw std::runtime_error("Codegen Error: Cannot access property '" + node->property + "' on variable '" + varExpr->name + "' of type '" + varType + "'. Property access is only supported on objects.");
             } else {
                 throw std::runtime_error("Codegen Error: Unknown variable '" + varExpr->name + "' in property access");

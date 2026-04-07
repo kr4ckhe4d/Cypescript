@@ -255,6 +255,11 @@ println(config);          // {"appName":"Cypescript IDE","version":"1.0.0","port
 // JSON Stringification (requires C++ integration)
 let jsonStr: string = JSON.stringify(config);
 println(jsonStr);         // {"appName":"Cypescript IDE","version":"1.0.0","port":8080,"debug":false}
+
+// JSON Parsing (requires C++ integration)
+let parsed = JSON.parse(jsonStr);
+println(parsed.appName);  // "Cypescript IDE"
+println(parsed.port);     // 8080
 ```
 
 ### Arithmetic Operations
@@ -440,18 +445,14 @@ println(user.age);      // 28
 println(user.role);     // Developer
 println(user.active);   // 1 (true)
 
-// Multiple objects
-let config = {
-    appName: "Cypescript IDE",
-    version: "1.0.0",
-    port: 8080,
-    debug: false
-};
+// Object printing and JSON stringification
+println(user);          // {"name":"Alice Johnson","age":28,"role":"Developer","active":true}
+let jsonStr: string = JSON.stringify(user);
+println(jsonStr);
 
-println("Configuration:");
-println(config.appName);  // Cypescript IDE
-println(config.port);     // 8080
-println(config.debug);    // 0 (false)
+// JSON Parsing
+let parsed = JSON.parse(jsonStr);
+println(parsed.name);   // Alice Johnson
 ```
 
 ### User-Defined Functions Demo
