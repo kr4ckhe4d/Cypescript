@@ -281,6 +281,16 @@ println(queue.length);   // 2
 for (const item of queue) {
     println(item);
 }
+
+// Advanced Collections (requires C++ integration)
+let visited: Set<string> = new Set<string>();
+visited.add("NodeA");
+println(visited.has("NodeA")); // 1
+
+let graph: Map<string, string[]> = new Map<string, string[]>();
+graph.set("NodeA", ["NodeB", "NodeC"]);
+let neighbors: string[] = graph.get("NodeA");
+println(neighbors.length);     // 2
 ```
 
 ### Arithmetic Operations

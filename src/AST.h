@@ -17,6 +17,7 @@ class VariableExpressionNode;
 class FunctionCallNode;
 class FunctionDeclarationNode;
 class MethodCallNode;
+class NewExpressionNode;
 class ReturnStatementNode;
 class ArrayLiteralNode;
 class ArrayAccessNode;
@@ -671,6 +672,40 @@ public:
         if (object) {
             object->printNode(os, indent + 2);
         }
+        printIndent(os, indent + 1);
+        os << "Arguments:\n";
+        for (const auto &arg : arguments)
+        {
+            if (arg) arg->printNode(os, indent + 2);
+        }
+        printIndent(os, indent);
+        os << ")\n";
+    }
+};
+
+// New expression (new Map<string, string[]>())
+class NewExpressionNode : public ExpressionNode
+{
+public:
+    std::string className;
+    std::vector<std::string> genericTypes;
+    std::vector<std::unique_ptr<ExpressionNode>> arguments;
+
+    NewExpressionNode(std::string name) : className(std::move(name)) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "NewExpressionNode: new " << className;
+        if (!genericTypes.empty()) {
+            os << "<";
+            for (size_t i = 0; i < genericTypes.size(); ++i) {
+                if (i > 0) os << ", ";
+                os << genericTypes[i];
+            }
+            os << ">";
+        }
+        os << "(\n";
         printIndent(os, indent + 1);
         os << "Arguments:\n";
         for (const auto &arg : arguments)

@@ -26,7 +26,72 @@ public:
     DynamicArray(Type t) : type(t) {}
 };
 
+#include <set>
+#include <unordered_set>
+#include <unordered_map>
+
+// ... DynamicArray implementation ...
+
+// Set implementation
+class DynamicSet {
+public:
+    enum class Type { I32, String };
+    Type type;
+    std::unordered_set<int32_t> i32_data;
+    std::unordered_set<std::string> string_data;
+    
+    DynamicSet(Type t) : type(t) {}
+};
+
+// Map implementation
+class DynamicMap {
+public:
+    enum class Type { StringToString, StringToI32, StringToObj };
+    Type type;
+    std::unordered_map<std::string, std::string> s_s_data;
+    std::unordered_map<std::string, int32_t> s_i_data;
+    std::unordered_map<std::string, void*> s_o_data;
+    
+    DynamicMap(Type t) : type(t) {}
+};
+
 extern "C" {
+    // --- Dynamic Set Interface ---
+    void* set_create_string() { return new DynamicSet(DynamicSet::Type::String); }
+    void* set_create_i32() { return new DynamicSet(DynamicSet::Type::I32); }
+    
+    void set_add_string(void* set_ptr, const char* val) {
+        auto* s = static_cast<DynamicSet*>(set_ptr);
+        if (s && val) s->string_data.insert(val);
+    }
+    
+    int32_t set_has_string(void* set_ptr, const char* val) {
+        auto* s = static_cast<DynamicSet*>(set_ptr);
+        if (!s || !val) return 0;
+        return s->string_data.count(val) > 0;
+    }
+
+    // --- Dynamic Map Interface ---
+    void* map_create_s_o() { return new DynamicMap(DynamicMap::Type::StringToObj); }
+    
+    void map_set_s_o(void* map_ptr, const char* key, void* val) {
+        auto* m = static_cast<DynamicMap*>(map_ptr);
+        if (m && key) m->s_o_data[key] = val;
+    }
+    
+    void* map_get_s_o(void* map_ptr, const char* key) {
+        auto* m = static_cast<DynamicMap*>(map_ptr);
+        if (!m || !key) return nullptr;
+        auto it = m->s_o_data.find(key);
+        return (it != m->s_o_data.end()) ? it->second : nullptr;
+    }
+    
+    int32_t map_has_s_o(void* map_ptr, const char* key) {
+        auto* m = static_cast<DynamicMap*>(map_ptr);
+        if (!m || !key) return 0;
+        return m->s_o_data.count(key) > 0;
+    }
+
     // ===================
     // DYNAMIC ARRAY FUNCTIONS
     // ===================

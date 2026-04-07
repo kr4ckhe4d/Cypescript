@@ -47,6 +47,11 @@ llvm::Type *CodeGen::getLLVMType(const std::string &typeName)
     {
         return llvm::Type::getVoidTy(m_context);
     }
+    else if (typeName.length() > 4 && (typeName.substr(0, 4) == "Set<" || typeName.substr(0, 4) == "Map<"))
+    {
+        // Generic collections are opaque pointers
+        return llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+    }
     else if (typeName.length() > 2 && typeName.substr(typeName.length() - 2) == "[]")
     {
         // For dynamic arrays implemented via cypescript_stdlib, it's an opaque pointer
@@ -406,6 +411,10 @@ llvm::Value *CodeGen::visit(ExpressionNode *node)
     else if (auto *methodCallNode = dynamic_cast<MethodCallNode *>(node))
     {
         return visit(methodCallNode);
+    }
+    else if (auto *newNode = dynamic_cast<NewExpressionNode *>(node))
+    {
+        return visit(newNode);
     }
     else if (auto *funcCallNode = dynamic_cast<FunctionCallNode *>(node))
     {
@@ -1831,7 +1840,95 @@ llvm::Value *CodeGen::visit(MethodCallNode *node)
         }
     }
     
+    // Is it a Set method?
+    if (varType.substr(0, 4) == "Set<") {
+        std::string elemType = varType.substr(4, varType.length() - 5);
+        
+        if (node->methodName == "add") {
+            if (node->arguments.size() != 1) throw std::runtime_error("Set.add() expects 1 argument");
+            llvm::Value *argValue = visit(node->arguments[0].get());
+            
+            if (elemType == "string") {
+                llvm::FunctionCallee addFunc = m_module->getOrInsertFunction("set_add_string",
+                    llvm::Type::getVoidTy(m_context),
+                    llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                    llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+                return m_builder.CreateCall(addFunc, {objectValue, argValue});
+            }
+        } else if (node->methodName == "has") {
+            if (node->arguments.size() != 1) throw std::runtime_error("Set.has() expects 1 argument");
+            llvm::Value *argValue = visit(node->arguments[0].get());
+            
+            if (elemType == "string") {
+                llvm::FunctionCallee hasFunc = m_module->getOrInsertFunction("set_has_string",
+                    llvm::Type::getInt32Ty(m_context),
+                    llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                    llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+                return m_builder.CreateCall(hasFunc, {objectValue, argValue}, "set_has_val");
+            }
+        }
+    }
+    
+    // Is it a Map method?
+    if (varType.substr(0, 4) == "Map<") {
+        if (node->methodName == "set") {
+            if (node->arguments.size() != 2) throw std::runtime_error("Map.set() expects 2 arguments");
+            llvm::Value *keyVal = visit(node->arguments[0].get());
+            llvm::Value *valVal = visit(node->arguments[1].get());
+            
+            // Map<string, object[]>
+            llvm::FunctionCallee setFunc = m_module->getOrInsertFunction("map_set_s_o",
+                llvm::Type::getVoidTy(m_context),
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+            return m_builder.CreateCall(setFunc, {objectValue, keyVal, valVal});
+        } else if (node->methodName == "get") {
+            if (node->arguments.size() != 1) throw std::runtime_error("Map.get() expects 1 argument");
+            llvm::Value *keyVal = visit(node->arguments[0].get());
+            
+            llvm::FunctionCallee getFunc = m_module->getOrInsertFunction("map_get_s_o",
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+            return m_builder.CreateCall(getFunc, {objectValue, keyVal}, "map_get_val");
+        } else if (node->methodName == "has") {
+            if (node->arguments.size() != 1) throw std::runtime_error("Map.has() expects 1 argument");
+            llvm::Value *keyVal = visit(node->arguments[0].get());
+            
+            llvm::FunctionCallee hasFunc = m_module->getOrInsertFunction("map_has_s_o",
+                llvm::Type::getInt32Ty(m_context),
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+            return m_builder.CreateCall(hasFunc, {objectValue, keyVal}, "map_has_val");
+        }
+    }
+    
     throw std::runtime_error("Codegen Error: Method '" + node->methodName + "' not supported on type '" + varType + "'");
+}
+
+llvm::Value *CodeGen::visit(NewExpressionNode *node)
+{
+    if (node->className == "Set") {
+        std::string elemType = !node->genericTypes.empty() ? node->genericTypes[0] : "string";
+        
+        llvm::FunctionCallee createFunc;
+        if (elemType == "string") {
+            createFunc = m_module->getOrInsertFunction("set_create_string",
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+        } else {
+            createFunc = m_module->getOrInsertFunction("set_create_i32",
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+        }
+        return m_builder.CreateCall(createFunc, {}, "set_ptr");
+    } else if (node->className == "Map") {
+        // For BFS, we mostly need Map<string, string[]>
+        llvm::FunctionCallee createFunc = m_module->getOrInsertFunction("map_create_s_o",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+        return m_builder.CreateCall(createFunc, {}, "map_ptr");
+    }
+    
+    throw std::runtime_error("Codegen Error: 'new " + node->className + "' is not supported");
 }
 
 // External function call support

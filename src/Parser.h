@@ -57,6 +57,8 @@ private:
     std::unique_ptr<ArrayLiteralNode> parseArrayLiteral();
     std::unique_ptr<ObjectLiteralNode> parseObjectLiteral();
     std::unique_ptr<ExpressionNode> parseArrayOrObjectAccess(std::unique_ptr<ExpressionNode> base);
+    std::string parseType();
+    std::unique_ptr<NewExpressionNode> parseNewExpression();
 
 public:
     // Constructor takes the vector of tokens

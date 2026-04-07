@@ -183,33 +183,7 @@ std::unique_ptr<VariableDeclarationNode> Parser::parseVariableDeclarationStateme
     // Check if there's a type annotation
     if (peek().type == TOK_COLON) {
         consume(TOK_COLON, "Expected ':' after variable name for type annotation");
-
-        // Handle both old identifier-based types and new specific type tokens
-        TokenType currentType = peek().type;
-        
-        if (currentType == TOK_TYPE_STRING || currentType == TOK_TYPE_I32 || 
-            currentType == TOK_TYPE_F64 || currentType == TOK_TYPE_BOOLEAN ||
-            currentType == TOK_TYPE_NUMBER) {
-            // New specific type tokens
-            const Token &typeToken = advance();
-            typeName = typeToken.value;
-        } else if (currentType == TOK_IDENTIFIER) {
-            // Legacy identifier-based types (for backward compatibility)
-            const Token &typeNameToken = consume(TOK_IDENTIFIER, "Expected type name after ':'");
-            typeName = typeNameToken.value;
-        } else {
-            std::string errorMsg = "Expected type name after ':'. Found " + 
-                                  std::string(tokenTypeToString(peek().type)) + " ('" + peek().value + "') instead.";
-            std::cerr << errorMsg << std::endl;
-            throw std::runtime_error(errorMsg);
-        }
-        
-        // Check for array type syntax: i32[]
-        if (peek().type == TOK_LBRACKET) {
-            advance(); // consume '['
-            consume(TOK_RBRACKET, "Expected ']' after '[' in array type");
-            typeName += "[]"; // Mark as array type
-        }
+        typeName = parseType();
     } else {
         // No explicit type annotation - infer from initializer
         typeName = "auto"; // We'll infer the type from the initializer
@@ -655,6 +629,10 @@ std::unique_ptr<ExpressionNode> Parser::parsePrimaryExpression()
         consume(TOK_RPAREN, "Expected ')' after expression");
         return expr;
     }
+    else if (peek().type == TOK_NEW)
+    {
+        return parseNewExpression();
+    }
     else if (peek().type == TOK_LBRACKET)
     {
         // Array literal [1, 2, 3]
@@ -776,6 +754,74 @@ std::unique_ptr<ExpressionNode> Parser::parseVariableExpression()
         // Check for array access [index] or object access .property
         return parseArrayOrObjectAccess(std::move(baseExpr));
     }
+}
+
+std::string Parser::parseType() {
+    std::string typeName;
+    
+    if (peek().isType()) {
+        typeName = advance().value;
+    } else if (peek().type == TOK_IDENTIFIER) {
+        typeName = advance().value;
+    } else {
+        throw std::runtime_error("Expected type name. Found " + std::string(tokenTypeToString(peek().type)));
+    }
+    
+    // Handle generics: Map<string, i32>
+    if (peek().type == TOK_LESS) {
+        advance(); // consume '<'
+        typeName += "<";
+        while (peek().type != TOK_GREATER) {
+            typeName += parseType();
+            if (peek().type == TOK_COMMA) {
+                advance(); // consume ','
+                typeName += ",";
+            }
+        }
+        consume(TOK_GREATER, "Expected '>' after generic types");
+        typeName += ">";
+    }
+    
+    // Handle arrays: string[]
+    while (peek().type == TOK_LBRACKET) {
+        advance(); // consume '['
+        consume(TOK_RBRACKET, "Expected ']' after '[' in array type");
+        typeName += "[]";
+    }
+    
+    return typeName;
+}
+
+std::unique_ptr<NewExpressionNode> Parser::parseNewExpression() {
+    consume(TOK_NEW, "Expected 'new' keyword");
+    const Token &nameToken = consume(TOK_IDENTIFIER, "Expected class name after 'new'");
+    
+    auto newNode = std::make_unique<NewExpressionNode>(nameToken.value);
+    
+    // Handle generics: new Map<string, i32>()
+    if (peek().type == TOK_LESS) {
+        advance(); // consume '<'
+        while (peek().type != TOK_GREATER) {
+            newNode->genericTypes.push_back(parseType());
+            if (peek().type == TOK_COMMA) {
+                advance(); // consume ','
+            }
+        }
+        consume(TOK_GREATER, "Expected '>' after generic types");
+    }
+    
+    consume(TOK_LPAREN, "Expected '(' in new expression");
+    if (peek().type != TOK_RPAREN) {
+        do {
+            newNode->arguments.push_back(parseExpression());
+            if (peek().type == TOK_COMMA) {
+                advance(); // consume ','
+            }
+        } while (peek().type != TOK_RPAREN && !isAtEnd());
+    }
+    consume(TOK_RPAREN, "Expected ')' after arguments");
+    
+    return newNode;
 }
 
 // --- Public Main Parsing Method ---
