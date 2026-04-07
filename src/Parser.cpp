@@ -378,7 +378,8 @@ bool Parser::isKnownFunction(const std::string& name)
     if (name == "json_create_object" || name == "json_create_array" ||
         name == "json_add_string" || name == "json_add_number" || name == "json_add_int" || name == "json_add_boolean" ||
         name == "json_get_string" || name == "json_get_number" || name == "json_get_int" || name == "json_get_boolean" ||
-        name == "json_is_valid" || name == "json_prettify" || name == "json_minify") {
+        name == "json_is_valid" || name == "json_prettify" || name == "json_minify" ||
+        name == "JSON.stringify" || name == "JSON.parse") {
         return true;
     }
     
@@ -674,6 +675,30 @@ std::unique_ptr<ExpressionNode> Parser::parseVariableExpression()
 {
     const Token &varToken = consume(TOK_IDENTIFIER, "Expected variable name.");
     
+    // Check for JSON namespace
+    if (varToken.value == "JSON" && peek().type == TOK_DOT) {
+        advance(); // consume '.'
+        const Token &methodToken = consume(TOK_IDENTIFIER, "Expected JSON method (stringify or parse)");
+        
+        auto callNode = std::make_unique<FunctionCallNode>("JSON." + methodToken.value);
+        consume(TOK_LPAREN, "Expected '(' after JSON." + methodToken.value);
+        
+        // Parse arguments
+        if (peek().type != TOK_RPAREN) {
+            do {
+                callNode->arguments.push_back(parseExpression());
+                if (peek().type == TOK_COMMA) {
+                    advance(); // consume ','
+                } else if (peek().type != TOK_RPAREN) {
+                    throw std::runtime_error("Expected ',' or ')' in JSON method arguments");
+                }
+            } while (peek().type != TOK_RPAREN && !isAtEnd());
+        }
+        
+        consume(TOK_RPAREN, "Expected ')' after JSON method arguments");
+        return callNode;
+    }
+
     // Check if this is a function call (any identifier followed by '(')
     if (peek().type == TOK_LPAREN) {
         // This is a function call in an expression context

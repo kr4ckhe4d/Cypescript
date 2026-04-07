@@ -17,9 +17,10 @@ public:
     };
     
     struct ObjectLayout {
-        std::map<std::string, PropertyInfo> properties;
+        std::vector<std::pair<std::string, PropertyInfo>> properties; // Preserve order
+        std::map<std::string, size_t> propertyIndices; // Fast lookup by name
         size_t totalSize;
-        llvm::StructType* structType;  // Changed from llvm::Type*
+        llvm::StructType* structType;
     };
     
 private:

@@ -12,7 +12,8 @@ ObjectOptimizer::ObjectLayout ObjectOptimizer::createObjectLayout(
     
     std::vector<llvm::Type*> structMembers;
     
-    for (const auto& prop : properties) {
+    for (size_t i = 0; i < properties.size(); i++) {
+        const auto& prop = properties[i];
         PropertyInfo info;
         info.offset = currentOffset;
         info.typeName = prop.second;
@@ -33,7 +34,11 @@ ObjectOptimizer::ObjectLayout ObjectOptimizer::createObjectLayout(
             currentOffset += 4;
         }
         
-        layout.properties[prop.first] = info;
+        // Store in order-preserving vector
+        layout.properties.push_back({prop.first, info});
+        // Store index for fast lookup
+        layout.propertyIndices[prop.first] = i;
+        
         structMembers.push_back(info.type);
     }
     
@@ -57,29 +62,21 @@ llvm::Value* ObjectOptimizer::generateDirectPropertyAccess(
     const std::string& property,
     const ObjectLayout& layout) {
     
-    // Check cache first (Phase 1 optimization)
-    std::string cacheKey = "prop_" + property;
-    llvm::Value* cached = getCachedProperty(cacheKey);
-    if (cached) {
-        return cached;
-    }
-    
-    // Find property in layout
-    auto propIt = layout.properties.find(property);
-    if (propIt == layout.properties.end()) {
+    // Find property index using fast lookup
+    auto indexIt = layout.propertyIndices.find(property);
+    if (indexIt == layout.propertyIndices.end()) {
         return nullptr; // Property not found
     }
     
-    const PropertyInfo& propInfo = propIt->second;
+    size_t memberIndex = indexIt->second;
+    const PropertyInfo& propInfo = layout.properties[memberIndex].second;
     
-    // Calculate struct member index (much faster than offset calculation)
-    size_t memberIndex = 0;
-    for (const auto& layoutProp : layout.properties) {
-        if (layoutProp.first == property) {
-            break;
-        }
-        memberIndex++;
-    }
+    // Generate unique instruction names to avoid LLVM IR conflicts
+    static size_t instructionCounter = 0;
+    instructionCounter++;
+    
+    std::string ptrName = property + "_ptr_" + std::to_string(instructionCounter);
+    std::string valName = property + "_val_" + std::to_string(instructionCounter);
     
     // Generate direct struct member access - CRITICAL OPTIMIZATION
     // This replaces 4+ hash map lookups with a single GEP instruction!
@@ -92,14 +89,11 @@ llvm::Value* ObjectOptimizer::generateDirectPropertyAccess(
         layout.structType,
         objectPtr,
         indices,
-        property + "_ptr"
+        ptrName
     );
     
     // Load the value - single instruction instead of multiple lookups
-    llvm::Value* value = builder.CreateLoad(propInfo.type, memberPtr, property + "_val");
-    
-    // Cache for future access (Phase 1 optimization)
-    cachePropertyAccess(cacheKey, value);
+    llvm::Value* value = builder.CreateLoad(propInfo.type, memberPtr, valName);
     
     return value;
 }
@@ -153,24 +147,20 @@ llvm::Value* OptimizedObjectCreator::createOptimizedObject(
     );
     
     // Initialize struct members directly - no hash map overhead
-    size_t valueIndex = 0;
-    for (const auto& prop : layout.properties) {
-        if (valueIndex < propertyValues.size()) {
-            std::vector<llvm::Value*> indices = {
-                llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0),
-                llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), valueIndex)
-            };
-            
-            llvm::Value* memberPtr = builder.CreateGEP(
-                layout.structType,
-                objectPtr,
-                indices,
-                prop.first + "_init_ptr"
-            );
-            
-            builder.CreateStore(propertyValues[valueIndex], memberPtr);
-            valueIndex++;
-        }
+    for (size_t i = 0; i < layout.properties.size() && i < propertyValues.size(); i++) {
+        std::vector<llvm::Value*> indices = {
+            llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0),
+            llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), i)
+        };
+        
+        llvm::Value* memberPtr = builder.CreateGEP(
+            layout.structType,
+            objectPtr,
+            indices,
+            layout.properties[i].first + "_init_ptr"
+        );
+        
+        builder.CreateStore(propertyValues[i], memberPtr);
     }
     
     return objectPtr;

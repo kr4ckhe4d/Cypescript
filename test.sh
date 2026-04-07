@@ -25,13 +25,14 @@ if [[ ! -f "example/hello.csc" ]]; then
     mkdir -p example
     cat > example/hello.csc << 'EOF'
 let message: string = "Hello, Cypescript!";
-print(message);
+println(message);
 
-let number: i32 = 42;
-print(number);
+let num: i32 = 42;
+println(num);
 
-print("Direct string test");
-print(123);
+let user = { name: "Tester", active: true };
+println(user.name);
+println(user);
 EOF
     echo -e "${GREEN}✓ Created example/hello.csc${NC}"
 fi

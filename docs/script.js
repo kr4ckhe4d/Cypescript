@@ -369,28 +369,28 @@ function initializePerformanceCharts() {
         new Chart(multiLanguageCtx, {
             type: 'bar',
             data: {
-                labels: ['Array Processing', 'Complex Objects', 'Intensive Computation'],
+                labels: ['Array Processing', 'Object Property Access (2.5M)', 'Intensive Computation'],
                 datasets: [{
                     label: 'JavaScript',
-                    data: [98, 0.57, 723],
+                    data: [98, 3.74, 723],
                     backgroundColor: 'rgba(243, 156, 18, 0.8)',
                     borderColor: 'rgba(243, 156, 18, 1)',
                     borderWidth: 2
                 }, {
-                    label: 'Cypescript (Memory-Opt ✅)',
-                    data: [301, 466, 986],
-                    backgroundColor: 'rgba(39, 174, 96, 0.8)',
-                    borderColor: 'rgba(39, 174, 96, 1)',
+                    label: 'Cypescript (Phase 1 ✅)',
+                    data: [301, 339, 986],
+                    backgroundColor: 'rgba(46, 204, 113, 0.8)',
+                    borderColor: 'rgba(46, 204, 113, 1)',
                     borderWidth: 2
                 }, {
-                    label: 'Cypescript (Basic)',
-                    data: [438, null, null], // Only array processing tested
+                    label: 'Cypescript (Pre-Phase 1)',
+                    data: [438, 720, 986],
                     backgroundColor: 'rgba(231, 76, 60, 0.8)',
                     borderColor: 'rgba(231, 76, 60, 1)',
                     borderWidth: 2
                 }, {
                     label: 'Python',
-                    data: [644, 9.20, 94666],
+                    data: [644, 82.71, 94666],
                     backgroundColor: 'rgba(52, 152, 219, 0.8)',
                     borderColor: 'rgba(52, 152, 219, 1)',
                     borderWidth: 2
@@ -401,7 +401,7 @@ function initializePerformanceCharts() {
                 plugins: {
                     title: {
                         display: true,
-                        text: 'Multi-Language Performance: Complex Objects + Memory Optimization!',
+                        text: '🔥 Phase 1 ObjectOptimizer: 2.1x Performance Improvement!',
                         font: { size: 16, weight: 'bold' },
                         color: 'white'
                     },
@@ -411,13 +411,15 @@ function initializePerformanceCharts() {
                     tooltip: {
                         callbacks: {
                             afterLabel: function(context) {
-                                if (context.label === 'Complex Objects') {
+                                if (context.label === 'Object Property Access (2.5M)') {
                                     if (context.dataset.label === 'JavaScript') {
-                                        return '250K property accesses';
-                                    } else if (context.dataset.label.includes('Cypescript')) {
-                                        return '2.5M property accesses (10x scale!)';
+                                        return '668,449 accesses/ms';
+                                    } else if (context.dataset.label === 'Cypescript (Phase 1 ✅)') {
+                                        return '7.37M accesses/sec - 2.1x faster!';
+                                    } else if (context.dataset.label === 'Cypescript (Pre-Phase 1)') {
+                                        return '3.47M accesses/sec';
                                     } else if (context.dataset.label === 'Python') {
-                                        return '250K property accesses';
+                                        return '30,226 accesses/ms';
                                     }
                                 }
                                 return '';
@@ -550,7 +552,71 @@ function initializePerformanceCharts() {
         });
     }
     
-    // 4. C++ Integration Performance Chart
+    // 4. Phase 1 ObjectOptimizer Performance Chart
+    const phase1Ctx = document.getElementById('phase1OptimizationChart');
+    if (phase1Ctx) {
+        new Chart(phase1Ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Pre-Phase 1', 'Phase 1 Optimized'],
+                datasets: [{
+                    label: '2.5M Property Accesses (ms)',
+                    data: [720, 339],
+                    backgroundColor: [
+                        'rgba(231, 76, 60, 0.8)',   // Pre-Phase 1 (red)
+                        'rgba(46, 204, 113, 0.8)'   // Phase 1 (green)
+                    ],
+                    borderColor: [
+                        'rgba(231, 76, 60, 1)',
+                        'rgba(46, 204, 113, 1)'
+                    ],
+                    borderWidth: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: '🚀 Phase 1 ObjectOptimizer: 2.1x Performance Improvement',
+                        font: { size: 16, weight: 'bold' },
+                        color: 'white'
+                    },
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: function(context) {
+                                if (context.label === 'Pre-Phase 1') {
+                                    return '3.47M accesses/sec';
+                                } else if (context.label === 'Phase 1 Optimized') {
+                                    return '7.37M accesses/sec - 2.1x faster!';
+                                }
+                                return '';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Execution Time (ms)',
+                            color: 'white'
+                        },
+                        ticks: { color: 'white' },
+                        grid: { color: 'rgba(255, 255, 255, 0.2)' }
+                    },
+                    x: {
+                        ticks: { color: 'white' },
+                        grid: { color: 'rgba(255, 255, 255, 0.2)' }
+                    }
+                }
+            }
+        });
+    }
+    
+    // 5. C++ Integration Performance Chart
     const cppCtx = document.getElementById('cppIntegrationChart');
     if (cppCtx) {
         new Chart(cppCtx, {
@@ -584,7 +650,7 @@ function initializePerformanceCharts() {
         });
     }
     
-    // 5. Small Workload Future Performance Chart
+    // 6. Small Workload Future Performance Chart
     const smallWorkloadCtx = document.getElementById('smallWorkloadChart');
     if (smallWorkloadCtx) {
         new Chart(smallWorkloadCtx, {
@@ -627,7 +693,7 @@ function initializePerformanceCharts() {
         });
     }
     
-    // 6. Large Workload Future Performance Chart
+    // 7. Large Workload Future Performance Chart
     const largeWorkloadCtx = document.getElementById('largeWorkloadChart');
     if (largeWorkloadCtx) {
         new Chart(largeWorkloadCtx, {

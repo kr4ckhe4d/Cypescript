@@ -250,6 +250,11 @@ let config = {
 
 println(config.appName);  // "Cypescript IDE"
 println(config.port);     // 8080
+println(config);          // {"appName":"Cypescript IDE","version":"1.0.0","port":8080,"debug":false}
+
+// JSON Stringification (requires C++ integration)
+let jsonStr: string = JSON.stringify(config);
+println(jsonStr);         // {"appName":"Cypescript IDE","version":"1.0.0","port":8080,"debug":false}
 ```
 
 ### Arithmetic Operations

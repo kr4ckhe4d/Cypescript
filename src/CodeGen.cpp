@@ -223,8 +223,9 @@ void CodeGen::visit(VariableDeclarationNode *node)
             } else if (auto *boolLit = dynamic_cast<BooleanLiteralNode*>(node->initializer.get())) {
                 varLLVMType = llvm::Type::getInt32Ty(m_context); // Booleans are stored as i32
             } else if (auto *objLit = dynamic_cast<ObjectLiteralNode*>(node->initializer.get())) {
-                // Object literal - store as i32 for now (object ID)
-                varLLVMType = llvm::Type::getInt32Ty(m_context);
+                // Object literal - we'll determine the actual struct type during object creation
+                // For now, use a generic pointer that will be cast appropriately
+                varLLVMType = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
                 
                 // Track this variable as an object
                 std::string objectKey = "obj_" + std::to_string(reinterpret_cast<uintptr_t>(objLit));
@@ -310,6 +311,16 @@ void CodeGen::visit(VariableDeclarationNode *node)
                 m_builder.CreateStore(initVal, allocaInst);
             } else {
                 std::cerr << "Codegen Warning: Array type mismatch for variable '" << node->variableName << "'\n";
+                m_builder.CreateStore(initVal, allocaInst);
+            }
+        } else if (auto *objLit = dynamic_cast<ObjectLiteralNode*>(node->initializer.get())) {
+            // Special handling for object assignments - cast struct pointer to generic pointer
+            if (initVal->getType()->isPointerTy() && varLLVMType->isPointerTy()) {
+                // Cast the struct pointer to the generic pointer type for storage
+                llvm::Value* castedPtr = m_builder.CreateBitCast(initVal, varLLVMType, "obj_cast");
+                m_builder.CreateStore(castedPtr, allocaInst);
+            } else {
+                std::cerr << "Codegen Warning: Object type mismatch for variable '" << node->variableName << "'\n";
                 m_builder.CreateStore(initVal, allocaInst);
             }
         } else {
@@ -820,12 +831,253 @@ llvm::Value *CodeGen::visit(FunctionCallNode *node)
         }
     }
     
+    if (node->functionName == "JSON.stringify") {
+        if (node->arguments.size() != 1) {
+            throw std::runtime_error("JSON.stringify expects exactly one argument.");
+        }
+        
+        bool isObject = false;
+        std::string objectKey;
+        if (auto* varExpr = dynamic_cast<VariableExpressionNode*>(node->arguments[0].get())) {
+            auto objKeyIt = variableToObjectKey.find(varExpr->name);
+            if (objKeyIt != variableToObjectKey.end()) {
+                isObject = true;
+                objectKey = objKeyIt->second;
+            }
+        }
+        
+        if (isObject) {
+            auto layoutIt = objectLayouts.find(objectKey);
+            if (layoutIt != objectLayouts.end()) {
+                const ObjectOptimizer::ObjectLayout& layout = layoutIt->second;
+                
+                auto namedValueIt = namedValues.find(dynamic_cast<VariableExpressionNode*>(node->arguments[0].get())->name);
+                if (namedValueIt != namedValues.end()) {
+                    llvm::Value* objectPtrAlloca = namedValueIt->second;
+                    llvm::Value* objectPtr = m_builder.CreateLoad(
+                        llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                        objectPtrAlloca,
+                        "obj_ptr_load"
+                    );
+                    llvm::Value* structPtr = m_builder.CreateBitCast(
+                        objectPtr,
+                        llvm::PointerType::get(layout.structType, 0),
+                        "struct_cast"
+                    );
+                    
+                    llvm::FunctionCallee createObjFunc = m_module->getOrInsertFunction("json_create_object",
+                        llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+                    llvm::Value* jsonObj = m_builder.CreateCall(createObjFunc, {}, "json_obj");
+                    
+                    for (const auto& prop : layout.properties) {
+                        llvm::Value* keyStr = m_builder.CreateGlobalString(prop.first, ".json_key");
+                        llvm::Value* propValue = objectOptimizer.generateDirectPropertyAccess(
+                            m_builder, structPtr, prop.first, layout);
+                        
+                        if (prop.second.typeName == "string") {
+                            llvm::FunctionCallee addStrFunc = m_module->getOrInsertFunction("json_add_string",
+                                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+                            jsonObj = m_builder.CreateCall(addStrFunc, {jsonObj, keyStr, propValue}, "json_add");
+                        } else if (prop.second.typeName == "i32") {
+                            llvm::FunctionCallee addIntFunc = m_module->getOrInsertFunction("json_add_int",
+                                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                                llvm::Type::getInt32Ty(m_context));
+                            jsonObj = m_builder.CreateCall(addIntFunc, {jsonObj, keyStr, propValue}, "json_add");
+                        } else if (prop.second.typeName == "boolean") {
+                            llvm::FunctionCallee addBoolFunc = m_module->getOrInsertFunction("json_add_boolean",
+                                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                                llvm::Type::getInt32Ty(m_context));
+                            jsonObj = m_builder.CreateCall(addBoolFunc, {jsonObj, keyStr, propValue}, "json_add");
+                        }
+                    }
+                    
+                    return jsonObj;
+                }
+            } else {
+                // Legacy object handling
+                auto propertiesIt = objectProperties.find(objectKey);
+                if (propertiesIt != objectProperties.end()) {
+                    auto& properties = propertiesIt->second;
+                    auto& propertyTypes = objectPropertyTypes[objectKey];
+                    
+                    llvm::FunctionCallee createObjFunc = m_module->getOrInsertFunction("json_create_object",
+                        llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+                    llvm::Value* jsonObj = m_builder.CreateCall(createObjFunc, {}, "json_obj");
+                    
+                    for (const auto& pair : properties) {
+                        llvm::Value* keyStr = m_builder.CreateGlobalString(pair.first, ".json_key");
+                        llvm::Value* propValue = pair.second;
+                        std::string propType = propertyTypes[pair.first];
+                        
+                        if (propType == "string") {
+                            llvm::FunctionCallee addStrFunc = m_module->getOrInsertFunction("json_add_string",
+                                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+                            jsonObj = m_builder.CreateCall(addStrFunc, {jsonObj, keyStr, propValue}, "json_add");
+                        } else if (propType == "i32") {
+                            llvm::Value* loadedVal = m_builder.CreateLoad(llvm::Type::getInt32Ty(m_context), propValue);
+                            llvm::FunctionCallee addIntFunc = m_module->getOrInsertFunction("json_add_int",
+                                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                                llvm::Type::getInt32Ty(m_context));
+                            jsonObj = m_builder.CreateCall(addIntFunc, {jsonObj, keyStr, loadedVal}, "json_add");
+                        } else if (propType == "boolean") {
+                            llvm::Value* loadedVal = m_builder.CreateLoad(llvm::Type::getInt32Ty(m_context), propValue);
+                            llvm::FunctionCallee addBoolFunc = m_module->getOrInsertFunction("json_add_boolean",
+                                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                                llvm::Type::getInt32Ty(m_context));
+                            jsonObj = m_builder.CreateCall(addBoolFunc, {jsonObj, keyStr, loadedVal}, "json_add");
+                        }
+                    }
+                    
+                    return jsonObj;
+                }
+            }
+        }
+        
+        throw std::runtime_error("JSON.stringify only supports object variables currently.");
+    }
+
     if (node->functionName == "print" || node->functionName == "println")
     {
         if (node->arguments.size() != 1)
         {
             std::cerr << "Codegen Error: '" << node->functionName << "' expects exactly one argument.\n";
             throw std::runtime_error("'" + node->functionName + "' expects one argument.");
+        }
+
+        bool addNewline = (node->functionName == "println");
+
+        // CHECK FOR OBJECT
+        bool isObject = false;
+        std::string objectKey;
+        if (auto* varExpr = dynamic_cast<VariableExpressionNode*>(node->arguments[0].get())) {
+            auto objKeyIt = variableToObjectKey.find(varExpr->name);
+            if (objKeyIt != variableToObjectKey.end()) {
+                isObject = true;
+                objectKey = objKeyIt->second;
+            }
+        }
+
+        if (isObject) {
+            auto layoutIt = objectLayouts.find(objectKey);
+            if (layoutIt != objectLayouts.end()) {
+                const ObjectOptimizer::ObjectLayout& layout = layoutIt->second;
+                
+                auto namedValueIt = namedValues.find(dynamic_cast<VariableExpressionNode*>(node->arguments[0].get())->name);
+                if (namedValueIt != namedValues.end()) {
+                    llvm::Value* objectPtrAlloca = namedValueIt->second;
+                    llvm::Value* objectPtr = m_builder.CreateLoad(
+                        llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                        objectPtrAlloca,
+                        "obj_ptr_load"
+                    );
+                    llvm::Value* structPtr = m_builder.CreateBitCast(
+                        objectPtr,
+                        llvm::PointerType::get(layout.structType, 0),
+                        "struct_cast"
+                    );
+                    
+                    std::string formatString = "{";
+                    std::vector<llvm::Value*> printfArgs;
+                    printfArgs.push_back(nullptr); // Placeholder for format string
+                    
+                    for (size_t i = 0; i < layout.properties.size(); ++i) {
+                        const auto& prop = layout.properties[i];
+                        if (i > 0) formatString += ",";
+                        formatString += "\"" + prop.first + "\":";
+                        
+                        llvm::Value* propValue = objectOptimizer.generateDirectPropertyAccess(
+                            m_builder, structPtr, prop.first, layout);
+                        
+                        if (prop.second.typeName == "string") {
+                            formatString += "\"%s\"";
+                            printfArgs.push_back(propValue);
+                        } else if (prop.second.typeName == "i32") {
+                            formatString += "%d";
+                            printfArgs.push_back(propValue);
+                        } else if (prop.second.typeName == "boolean") {
+                            formatString += "%s";
+                            llvm::Value* isTrue = m_builder.CreateICmpNE(propValue, llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), 0));
+                            llvm::Value* trueStr = m_builder.CreateGlobalString("true", ".true_str");
+                            llvm::Value* falseStr = m_builder.CreateGlobalString("false", ".false_str");
+                            llvm::Value* boolStr = m_builder.CreateSelect(isTrue, trueStr, falseStr);
+                            printfArgs.push_back(boolStr);
+                        } else {
+                            formatString += "%d";
+                            printfArgs.push_back(propValue);
+                        }
+                    }
+                    
+                    formatString += "}";
+                    if (addNewline) formatString += "\n";
+                    
+                    llvm::Value* formatStrVal = m_builder.CreateGlobalString(formatString, ".obj_format");
+                    printfArgs[0] = formatStrVal;
+                    
+                    llvm::FunctionCallee printfFunc = getOrDeclarePrintf();
+                    return m_builder.CreateCall(printfFunc, printfArgs, "printfCall");
+                }
+            } else {
+                // Legacy object handling
+                auto propertiesIt = objectProperties.find(objectKey);
+                if (propertiesIt != objectProperties.end()) {
+                    auto& properties = propertiesIt->second;
+                    auto& propertyTypes = objectPropertyTypes[objectKey];
+                    
+                    std::string formatString = "{";
+                    std::vector<llvm::Value*> printfArgs;
+                    printfArgs.push_back(nullptr); // Placeholder
+                    
+                    bool first = true;
+                    for (const auto& pair : properties) {
+                        if (!first) formatString += ",";
+                        first = false;
+                        
+                        formatString += "\"" + pair.first + "\":";
+                        llvm::Value* propValue = pair.second;
+                        std::string propType = propertyTypes[pair.first];
+                        
+                        if (propType == "string") {
+                            formatString += "\"%s\"";
+                            printfArgs.push_back(propValue);
+                        } else if (propType == "i32") {
+                            formatString += "%d";
+                            llvm::Value* loadedVal = m_builder.CreateLoad(llvm::Type::getInt32Ty(m_context), propValue);
+                            printfArgs.push_back(loadedVal);
+                        } else if (propType == "boolean") {
+                            formatString += "%s";
+                            llvm::Value* loadedVal = m_builder.CreateLoad(llvm::Type::getInt32Ty(m_context), propValue);
+                            llvm::Value* isTrue = m_builder.CreateICmpNE(loadedVal, llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), 0));
+                            llvm::Value* trueStr = m_builder.CreateGlobalString("true", ".true_str");
+                            llvm::Value* falseStr = m_builder.CreateGlobalString("false", ".false_str");
+                            llvm::Value* boolStr = m_builder.CreateSelect(isTrue, trueStr, falseStr);
+                            printfArgs.push_back(boolStr);
+                        }
+                    }
+                    
+                    formatString += "}";
+                    if (addNewline) formatString += "\n";
+                    
+                    llvm::Value* formatStrVal = m_builder.CreateGlobalString(formatString, ".obj_format");
+                    printfArgs[0] = formatStrVal;
+                    
+                    llvm::FunctionCallee printfFunc = getOrDeclarePrintf();
+                    return m_builder.CreateCall(printfFunc, printfArgs, "printfCall");
+                }
+            }
         }
 
         llvm::Value *argValue = visit(node->arguments[0].get());
@@ -836,7 +1088,6 @@ llvm::Value *CodeGen::visit(FunctionCallNode *node)
         }
 
         llvm::Type *argType = argValue->getType();
-        bool addNewline = (node->functionName == "println");
 
         if (argType->isPointerTy())
         {
@@ -1258,12 +1509,26 @@ llvm::Value *CodeGen::visit(ObjectAccessNode *node)
                 // Get the object pointer from named values
                 auto namedValueIt = namedValues.find(varExpr->name);
                 if (namedValueIt != namedValues.end()) {
-                    llvm::Value* objectPtr = namedValueIt->second;
+                    llvm::Value* objectPtrAlloca = namedValueIt->second;
+                    
+                    // Load the actual object pointer from the variable
+                    llvm::Value* objectPtr = m_builder.CreateLoad(
+                        llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                        objectPtrAlloca,
+                        "obj_ptr_load"
+                    );
+                    
+                    // Cast the generic pointer back to the struct type
+                    llvm::Value* structPtr = m_builder.CreateBitCast(
+                        objectPtr,
+                        llvm::PointerType::get(layout.structType, 0),
+                        "struct_cast"
+                    );
                     
                     // Use optimized property access (10-50x faster than hash maps)
                     llvm::Value* optimizedValue = objectOptimizer.generateDirectPropertyAccess(
                         m_builder,
-                        objectPtr,
+                        structPtr,
                         node->property,
                         layout
                     );
