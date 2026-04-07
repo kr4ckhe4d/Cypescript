@@ -74,7 +74,7 @@ std::unique_ptr<ProgramNode> Parser::parseProgram()
 
 std::unique_ptr<StatementNode> Parser::parseStatement()
 {
-    if (peek().type == TOK_LET)
+    if (peek().type == TOK_LET || peek().type == TOK_CONST)
     {
         return parseVariableDeclarationStatement();
     }
@@ -161,9 +161,15 @@ std::unique_ptr<StatementNode> Parser::parseStatement()
 
 std::unique_ptr<VariableDeclarationNode> Parser::parseVariableDeclarationStatement()
 {
-    consume(TOK_LET, "Expected 'let' keyword");
+    bool isConst = false;
+    if (peek().type == TOK_CONST) {
+        consume(TOK_CONST, "Expected 'const' keyword");
+        isConst = true;
+    } else {
+        consume(TOK_LET, "Expected 'let' keyword");
+    }
 
-    const Token &varNameToken = consume(TOK_IDENTIFIER, "Expected variable name after 'let'");
+    const Token &varNameToken = consume(TOK_IDENTIFIER, "Expected variable name after declaration keyword");
     std::string varName = varNameToken.value;
 
     std::string typeName;
@@ -209,7 +215,7 @@ std::unique_ptr<VariableDeclarationNode> Parser::parseVariableDeclarationStateme
 
     consume(TOK_SEMICOLON, "Expected ';' after variable declaration statement");
 
-    return std::make_unique<VariableDeclarationNode>(varName, typeName, std::move(initializer));
+    return std::make_unique<VariableDeclarationNode>(varName, typeName, std::move(initializer), isConst);
 }
 
 std::unique_ptr<IfStatementNode> Parser::parseIfStatement()

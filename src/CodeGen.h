@@ -53,7 +53,10 @@ private:
     // Type tracking: Maps variable names to their type information
     // For arrays, stores the element type (e.g., "i32" for i32[], "string" for string[])
     std::map<std::string, std::string> variableTypes;
-    
+
+    // Const tracking: Maps variable names to boolean (true if const)
+    std::map<std::string, bool> constVariables;
+
     // Array size tracking: Maps array variable names to their sizes
     std::map<std::string, size_t> arraySizes;
     

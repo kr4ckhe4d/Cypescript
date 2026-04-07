@@ -594,14 +594,15 @@ public:
     std::string variableName;
     std::string typeName;
     std::unique_ptr<ExpressionNode> initializer;
+    bool isConst;
 
-    VariableDeclarationNode(std::string varName, std::string type, std::unique_ptr<ExpressionNode> init)
-        : variableName(std::move(varName)), typeName(std::move(type)), initializer(std::move(init)) {}
+    VariableDeclarationNode(std::string varName, std::string type, std::unique_ptr<ExpressionNode> init, bool isConstVal = false)
+        : variableName(std::move(varName)), typeName(std::move(type)), initializer(std::move(init)), isConst(isConstVal) {}
 
     void printNode(llvm::raw_ostream &os, int indent = 0) const override
     {
         printIndent(os, indent);
-        os << "VariableDeclarationNode: " << variableName << " : " << typeName << " =\n";
+        os << "VariableDeclarationNode: " << (isConst ? "const " : "let ") << variableName << " : " << typeName << " =\n";
         if (initializer)
         {
             initializer->printNode(os, indent + 1);

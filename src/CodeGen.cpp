@@ -307,6 +307,7 @@ void CodeGen::visit(VariableDeclarationNode *node)
         }
     }
     variableTypes[node->variableName] = typeToStore;
+    constVariables[node->variableName] = node->isConst;
 
     if (node->initializer)
     {
@@ -627,9 +628,14 @@ void CodeGen::visit(AssignmentStatementNode *node)
     if (it == namedValues.end()) {
         throw std::runtime_error("Codegen Error: Undefined variable '" + node->variableName + "'");
     }
-    
-    llvm::AllocaInst *varAlloca = it->second;
-    
+
+    // Check if the variable is const
+    auto constIt = constVariables.find(node->variableName);
+    if (constIt != constVariables.end() && constIt->second) {
+        throw std::runtime_error("Codegen Error: Cannot reassign to const variable '" + node->variableName + "'");
+    }
+
+    llvm::AllocaInst *varAlloca = it->second;    
     // Generate code for the value expression
     llvm::Value *value = visit(node->value.get());
     if (!value) {
