@@ -276,7 +276,7 @@ int main(int argc, char** argv) {
             // For a distributed app, this would be in a fixed location
             std::string stdlibPath = "src/cypescript_stdlib.cpp";
             
-            std::string compileCmd = "clang++ " + irFile + " " + stdlibPath + " -o " + executableName + " -std=c++17";
+            std::string compileCmd = "clang++ -O2 " + irFile + " " + stdlibPath + " -o " + executableName + " -std=c++17";
             if (opts.verbose) {
                 llvm::outs() << "Running: " << Colors::CYAN << compileCmd << Colors::RESET << "\n";
             }

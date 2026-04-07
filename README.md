@@ -69,7 +69,13 @@ This will install:
 ./test.sh
 ```
 
-### 4. View Documentation
+### 4. Run Benchmarks
+
+```bash
+./benchmarks/run_benchmarks.sh
+```
+
+### 5. View Documentation
 
 ```bash
 ./launch-docs.sh
@@ -185,33 +191,27 @@ Cypescript now includes multiple optimization levels for different use cases:
 ```
 
 ### **Performance Characteristics**
-- **vs JavaScript:** 3.1x slower (reduced from 4.5x through memory optimization)
-- **vs Python:** 2x faster on small workloads, **131x faster** on intensive computation
-- **Memory optimization:** 31.3% performance improvement over basic compilation
+- **vs JavaScript (Node.js):** Cypescript is **3x–17x faster** with `-O2` optimizations
+- **Simple loops:** 8x faster than Node.js
+- **Function-heavy code (Fibonacci):** 3x faster than Node.js
+- **Nested loops (Matrix):** 17x faster than Node.js
+- **Branch-heavy code (Primes):** 7x faster than Node.js
 - **NEON SIMD:** 4x parallel processing validated on Apple Silicon
-- **Complex Objects:** Handles 2.5M property accesses at enterprise scale
 
-**Multi-Language Benchmark Results:**
+**Benchmark Results (Cypescript -O2 vs Node.js v22):**
 ```
-Array Processing (Small Workloads):
-🥇 JavaScript: 98ms
-🥈 Cypescript (Memory-Optimized): 301ms  
-🥉 Cypescript (Advanced): 302ms
-🥉 Cypescript (Basic): 438ms
-4️⃣ Python: 644ms
-
-Complex Object Processing (Enterprise Scale):
-🥇 JavaScript: 0.57ms (250K property accesses)
-🥈 Cypescript: ~466ms (2.5M property accesses - 10x larger scale!)
-🥉 Python: 9.20ms (250K property accesses - 16x slower than JS)
-
-Intensive Computation (Large Workloads):
-🥇 JavaScript: 723ms
-🥈 Cypescript (Memory-Optimized): 986ms
-🥉 Python: 94,666ms (131x slower!)
+Benchmark                    Cypescript     Node.js     Speedup
+─────────────────────────────────────────────────────────────────
+Simple Loop (100M)              17ms        142ms       8.3x 🔥
+Fibonacci (10M calls)           63ms        189ms       3.0x 🔥
+Matrix Multiply (300³)           6ms        101ms      16.8x 🔥
+Prime Sieve (500K)              13ms         87ms       6.6x 🔥
 ```
 
-See the **interactive performance documentation** for detailed benchmarks and charts!
+Run benchmarks yourself:
+```bash
+./benchmarks/run_benchmarks.sh
+```
 
 ## Language Syntax
 
@@ -656,40 +656,39 @@ Cypescript/
 │   ├── CodeGen.cpp/h # LLVM IR generation
 │   ├── Token.h       # Token definitions
 │   └── cypescript_stdlib.cpp # C++ standard library
+├── tests/
+│   ├── run_tests.sh  # Test suite runner
+│   ├── test_variables.csc    # Variable declarations
+│   ├── test_arithmetic.csc   # Arithmetic operations
+│   ├── test_if_else.csc      # Control flow
+│   ├── test_for.csc          # For loops
+│   ├── test_while.csc        # While loops
+│   ├── test_do_while.csc     # Do-while loops
+│   ├── test_functions.csc    # User-defined functions
+│   ├── test_arrays.csc       # Arrays and array.length
+│   └── test_objects.csc      # Native objects
+├── benchmarks/
+│   ├── run_benchmarks.sh     # Benchmark suite runner
+│   ├── benchmark_simple.csc  # Simple loop (100M iterations)
+│   ├── benchmark_simple.ts   # Node.js comparison
+│   ├── bench_fibonacci.csc   # Fibonacci (10M function calls)
+│   ├── bench_fibonacci.ts    # Node.js comparison
+│   ├── bench_matrix.csc      # Matrix multiply (300³ nested loops)
+│   ├── bench_matrix.ts       # Node.js comparison
+│   ├── bench_primes.csc      # Prime sieve (500K)
+│   └── bench_primes.ts       # Node.js comparison
 ├── example/
 │   ├── README.md     # Example organization guide
-│   ├── property_access_test.csc # 🔥 NEW! Native object property access
-│   ├── typescript_objects_native.csc # 🔥 NEW! TypeScript-style objects
-│   ├── functions_demo.csc # User-defined functions demo
 │   ├── basic/        # Basic examples (native compilation)
-│   │   ├── hello.csc # Basic variables and printing
-│   │   ├── arithmetic.csc # Arithmetic operations
-│   │   ├── control_flow.csc # If/else statements
-│   │   ├── all_loops.csc # All loop types
-│   │   ├── array_length_test.csc # Array operations
-│   │   └── comprehensive.csc # Complex algorithms
-│   ├── cpp-integration/ # C++ integration examples (./compile-with-cpp.sh)
-│   │   ├── cpp_integration_basic.csc # Comprehensive C++ demo
-│   │   ├── cpp_integration_simple.csc # Simple C++ demo
-│   │   ├── cpp_integration_test.csc # C++ function test suite
-│   │   ├── json_demo.csc # JSON functions demo
-│   │   └── custom_math_demo.csc # Custom C++ library demo
-│   └── browser-only/ # Browser interpreter examples (./launch-docs.sh)
-│       ├── game_system.csc # RPG management system
-│       └── complex_data_structures.csc # E-commerce system
+│   ├── cpp-integration/ # C++ integration examples
+│   └── browser-only/ # Browser interpreter examples
 ├── docs/             # Web documentation
-│   ├── index.html    # Interactive docs
-│   ├── styles.css    # Documentation styling
-│   ├── script.js     # UI functionality
-│   └── cypescript-interpreter.js # Browser interpreter
-├── NATIVE_OBJECTS_ROADMAP.md # Native TypeScript development roadmap
 ├── build.sh          # Build script
-├── test.sh           # Test script
+├── test.sh           # Test script (runs tests/run_tests.sh)
 ├── setup-macos.sh    # macOS setup script
 ├── launch-docs.sh    # Documentation launcher
 ├── compile-run.sh    # Basic compilation script
 ├── compile-with-cpp.sh # C++ integration compiler
-├── compile-with-custom-cpp.sh # Custom C++ libraries compiler
 └── CMakeLists.txt    # CMake configuration
 ```
 
