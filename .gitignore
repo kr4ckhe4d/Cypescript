@@ -129,7 +129,6 @@ Thumbs.db
 # Development markdown files
 *_RESULTS.md
 *_SUMMARY.md
-*_ROADMAP.md
 *_IMPLEMENTATION.md
 *_REVIEW.md
 *_APPROACH.md
@@ -137,7 +136,6 @@ Thumbs.db
 CHAT_*.md
 DEVELOPMENT_*.md
 PERFORMANCE_*.md
-OPTIMIZATION_*.md
 BENCHMARK_*.md
 MEMORY_*.md
 NEON_*.md
