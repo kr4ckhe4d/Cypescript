@@ -50,6 +50,9 @@ private:
                                                            std::unique_ptr<ExpressionNode> value);
     // Parses "(params): returnType { body }" after a function name/key
     std::unique_ptr<FunctionDeclarationNode> parseFunctionRest(const std::string& name);
+    // Arrow functions: x => expr, (a, b) => expr, (a: i32): i32 => { ... }
+    bool isArrowFunctionAhead() const;
+    std::unique_ptr<ExpressionNode> parseArrowFunction();
     
     // Helper methods
     bool isKnownFunction(const std::string& name);                  // Check if function is known

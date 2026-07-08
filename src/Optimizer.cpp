@@ -214,6 +214,10 @@ void ASTOptimizer::optimizeExpression(std::unique_ptr<ExpressionNode> &expr)
         optimizeExpression(objAccess->object);
         return;
     }
+    if (auto *arrowFn = dynamic_cast<ArrowFunctionNode *>(expr.get())) {
+        optimizeStatementList(arrowFn->bodyStatements);
+        return;
+    }
 }
 
 void ASTOptimizer::optimizeStatement(StatementNode *stmt)

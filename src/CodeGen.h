@@ -15,6 +15,7 @@
 #include <memory>
 #include <string>
 #include <map> // For symbol table
+#include <set>
 
 // Forward declare AST node types we'll visit
 class ProgramNode;
@@ -106,6 +107,38 @@ private:
     llvm::Function *getOrCreateMethodFunction(const std::string& objectKey,
                                               const std::string& methodName);
 
+    // --- Arrow functions / closures ---
+    // Closures are {i8* fn, i8* env} pairs; captures are snapshotted by value.
+    std::map<std::string, ArrowFunctionNode*> variableToArrow; // var name -> arrow node
+    std::map<ArrowFunctionNode*, llvm::Function*> arrowFunctions;
+    std::map<ArrowFunctionNode*, llvm::StructType*> arrowEnvTypes;
+    std::map<ArrowFunctionNode*, std::vector<std::pair<std::string, std::string>>> arrowCaptures;
+    llvm::StructType *closureType = nullptr; // {i8* fn, i8* env}
+    int arrowCounter = 0;
+
+    llvm::StructType *getClosureType();
+    // Free-variable analysis for capture lists
+    void collectFreeVars(StatementNode *stmt, std::set<std::string> &bound,
+                         std::set<std::string> &free);
+    void collectFreeVarsExpr(ExpressionNode *expr, std::set<std::string> &bound,
+                             std::set<std::string> &free);
+    // Heuristic return-type inference for un-annotated arrows
+    llvm::Type *inferArrowReturnType(ArrowFunctionNode *node,
+                                     const std::map<std::string, std::string> &paramTypes);
+    llvm::Type *inferExpressionLLVMType(ExpressionNode *expr,
+                                        const std::map<std::string, std::string> &paramTypes);
+    // Generates (and caches) the LLVM function for an arrow node
+    llvm::Function *getOrCreateArrowFunction(ArrowFunctionNode *node);
+    // Resolves a callback argument to its arrow node (literal or bound variable)
+    ArrowFunctionNode *resolveArrowArgument(ExpressionNode *expr);
+    // Evaluates a callback argument into {function, env} for direct calls
+    std::pair<llvm::Function*, llvm::Value*> materializeCallback(ExpressionNode *expr);
+    // Array methods taking callbacks: map/filter/forEach/reduce/find
+    llvm::Value *generateArrayCallbackMethod(MethodCallNode *node, llvm::Value *arrayPtr,
+                                             const std::string &elemType);
+    // Recorded type name for variables initialized from method calls (map/filter/...)
+    std::string inferMethodCallTypeName(MethodCallNode *node);
+
     // Structural check of an object literal against an interface
     void checkInterfaceConformance(const std::string& interfaceName, ObjectLiteralNode* literal,
                                    const std::string& variableName);
@@ -164,6 +197,7 @@ private:
     llvm::Value *visit(ObjectAccessNode *node);       // For object access
     llvm::Value *visit(MethodCallNode *node);         // For method calls
     llvm::Value *visit(NewExpressionNode *node);      // For new expressions
+    llvm::Value *visit(ArrowFunctionNode *node);      // For arrow functions / closures
 
     llvm::FunctionCallee getOrDeclarePuts();
     llvm::FunctionCallee getOrDeclarePrintf(); // New: For printf for integers

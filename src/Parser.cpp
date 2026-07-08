@@ -661,11 +661,18 @@ std::unique_ptr<ExpressionNode> Parser::parsePrimaryExpression()
         advance();
         expr = parseArrayOrObjectAccess(std::make_unique<VariableExpressionNode>("this"));
     }
-    else if (peek().type == TOK_IDENTIFIER) expr = parseVariableExpression();
+    else if (peek().type == TOK_IDENTIFIER) {
+        if (peek(1).type == TOK_ARROW) expr = parseArrowFunction(); // x => ...
+        else expr = parseVariableExpression();
+    }
     else if (peek().type == TOK_LPAREN) {
-        advance();
-        expr = parseExpression();
-        consume(TOK_RPAREN, "Expected ')'");
+        if (isArrowFunctionAhead()) {
+            expr = parseArrowFunction();
+        } else {
+            advance();
+            expr = parseExpression();
+            consume(TOK_RPAREN, "Expected ')'");
+        }
     }
     else if (peek().type == TOK_NEW) expr = parseNewExpression();
     else if (peek().type == TOK_LBRACKET) expr = parseArrayLiteral();
@@ -675,6 +682,83 @@ std::unique_ptr<ExpressionNode> Parser::parsePrimaryExpression()
                                   tokenPosition(peek()));
     while (peek().type == TOK_BANG) advance();
     return expr;
+}
+
+// Looks ahead from a '(' for "...) =>" or "...): type =>" to disambiguate
+// arrow functions from parenthesized expressions.
+bool Parser::isArrowFunctionAhead() const
+{
+    if (peek().type != TOK_LPAREN) return false;
+    int depth = 1;
+    int i = 1;
+    while (depth > 0) {
+        TokenType t = peek(i).type;
+        if (t == TOK_EOF) return false;
+        if (t == TOK_LPAREN) depth++;
+        else if (t == TOK_RPAREN) depth--;
+        i++;
+    }
+    if (peek(i).type == TOK_ARROW) return true;
+    if (peek(i).type == TOK_COLON) {
+        // Skip a return-type annotation: only type-ish tokens may appear before '=>'
+        i++;
+        while (true) {
+            TokenType t = peek(i).type;
+            if (t == TOK_ARROW) return true;
+            if (t == TOK_IDENTIFIER || t == TOK_TYPE_STRING || t == TOK_TYPE_I32 ||
+                t == TOK_TYPE_F64 || t == TOK_TYPE_BOOLEAN || t == TOK_TYPE_NUMBER ||
+                t == TOK_TYPE_VOID || t == TOK_LESS || t == TOK_GREATER ||
+                t == TOK_COMMA || t == TOK_LBRACKET || t == TOK_RBRACKET) {
+                i++;
+                continue;
+            }
+            return false;
+        }
+    }
+    return false;
+}
+
+std::unique_ptr<ExpressionNode> Parser::parseArrowFunction()
+{
+    auto arrowNode = std::make_unique<ArrowFunctionNode>();
+
+    if (peek().type == TOK_IDENTIFIER) {
+        // Single untyped parameter: x => ...   (untyped params default to i32)
+        arrowNode->parameters.emplace_back(advance().value, "i32");
+    } else {
+        consume(TOK_LPAREN, "Expected '(' in arrow function");
+        while (peek().type != TOK_RPAREN && !isAtEnd()) {
+            const Token &paramName = consume(TOK_IDENTIFIER, "Expected arrow function parameter name");
+            std::string paramType = "i32";
+            if (peek().type == TOK_COLON) {
+                advance();
+                paramType = parseType();
+            }
+            arrowNode->parameters.emplace_back(paramName.value, paramType);
+            if (peek().type == TOK_COMMA) advance();
+            else break;
+        }
+        consume(TOK_RPAREN, "Expected ')' in arrow function");
+        if (peek().type == TOK_COLON) {
+            advance();
+            arrowNode->returnType = parseType();
+        }
+    }
+
+    consume(TOK_ARROW, "Expected '=>' in arrow function");
+
+    if (peek().type == TOK_LBRACE) {
+        advance();
+        while (peek().type != TOK_RBRACE && !isAtEnd()) {
+            arrowNode->bodyStatements.push_back(parseStatement());
+        }
+        consume(TOK_RBRACE, "Expected '}' after arrow function body");
+    } else {
+        // Expression body: implicit return
+        arrowNode->bodyStatements.push_back(
+            std::make_unique<ReturnStatementNode>(parseExpression()));
+    }
+    return arrowNode;
 }
 
 std::unique_ptr<StringLiteralNode> Parser::parseStringLiteral() { return std::make_unique<StringLiteralNode>(consume(TOK_STRING_LITERAL, "Expected string literal").value); }

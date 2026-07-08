@@ -143,9 +143,9 @@ llvm::Type *CodeGen::getLLVMType(const std::string &typeName)
     {
         return llvm::Type::getVoidTy(m_context);
     }
-    else if (typeName == "object" || interfaces.count(typeName))
+    else if (typeName == "object" || typeName == "closure" || interfaces.count(typeName))
     {
-        // Native objects and interface-typed values are opaque pointers
+        // Native objects, closures, and interface-typed values are opaque pointers
         return llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
     }
     else if (typeName.find('<') != std::string::npos || typeName.length() == 1)
@@ -213,6 +213,11 @@ void CodeGen::visit(ProgramNode *node)
     loopTargets.clear();
     loopTargetTryDepths.clear();
     tryDepth = 0;
+    variableToArrow.clear();
+    arrowFunctions.clear();
+    arrowEnvTypes.clear();
+    arrowCaptures.clear();
+    arrowCounter = 0;
 
     // Pass 0: Register all interfaces so they are usable as types everywhere
     for (const auto &stmt : node->statements)
@@ -388,6 +393,10 @@ void CodeGen::visit(VariableDeclarationNode *node)
         typeToStore = "object";
         variableToObjectKey[node->variableName] =
             "opt_obj_" + std::to_string(reinterpret_cast<uintptr_t>(objLit));
+    } else if (auto *arrowLit = dynamic_cast<ArrowFunctionNode*>(node->initializer.get())) {
+        // Closure: track the arrow node so calls through this variable bind statically
+        typeToStore = "closure";
+        variableToArrow[node->variableName] = arrowLit;
     } else if (auto *arrLit = dynamic_cast<ArrayLiteralNode*>(node->initializer.get())) {
         if (node->typeName == "auto") typeToStore = arrLit->elementType + "[]";
         arraySizes[node->variableName] = arrLit->elements.size();
@@ -408,13 +417,20 @@ void CodeGen::visit(VariableDeclarationNode *node)
                 typeToStore += ">";
             }
         } else if (auto *varRef = dynamic_cast<VariableExpressionNode*>(node->initializer.get())) {
-            // Aliasing another variable: copy its recorded type and object key
+            // Aliasing another variable: copy its recorded type and object/closure binding
             auto typeIt = variableTypes.find(varRef->name);
             typeToStore = (typeIt != variableTypes.end()) ? typeIt->second : "";
             auto keyIt = variableToObjectKey.find(varRef->name);
             if (keyIt != variableToObjectKey.end()) {
                 variableToObjectKey[node->variableName] = keyIt->second;
             }
+            auto arrowIt = variableToArrow.find(varRef->name);
+            if (arrowIt != variableToArrow.end()) {
+                variableToArrow[node->variableName] = arrowIt->second;
+            }
+        } else if (auto *methodCall = dynamic_cast<MethodCallNode*>(node->initializer.get())) {
+            // e.g. numbers.map(...) -> i32[]/string[], arr.filter(...) -> source type
+            typeToStore = inferMethodCallTypeName(methodCall);
         } else {
             typeToStore = "";
         }
@@ -508,6 +524,10 @@ llvm::Value *CodeGen::visit(ExpressionNode *node)
     else if (auto *newNode = dynamic_cast<NewExpressionNode *>(node))
     {
         return visit(newNode);
+    }
+    else if (auto *arrowNode = dynamic_cast<ArrowFunctionNode *>(node))
+    {
+        return visit(arrowNode);
     }
     else if (auto *funcCallNode = dynamic_cast<FunctionCallNode *>(node))
     {
@@ -1312,6 +1332,48 @@ llvm::Value *CodeGen::visit(FunctionCallNode *node)
         }
         }
 
+    // Closure call through a variable: let f = (x) => ...; f(5);
+    auto arrowVarIt = variableToArrow.find(node->functionName);
+    if (arrowVarIt != variableToArrow.end() && namedValues.count(node->functionName)) {
+        ArrowFunctionNode *arrowNode = arrowVarIt->second;
+        auto fnIt = arrowFunctions.find(arrowNode);
+        if (fnIt == arrowFunctions.end()) {
+            throw std::runtime_error("Codegen Error: Closure '" + node->functionName +
+                                     "' called before it was created");
+        }
+        llvm::Function *fn = fnIt->second;
+
+        llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+        llvm::Value *closureVal = m_builder.CreateLoad(charPtr, namedValues[node->functionName],
+                                                       node->functionName + "_closure");
+        llvm::StructType *closTy = getClosureType();
+        llvm::Value *closPtr = m_builder.CreateBitCast(closureVal,
+            llvm::PointerType::get(closTy, 0), "closure_ptr");
+        llvm::Value *envPtr = m_builder.CreateLoad(charPtr,
+            m_builder.CreateStructGEP(closTy, closPtr, 1), "closure_env");
+
+        std::vector<llvm::Value*> args;
+        args.push_back(envPtr);
+        size_t argIndex = 1;
+        for (const auto& arg : node->arguments) {
+            llvm::Value *argValue = visit(arg.get());
+            if (!argValue) {
+                throw std::runtime_error("Codegen Error: Failed to generate closure argument");
+            }
+            if (argIndex < fn->arg_size()) {
+                argValue = coerceValue(argValue, fn->getFunctionType()->getParamType(argIndex));
+            }
+            args.push_back(argValue);
+            argIndex++;
+        }
+
+        if (fn->getReturnType()->isVoidTy()) {
+            m_builder.CreateCall(fn, args);
+            return nullptr;
+        }
+        return m_builder.CreateCall(fn, args, node->functionName + "_result");
+    }
+
     if (node->functionName == "JSON.parse") {
         if (node->arguments.size() != 1) {
             throw std::runtime_error("JSON.parse expects exactly one argument.");
@@ -2039,7 +2101,16 @@ llvm::Value *CodeGen::visit(ObjectAccessNode *node)
                 throw std::runtime_error("Codegen Error: Unknown variable '" + varExpr->name + "' in property access");
             }
         } else {
-            throw std::runtime_error("Codegen Error: .length property access is only supported on array variables");
+            // .length on a non-variable expression (e.g. arr.filter(f).length):
+            // evaluate it and call array_length on the resulting pointer
+            llvm::Value *value = visit(node->object.get());
+            if (value && value->getType()->isPointerTy()) {
+                llvm::FunctionCallee lenFunc = m_module->getOrInsertFunction("array_length",
+                    llvm::Type::getInt32Ty(m_context),
+                    llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+                return m_builder.CreateCall(lenFunc, {value}, "array_len");
+            }
+            throw std::runtime_error("Codegen Error: .length is only supported on arrays");
         }
     }
     
@@ -2237,7 +2308,14 @@ llvm::Value *CodeGen::visit(MethodCallNode *node)
     // Is it an array method?
     if (varType.length() > 2 && varType.substr(varType.length() - 2) == "[]") {
         std::string elemType = varType.substr(0, varType.length() - 2);
-        
+
+        // Callback-based methods: map/filter/forEach/reduce/find
+        if (node->methodName == "map" || node->methodName == "filter" ||
+            node->methodName == "forEach" || node->methodName == "reduce" ||
+            node->methodName == "find") {
+            return generateArrayCallbackMethod(node, objectValue, elemType);
+        }
+
         if (node->methodName == "push") {
             if (node->arguments.size() != 1) throw std::runtime_error("push() expects 1 argument");
             llvm::Value *argValue = visit(node->arguments[0].get());
@@ -3122,6 +3200,555 @@ llvm::Function *CodeGen::getOrCreateMethodFunction(const std::string& objectKey,
     m_builder.restoreIP(savedIP);
 
     return fn;
+}
+
+// ============================================================
+// Arrow functions & closures
+// ============================================================
+
+llvm::StructType *CodeGen::getClosureType()
+{
+    if (!closureType) {
+        llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+        closureType = llvm::StructType::create(m_context, {charPtr, charPtr}, "CypsClosure");
+    }
+    return closureType;
+}
+
+void CodeGen::collectFreeVarsExpr(ExpressionNode *expr, std::set<std::string> &bound,
+                                  std::set<std::string> &free)
+{
+    if (!expr) return;
+
+    if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(expr)) {
+        if (!bound.count(varExpr->name)) free.insert(varExpr->name);
+    } else if (auto *binOp = dynamic_cast<BinaryExpressionNode*>(expr)) {
+        collectFreeVarsExpr(binOp->left.get(), bound, free);
+        collectFreeVarsExpr(binOp->right.get(), bound, free);
+    } else if (auto *unaryOp = dynamic_cast<UnaryExpressionNode*>(expr)) {
+        collectFreeVarsExpr(unaryOp->operand.get(), bound, free);
+    } else if (auto *call = dynamic_cast<FunctionCallNode*>(expr)) {
+        // A call target that is not a declared function may be a captured closure
+        if (!declaredFunctions.count(call->functionName) && !bound.count(call->functionName)) {
+            free.insert(call->functionName);
+        }
+        for (auto &arg : call->arguments) collectFreeVarsExpr(arg.get(), bound, free);
+    } else if (auto *method = dynamic_cast<MethodCallNode*>(expr)) {
+        collectFreeVarsExpr(method->object.get(), bound, free);
+        for (auto &arg : method->arguments) collectFreeVarsExpr(arg.get(), bound, free);
+    } else if (auto *arrAccess = dynamic_cast<ArrayAccessNode*>(expr)) {
+        collectFreeVarsExpr(arrAccess->array.get(), bound, free);
+        collectFreeVarsExpr(arrAccess->index.get(), bound, free);
+    } else if (auto *objAccess = dynamic_cast<ObjectAccessNode*>(expr)) {
+        collectFreeVarsExpr(objAccess->object.get(), bound, free);
+    } else if (auto *arrLit = dynamic_cast<ArrayLiteralNode*>(expr)) {
+        for (auto &element : arrLit->elements) collectFreeVarsExpr(element.get(), bound, free);
+    } else if (auto *objLit = dynamic_cast<ObjectLiteralNode*>(expr)) {
+        for (auto &prop : objLit->properties) {
+            if (prop.value) collectFreeVarsExpr(prop.value.get(), bound, free);
+        }
+    } else if (auto *newExpr = dynamic_cast<NewExpressionNode*>(expr)) {
+        for (auto &arg : newExpr->arguments) collectFreeVarsExpr(arg.get(), bound, free);
+    } else if (auto *nested = dynamic_cast<ArrowFunctionNode*>(expr)) {
+        // Names free in a nested arrow (minus its params) are free here too
+        std::set<std::string> nestedBound = bound;
+        for (const auto &param : nested->parameters) nestedBound.insert(param.name);
+        for (auto &stmt : nested->bodyStatements) collectFreeVars(stmt.get(), nestedBound, free);
+    }
+}
+
+void CodeGen::collectFreeVars(StatementNode *stmt, std::set<std::string> &bound,
+                              std::set<std::string> &free)
+{
+    if (!stmt) return;
+
+    if (auto *varDecl = dynamic_cast<VariableDeclarationNode*>(stmt)) {
+        collectFreeVarsExpr(varDecl->initializer.get(), bound, free);
+        bound.insert(varDecl->variableName);
+    } else if (auto *destruct = dynamic_cast<DestructuringDeclarationNode*>(stmt)) {
+        collectFreeVarsExpr(destruct->initializer.get(), bound, free);
+        for (const auto &name : destruct->bindings) bound.insert(name);
+    } else if (auto *assign = dynamic_cast<AssignmentStatementNode*>(stmt)) {
+        // Assigning to an outer variable still requires capturing it
+        if (!bound.count(assign->variableName)) free.insert(assign->variableName);
+        collectFreeVarsExpr(assign->value.get(), bound, free);
+    } else if (auto *arrAssign = dynamic_cast<ArrayAssignmentStatementNode*>(stmt)) {
+        collectFreeVarsExpr(arrAssign->array.get(), bound, free);
+        collectFreeVarsExpr(arrAssign->index.get(), bound, free);
+        collectFreeVarsExpr(arrAssign->value.get(), bound, free);
+    } else if (auto *propAssign = dynamic_cast<ObjectPropertyAssignmentNode*>(stmt)) {
+        collectFreeVarsExpr(propAssign->object.get(), bound, free);
+        collectFreeVarsExpr(propAssign->value.get(), bound, free);
+    } else if (auto *exprStmt = dynamic_cast<ExpressionStatementNode*>(stmt)) {
+        collectFreeVarsExpr(exprStmt->expression.get(), bound, free);
+    } else if (auto *ifStmt = dynamic_cast<IfStatementNode*>(stmt)) {
+        collectFreeVarsExpr(ifStmt->condition.get(), bound, free);
+        for (auto &s : ifStmt->thenStatements) collectFreeVars(s.get(), bound, free);
+        for (auto &s : ifStmt->elseStatements) collectFreeVars(s.get(), bound, free);
+    } else if (auto *whileStmt = dynamic_cast<WhileStatementNode*>(stmt)) {
+        collectFreeVarsExpr(whileStmt->condition.get(), bound, free);
+        for (auto &s : whileStmt->bodyStatements) collectFreeVars(s.get(), bound, free);
+    } else if (auto *doWhile = dynamic_cast<DoWhileStatementNode*>(stmt)) {
+        for (auto &s : doWhile->bodyStatements) collectFreeVars(s.get(), bound, free);
+        collectFreeVarsExpr(doWhile->condition.get(), bound, free);
+    } else if (auto *forStmt = dynamic_cast<ForStatementNode*>(stmt)) {
+        if (forStmt->initialization) collectFreeVars(forStmt->initialization.get(), bound, free);
+        collectFreeVarsExpr(forStmt->condition.get(), bound, free);
+        if (forStmt->increment) collectFreeVars(forStmt->increment.get(), bound, free);
+        for (auto &s : forStmt->bodyStatements) collectFreeVars(s.get(), bound, free);
+    } else if (auto *forOf = dynamic_cast<ForOfStatementNode*>(stmt)) {
+        collectFreeVarsExpr(forOf->iterable.get(), bound, free);
+        bound.insert(forOf->iteratorVariable->variableName);
+        for (auto &s : forOf->bodyStatements) collectFreeVars(s.get(), bound, free);
+    } else if (auto *switchStmt = dynamic_cast<SwitchStatementNode*>(stmt)) {
+        collectFreeVarsExpr(switchStmt->condition.get(), bound, free);
+        for (auto &clause : switchStmt->cases) {
+            collectFreeVarsExpr(clause.value.get(), bound, free);
+            for (auto &s : clause.statements) collectFreeVars(s.get(), bound, free);
+        }
+    } else if (auto *tryStmt = dynamic_cast<TryCatchStatementNode*>(stmt)) {
+        for (auto &s : tryStmt->tryStatements) collectFreeVars(s.get(), bound, free);
+        if (!tryStmt->errorVariable.empty()) bound.insert(tryStmt->errorVariable);
+        for (auto &s : tryStmt->catchStatements) collectFreeVars(s.get(), bound, free);
+        for (auto &s : tryStmt->finallyStatements) collectFreeVars(s.get(), bound, free);
+    } else if (auto *retStmt = dynamic_cast<ReturnStatementNode*>(stmt)) {
+        collectFreeVarsExpr(retStmt->expression.get(), bound, free);
+    } else if (auto *throwStmt = dynamic_cast<ThrowStatementNode*>(stmt)) {
+        collectFreeVarsExpr(throwStmt->expression.get(), bound, free);
+    }
+}
+
+llvm::Type *CodeGen::inferExpressionLLVMType(ExpressionNode *expr,
+                                             const std::map<std::string, std::string> &paramTypes)
+{
+    llvm::Type *i32Ty = llvm::Type::getInt32Ty(m_context);
+    llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+    if (!expr) return i32Ty;
+
+    if (dynamic_cast<StringLiteralNode*>(expr)) return charPtr;
+    if (dynamic_cast<FloatLiteralNode*>(expr)) return llvm::Type::getDoubleTy(m_context);
+    if (dynamic_cast<IntegerLiteralNode*>(expr) || dynamic_cast<BooleanLiteralNode*>(expr)) return i32Ty;
+    if (dynamic_cast<ArrowFunctionNode*>(expr)) return charPtr;
+
+    if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(expr)) {
+        auto paramIt = paramTypes.find(varExpr->name);
+        if (paramIt != paramTypes.end()) return getLLVMType(paramIt->second);
+        auto typeIt = variableTypes.find(varExpr->name);
+        if (typeIt != variableTypes.end()) return getLLVMType(typeIt->second);
+        return i32Ty;
+    }
+    if (auto *unaryOp = dynamic_cast<UnaryExpressionNode*>(expr)) {
+        if (unaryOp->op == UnaryExpressionNode::NOT) return i32Ty;
+        return inferExpressionLLVMType(unaryOp->operand.get(), paramTypes);
+    }
+    if (auto *binOp = dynamic_cast<BinaryExpressionNode*>(expr)) {
+        switch (binOp->op) {
+            case BinaryExpressionNode::EQUAL:
+            case BinaryExpressionNode::NOT_EQUAL:
+            case BinaryExpressionNode::LESS_THAN:
+            case BinaryExpressionNode::LESS_EQUAL:
+            case BinaryExpressionNode::GREATER_THAN:
+            case BinaryExpressionNode::GREATER_EQUAL:
+            case BinaryExpressionNode::LOGICAL_AND:
+            case BinaryExpressionNode::LOGICAL_OR:
+                return i32Ty;
+            default: break;
+        }
+        llvm::Type *left = inferExpressionLLVMType(binOp->left.get(), paramTypes);
+        llvm::Type *right = inferExpressionLLVMType(binOp->right.get(), paramTypes);
+        if (binOp->op == BinaryExpressionNode::ADD &&
+            (left->isPointerTy() || right->isPointerTy())) return charPtr;
+        if (left->isDoubleTy() || right->isDoubleTy()) return llvm::Type::getDoubleTy(m_context);
+        return i32Ty;
+    }
+    if (auto *call = dynamic_cast<FunctionCallNode*>(expr)) {
+        auto fnIt = declaredFunctions.find(call->functionName);
+        if (fnIt != declaredFunctions.end()) return fnIt->second->getReturnType();
+        if (call->functionName == "JSON.stringify" || call->functionName == "JSON.parse") return charPtr;
+        return i32Ty;
+    }
+    return i32Ty;
+}
+
+llvm::Type *CodeGen::inferArrowReturnType(ArrowFunctionNode *node,
+                                          const std::map<std::string, std::string> &paramTypes)
+{
+    // Use the first top-level return statement's expression as the signal
+    for (const auto &stmt : node->bodyStatements) {
+        if (auto *retStmt = dynamic_cast<ReturnStatementNode*>(stmt.get())) {
+            if (!retStmt->expression) return llvm::Type::getVoidTy(m_context);
+            return inferExpressionLLVMType(retStmt->expression.get(), paramTypes);
+        }
+        // returns nested inside control flow: fall through to default
+    }
+    return llvm::Type::getVoidTy(m_context);
+}
+
+llvm::Function *CodeGen::getOrCreateArrowFunction(ArrowFunctionNode *node)
+{
+    auto cached = arrowFunctions.find(node);
+    if (cached != arrowFunctions.end()) return cached->second;
+
+    llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+    const auto &captures = arrowCaptures[node];
+    llvm::StructType *envType = arrowEnvTypes[node];
+
+    std::map<std::string, std::string> paramTypeNames;
+    for (const auto &param : node->parameters) paramTypeNames[param.name] = param.type;
+
+    llvm::Type *returnType = (node->returnType != "auto")
+        ? getLLVMType(node->returnType)
+        : inferArrowReturnType(node, paramTypeNames);
+
+    std::vector<llvm::Type*> paramTypes;
+    paramTypes.push_back(charPtr); // env
+    for (const auto &param : node->parameters) paramTypes.push_back(getLLVMType(param.type));
+
+    llvm::FunctionType *fnType = llvm::FunctionType::get(returnType, paramTypes, false);
+    llvm::Function *fn = llvm::Function::Create(fnType, llvm::Function::InternalLinkage,
+                                                "arrow_" + std::to_string(arrowCounter++), m_module.get());
+    arrowFunctions[node] = fn;
+
+    // Save generation context (arrows can be created mid-statement anywhere)
+    llvm::IRBuilderBase::InsertPoint savedIP = m_builder.saveIP();
+    llvm::Function *prevFunction = currentFunction;
+    auto prevNamedValues = namedValues;
+    auto prevVariableTypes = variableTypes;
+    auto prevConstVariables = constVariables;
+    auto prevLoopTargets = loopTargets;
+    auto prevLoopTryDepths = loopTargetTryDepths;
+    int prevTryDepth = tryDepth;
+
+    currentFunction = fn;
+    loopTargets.clear();
+    loopTargetTryDepths.clear();
+    tryDepth = 0;
+
+    llvm::BasicBlock *entryBlock = llvm::BasicBlock::Create(m_context, "entry", fn);
+    m_builder.SetInsertPoint(entryBlock);
+
+    auto argIt = fn->arg_begin();
+    argIt->setName("env");
+    llvm::Value *envRaw = &*argIt;
+    ++argIt;
+
+    // Unpack captured variables into locals (by-value snapshot)
+    if (!captures.empty()) {
+        llvm::Value *envPtr = m_builder.CreateBitCast(envRaw, llvm::PointerType::get(envType, 0), "env_cast");
+        for (size_t i = 0; i < captures.size(); ++i) {
+            const auto &capture = captures[i];
+            llvm::Type *fieldType = envType->getElementType(i);
+            llvm::Value *fieldPtr = m_builder.CreateStructGEP(envType, envPtr, i, capture.first + "_env_ptr");
+            llvm::Value *value = m_builder.CreateLoad(fieldType, fieldPtr, capture.first + "_captured");
+            llvm::AllocaInst *alloca = m_builder.CreateAlloca(fieldType, nullptr, capture.first);
+            m_builder.CreateStore(value, alloca);
+            namedValues[capture.first] = alloca;
+            variableTypes[capture.first] = capture.second;
+        }
+    }
+
+    // Parameters
+    for (size_t i = 0; i < node->parameters.size(); ++i, ++argIt) {
+        const auto &param = node->parameters[i];
+        argIt->setName(param.name);
+        llvm::AllocaInst *alloca = m_builder.CreateAlloca(getLLVMType(param.type), nullptr, param.name);
+        m_builder.CreateStore(&*argIt, alloca);
+        namedValues[param.name] = alloca;
+        variableTypes[param.name] = param.type;
+    }
+
+    for (const auto &stmt : node->bodyStatements) {
+        visit(stmt.get());
+    }
+
+    if (!m_builder.GetInsertBlock()->getTerminator()) {
+        if (fn->getReturnType()->isVoidTy()) {
+            m_builder.CreateRetVoid();
+        } else if (fn->getReturnType()->isPointerTy()) {
+            m_builder.CreateRet(llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(fn->getReturnType())));
+        } else if (fn->getReturnType()->isDoubleTy()) {
+            m_builder.CreateRet(llvm::ConstantFP::get(fn->getReturnType(), 0.0));
+        } else {
+            m_builder.CreateRet(llvm::ConstantInt::get(fn->getReturnType(), 0));
+        }
+    }
+
+    // Restore context
+    currentFunction = prevFunction;
+    namedValues = prevNamedValues;
+    variableTypes = prevVariableTypes;
+    constVariables = prevConstVariables;
+    loopTargets = prevLoopTargets;
+    loopTargetTryDepths = prevLoopTryDepths;
+    tryDepth = prevTryDepth;
+    m_builder.restoreIP(savedIP);
+
+    return fn;
+}
+
+llvm::Value *CodeGen::visit(ArrowFunctionNode *node)
+{
+    llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+
+    // Determine captures once per arrow node (cached for repeated visits, e.g. in loops)
+    if (!arrowEnvTypes.count(node)) {
+        std::set<std::string> bound, freeNames;
+        for (const auto &param : node->parameters) bound.insert(param.name);
+        for (const auto &stmt : node->bodyStatements) {
+            collectFreeVars(stmt.get(), bound, freeNames);
+        }
+
+        std::vector<std::pair<std::string, std::string>> captures;
+        for (const auto &name : freeNames) {
+            auto nv = namedValues.find(name);
+            if (nv == namedValues.end()) continue; // e.g. builtin function names
+            std::string typeName = "i32";
+            auto typeIt = variableTypes.find(name);
+            if (typeIt != variableTypes.end()) typeName = typeIt->second;
+            captures.push_back({name, typeName});
+        }
+
+        std::vector<llvm::Type*> envFields;
+        for (const auto &capture : captures) {
+            auto nv = namedValues.find(capture.first);
+            envFields.push_back(nv->second->getAllocatedType());
+        }
+        arrowCaptures[node] = std::move(captures);
+        arrowEnvTypes[node] = llvm::StructType::create(m_context, envFields, "ArrowEnv");
+    }
+
+    const auto &captures = arrowCaptures[node];
+    llvm::StructType *envType = arrowEnvTypes[node];
+
+    llvm::FunctionCallee mallocFn = m_module->getOrInsertFunction("malloc",
+        charPtr, llvm::Type::getInt64Ty(m_context));
+
+    // Snapshot the captured variables into a heap environment
+    llvm::Value *envRaw;
+    if (captures.empty()) {
+        envRaw = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(charPtr));
+    } else {
+        uint64_t envSize = m_module->getDataLayout().getTypeAllocSize(envType);
+        envRaw = m_builder.CreateCall(mallocFn,
+            {llvm::ConstantInt::get(llvm::Type::getInt64Ty(m_context), envSize)}, "arrow_env");
+        llvm::Value *envPtr = m_builder.CreateBitCast(envRaw, llvm::PointerType::get(envType, 0), "env_cast");
+        for (size_t i = 0; i < captures.size(); ++i) {
+            llvm::AllocaInst *sourceAlloca = namedValues[captures[i].first];
+            llvm::Value *value = m_builder.CreateLoad(sourceAlloca->getAllocatedType(), sourceAlloca,
+                                                      captures[i].first + "_snap");
+            llvm::Value *fieldPtr = m_builder.CreateStructGEP(envType, envPtr, i);
+            m_builder.CreateStore(value, fieldPtr);
+        }
+    }
+
+    llvm::Function *fn = getOrCreateArrowFunction(node);
+
+    // Build the closure value: {fn, env}
+    llvm::StructType *closTy = getClosureType();
+    uint64_t closSize = m_module->getDataLayout().getTypeAllocSize(closTy);
+    llvm::Value *closRaw = m_builder.CreateCall(mallocFn,
+        {llvm::ConstantInt::get(llvm::Type::getInt64Ty(m_context), closSize)}, "closure");
+    llvm::Value *closPtr = m_builder.CreateBitCast(closRaw, llvm::PointerType::get(closTy, 0), "closure_cast");
+    m_builder.CreateStore(m_builder.CreateBitCast(fn, charPtr),
+                          m_builder.CreateStructGEP(closTy, closPtr, 0));
+    m_builder.CreateStore(envRaw, m_builder.CreateStructGEP(closTy, closPtr, 1));
+    return closRaw;
+}
+
+ArrowFunctionNode *CodeGen::resolveArrowArgument(ExpressionNode *expr)
+{
+    if (auto *arrowLit = dynamic_cast<ArrowFunctionNode*>(expr)) return arrowLit;
+    if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(expr)) {
+        auto it = variableToArrow.find(varExpr->name);
+        if (it != variableToArrow.end()) return it->second;
+    }
+    return nullptr;
+}
+
+std::pair<llvm::Function*, llvm::Value*> CodeGen::materializeCallback(ExpressionNode *expr)
+{
+    ArrowFunctionNode *arrowNode = resolveArrowArgument(expr);
+    if (!arrowNode) {
+        throw std::runtime_error("Codegen Error: Callback must be an arrow function "
+                                 "or a variable bound to one");
+    }
+
+    llvm::Value *closureVal = visit(expr); // creates or loads the closure
+    llvm::StructType *closTy = getClosureType();
+    llvm::Value *closPtr = m_builder.CreateBitCast(closureVal,
+        llvm::PointerType::get(closTy, 0), "cb_closure");
+    llvm::Value *envPtr = m_builder.CreateLoad(
+        llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+        m_builder.CreateStructGEP(closTy, closPtr, 1), "cb_env");
+
+    return {arrowFunctions[arrowNode], envPtr};
+}
+
+std::string CodeGen::inferMethodCallTypeName(MethodCallNode *node)
+{
+    std::string varType;
+    if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(node->object.get())) {
+        auto typeIt = variableTypes.find(varExpr->name);
+        if (typeIt != variableTypes.end()) varType = typeIt->second;
+    }
+    if (varType.length() < 3 || varType.substr(varType.length() - 2) != "[]") return "";
+    std::string elemType = varType.substr(0, varType.length() - 2);
+
+    auto arrowReturnsPointer = [&](ExpressionNode *cb) {
+        ArrowFunctionNode *arrowNode = resolveArrowArgument(cb);
+        if (!arrowNode) return false;
+        auto fnIt = arrowFunctions.find(arrowNode);
+        if (fnIt != arrowFunctions.end()) return fnIt->second->getReturnType()->isPointerTy();
+        if (arrowNode->returnType != "auto") return getLLVMType(arrowNode->returnType)->isPointerTy();
+        std::map<std::string, std::string> paramTypeNames;
+        for (const auto &p : arrowNode->parameters) paramTypeNames[p.name] = p.type;
+        return inferArrowReturnType(arrowNode, paramTypeNames)->isPointerTy();
+    };
+
+    if (node->methodName == "map" && !node->arguments.empty()) {
+        return arrowReturnsPointer(node->arguments[0].get()) ? "string[]" : "i32[]";
+    }
+    if (node->methodName == "filter") return varType;
+    if (node->methodName == "find" || node->methodName == "shift" || node->methodName == "pop") {
+        return (elemType == "string") ? "string" : "i32";
+    }
+    if (node->methodName == "reduce" && !node->arguments.empty()) {
+        return arrowReturnsPointer(node->arguments[0].get()) ? "string" : "i32";
+    }
+    return "";
+}
+
+llvm::Value *CodeGen::generateArrayCallbackMethod(MethodCallNode *node, llvm::Value *arrayPtr,
+                                                  const std::string &elemType)
+{
+    llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+    llvm::Type *i32Ty = llvm::Type::getInt32Ty(m_context);
+    const std::string &method = node->methodName;
+
+    if (node->arguments.empty()) {
+        throw std::runtime_error("Codegen Error: ." + method + "() requires a callback argument");
+    }
+
+    auto [callback, envPtr] = materializeCallback(node->arguments[0].get());
+
+    bool stringElems = (elemType == "string");
+    llvm::FunctionCallee getFn = stringElems
+        ? m_module->getOrInsertFunction("array_get_string", charPtr, charPtr, i32Ty)
+        : m_module->getOrInsertFunction("array_get_i32", i32Ty, charPtr, i32Ty);
+    llvm::FunctionCallee lenFn = m_module->getOrInsertFunction("array_length", i32Ty, charPtr);
+
+    llvm::Value *length = m_builder.CreateCall(lenFn, {arrayPtr}, "cb_len");
+    llvm::Function *fn = m_builder.GetInsertBlock()->getParent();
+
+    // Shared loop skeleton
+    llvm::BasicBlock *condBlock = llvm::BasicBlock::Create(m_context, method + "_cond", fn);
+    llvm::BasicBlock *bodyBlock = llvm::BasicBlock::Create(m_context, method + "_body", fn);
+    llvm::BasicBlock *exitBlock = llvm::BasicBlock::Create(m_context, method + "_exit", fn);
+
+    llvm::AllocaInst *indexAlloca = m_builder.CreateAlloca(i32Ty, nullptr, method + "_i");
+    m_builder.CreateStore(llvm::ConstantInt::get(i32Ty, 0), indexAlloca);
+
+    // Method-specific setup
+    llvm::Value *resultArray = nullptr;
+    llvm::AllocaInst *accAlloca = nullptr;
+    llvm::AllocaInst *foundAlloca = nullptr;
+    llvm::Type *cbRetType = callback->getReturnType();
+
+    if (method == "map") {
+        llvm::FunctionCallee createFn = cbRetType->isPointerTy()
+            ? m_module->getOrInsertFunction("array_create_string", charPtr)
+            : m_module->getOrInsertFunction("array_create_i32", charPtr);
+        resultArray = m_builder.CreateCall(createFn, {}, "map_result");
+    } else if (method == "filter") {
+        llvm::FunctionCallee createFn = stringElems
+            ? m_module->getOrInsertFunction("array_create_string", charPtr)
+            : m_module->getOrInsertFunction("array_create_i32", charPtr);
+        resultArray = m_builder.CreateCall(createFn, {}, "filter_result");
+    } else if (method == "reduce") {
+        if (node->arguments.size() < 2) {
+            throw std::runtime_error("Codegen Error: .reduce() requires (callback, initialValue)");
+        }
+        llvm::Value *initial = visit(node->arguments[1].get());
+        initial = coerceValue(initial, cbRetType);
+        accAlloca = m_builder.CreateAlloca(cbRetType, nullptr, "reduce_acc");
+        m_builder.CreateStore(initial, accAlloca);
+    } else if (method == "find") {
+        llvm::Type *elemLLVM = stringElems ? charPtr : i32Ty;
+        foundAlloca = m_builder.CreateAlloca(elemLLVM, nullptr, "find_result");
+        m_builder.CreateStore(stringElems
+            ? (llvm::Value*)llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(charPtr))
+            : (llvm::Value*)llvm::ConstantInt::get(i32Ty, 0), foundAlloca);
+    } else if (method != "forEach") {
+        throw std::runtime_error("Codegen Error: Unsupported callback method '" + method + "'");
+    }
+
+    m_builder.CreateBr(condBlock);
+    m_builder.SetInsertPoint(condBlock);
+    llvm::Value *index = m_builder.CreateLoad(i32Ty, indexAlloca, "cb_idx");
+    llvm::Value *inRange = m_builder.CreateICmpSLT(index, length, "cb_inrange");
+    m_builder.CreateCondBr(inRange, bodyBlock, exitBlock);
+
+    m_builder.SetInsertPoint(bodyBlock);
+    llvm::Value *element = m_builder.CreateCall(getFn, {arrayPtr, index}, "cb_elem");
+
+    auto nextIteration = [&]() {
+        llvm::Value *next = m_builder.CreateAdd(
+            m_builder.CreateLoad(i32Ty, indexAlloca), llvm::ConstantInt::get(i32Ty, 1));
+        m_builder.CreateStore(next, indexAlloca);
+        m_builder.CreateBr(condBlock);
+    };
+
+    llvm::FunctionType *cbType = callback->getFunctionType();
+    auto coerceElem = [&](unsigned paramIdx) {
+        return coerceValue(element, cbType->getParamType(paramIdx));
+    };
+
+    if (method == "map") {
+        llvm::Value *mapped = m_builder.CreateCall(callback, {envPtr, coerceElem(1)}, "mapped");
+        llvm::FunctionCallee pushFn = cbRetType->isPointerTy()
+            ? m_module->getOrInsertFunction("array_push_string", llvm::Type::getVoidTy(m_context), charPtr, charPtr)
+            : m_module->getOrInsertFunction("array_push_i32", llvm::Type::getVoidTy(m_context), charPtr, i32Ty);
+        m_builder.CreateCall(pushFn, {resultArray, cbRetType->isPointerTy() ? mapped : coerceValue(mapped, i32Ty)});
+        nextIteration();
+    } else if (method == "filter") {
+        llvm::Value *keep = ensureI1(m_builder.CreateCall(callback, {envPtr, coerceElem(1)}, "keep"));
+        llvm::BasicBlock *pushBlock = llvm::BasicBlock::Create(m_context, "filter_push", fn);
+        llvm::BasicBlock *skipBlock = llvm::BasicBlock::Create(m_context, "filter_skip", fn);
+        m_builder.CreateCondBr(keep, pushBlock, skipBlock);
+        m_builder.SetInsertPoint(pushBlock);
+        llvm::FunctionCallee pushFn = stringElems
+            ? m_module->getOrInsertFunction("array_push_string", llvm::Type::getVoidTy(m_context), charPtr, charPtr)
+            : m_module->getOrInsertFunction("array_push_i32", llvm::Type::getVoidTy(m_context), charPtr, i32Ty);
+        m_builder.CreateCall(pushFn, {resultArray, element});
+        m_builder.CreateBr(skipBlock);
+        m_builder.SetInsertPoint(skipBlock);
+        nextIteration();
+    } else if (method == "forEach") {
+        m_builder.CreateCall(callback, {envPtr, coerceElem(1)});
+        nextIteration();
+    } else if (method == "reduce") {
+        llvm::Value *acc = m_builder.CreateLoad(cbRetType, accAlloca, "acc");
+        llvm::Value *newAcc = m_builder.CreateCall(callback,
+            {envPtr, coerceValue(acc, cbType->getParamType(1)), coerceElem(2)}, "new_acc");
+        m_builder.CreateStore(coerceValue(newAcc, cbRetType), accAlloca);
+        nextIteration();
+    } else if (method == "find") {
+        llvm::Value *matches = ensureI1(m_builder.CreateCall(callback, {envPtr, coerceElem(1)}, "matches"));
+        llvm::BasicBlock *hitBlock = llvm::BasicBlock::Create(m_context, "find_hit", fn);
+        llvm::BasicBlock *missBlock = llvm::BasicBlock::Create(m_context, "find_miss", fn);
+        m_builder.CreateCondBr(matches, hitBlock, missBlock);
+        m_builder.SetInsertPoint(hitBlock);
+        m_builder.CreateStore(element, foundAlloca);
+        m_builder.CreateBr(exitBlock); // early exit on first match
+        m_builder.SetInsertPoint(missBlock);
+        nextIteration();
+    }
+
+    m_builder.SetInsertPoint(exitBlock);
+    if (method == "map" || method == "filter") return resultArray;
+    if (method == "reduce") return m_builder.CreateLoad(cbRetType, accAlloca, "reduce_final");
+    if (method == "find") return m_builder.CreateLoad(foundAlloca->getAllocatedType(), foundAlloca, "find_final");
+    return nullptr; // forEach
 }
 
 void CodeGen::visit(ObjectPropertyAssignmentNode *node)

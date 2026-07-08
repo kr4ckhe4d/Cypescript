@@ -782,6 +782,32 @@ public:
     }
 };
 
+// Arrow function expression: (a: i32, b: i32): i32 => a + b, or x => { ... }
+// Captured outer variables are snapshotted by value when the closure is created.
+class ArrowFunctionNode : public ExpressionNode
+{
+public:
+    std::vector<FunctionDeclarationNode::Parameter> parameters;
+    std::string returnType; // "auto" = inferred
+    std::vector<std::unique_ptr<StatementNode>> bodyStatements;
+
+    ArrowFunctionNode() : returnType("auto") {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "ArrowFunctionNode: (";
+        for (size_t i = 0; i < parameters.size(); ++i) {
+            if (i > 0) os << ", ";
+            os << parameters[i].name << ": " << parameters[i].type;
+        }
+        os << ") => " << returnType << "\n";
+        for (const auto &stmt : bodyStatements) {
+            if (stmt) stmt->printNode(os, indent + 1);
+        }
+    }
+};
+
 class FunctionCallNode : public ExpressionNode
 {
 public:
