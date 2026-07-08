@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LLVM
+        run: brew install llvm cmake
+
+      - name: Build compiler
+        run: |
+          export PATH="$(brew --prefix llvm)/bin:$PATH"
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+
+      - name: Version check
+        run: ./build/cscript --version
+
+      - name: Run test suite
+        run: bash tests/run_tests.sh
+
+      - name: Compile all examples
+        run: |
+          for f in example/*.csc example/14_modules/main.csc; do
+            case "$f" in *math_utils*) continue;; esac
+            echo "=== $f ==="
+            ./build/cscript -r "$f"
+          done
+          rm -f demo_output.txt
+
+      - name: Smoke-run benchmarks (single run)
+        run: bash benchmarks/cross/run_cross_benchmarks.sh 1
+
+      - name: Upload compiler artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cscript-macos-${{ runner.arch }}
+          path: |
+            build/cscript
+            build/libcypescript.a

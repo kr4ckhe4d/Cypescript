@@ -73,8 +73,8 @@ if command -v code &> /dev/null; then
     read -p "Would you like to open a test Cypescript file? (y/N): " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        if [[ -f "../example/basic/hello.csc" ]]; then
-            code "../example/basic/hello.csc"
+        if [[ -f "../example/01_hello.csc" ]]; then
+            code "../example/01_hello.csc"
         else
             echo -e "${YELLOW}⚠️  Test file not found. Please open a .csc file manually.${NC}"
         fi

@@ -164,3 +164,11 @@ profile.profdata
 /compile-pgo*.sh
 /compile-static.sh
 /cypescript-pool.sh
+.aider*
+
+# Stray executables produced by `cscript file.csc` at the repo root
+/hello
+/bfs
+/all_loops
+/[0-9][0-9]_*
+/demo_output.txt

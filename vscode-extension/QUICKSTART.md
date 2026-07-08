@@ -96,7 +96,7 @@ Add to your VSCode `settings.json`:
 ### Compilation not working?
 1. Make sure you're in the Cypescript project root
 2. Check that `./build/cscript` exists
-3. Try manual compilation first: `./compile-run.sh example/basic/hello.csc`
+3. Try manual compilation first: `./compile-run.sh example/01_hello.csc`
 
 ### IntelliSense not showing?
 1. Check language mode (bottom-right should show "Cypescript")
@@ -105,7 +105,7 @@ Add to your VSCode `settings.json`:
 
 ## 🎉 What's Next?
 
-1. **Explore examples**: Open files from `example/basic/`
+1. **Explore examples**: Open files from `example/`
 2. **Try C++ integration**: Use `example/cpp-integration/`
 3. **Write your own code**: Create new `.csc` files
 4. **Use snippets**: Type prefixes and press Tab

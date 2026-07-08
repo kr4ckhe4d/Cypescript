@@ -63,11 +63,11 @@
       "patterns": [
         {
           "name": "keyword.control.cypescript",
-          "match": "\\b(if|else|while|for|do|break|continue|return)\\b"
+          "match": "\\b(if|else|while|for|do|break|continue|return|switch|case|default|try|catch|finally|throw|of|import|export|from|this)\\b"
         },
         {
           "name": "keyword.other.cypescript",
-          "match": "\\b(let|const|var|function)\\b"
+          "match": "\\b(let|const|var|function|interface|type|extends)\\b"
         },
         {
           "name": "keyword.operator.new.cypescript",
@@ -79,7 +79,7 @@
       "patterns": [
         {
           "name": "storage.type.primitive.cypescript",
-          "match": "\\b(string|i32|f64|boolean|void)\\b"
+          "match": "\\b(string|i32|f64|boolean|void|number)\\b"
         },
         {
           "name": "storage.type.array.cypescript",
@@ -108,6 +108,27 @@
             {
               "name": "constant.character.escape.cypescript",
               "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.template.cypescript",
+          "begin": "`",
+          "end": "`",
+          "patterns": [
+            {
+              "name": "constant.character.escape.cypescript",
+              "match": "\\\\."
+            },
+            {
+              "name": "meta.embedded.expression.cypescript",
+              "begin": "\\$\\{",
+              "end": "\\}",
+              "patterns": [
+                {
+                  "include": "$self"
+                }
+              ]
             }
           ]
         }
@@ -141,7 +162,7 @@
       "patterns": [
         {
           "name": "entity.name.function.builtin.cypescript",
-          "match": "\\b(print|println)\\b"
+          "match": "\\b(print|println)\\b|\\bconsole\\.(log|error|warn|info)\\b|\\b(JSON)\\.(stringify|parse)\\b|\\bMath\\.(sqrt|pow|abs|floor|sin|cos|log|exp)\\b"
         },
         {
           "name": "entity.name.function.cpp.string.cypescript",
