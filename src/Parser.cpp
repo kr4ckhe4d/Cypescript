@@ -47,6 +47,13 @@ bool Parser::match(TokenType expectedType)
     return true;
 }
 
+// Formats a token's source position for error messages
+static std::string tokenPosition(const Token &tok)
+{
+    if (tok.line <= 0) return "";
+    return " at line " + std::to_string(tok.line) + ", column " + std::to_string(tok.column);
+}
+
 const Token &Parser::consume(TokenType expectedType, const std::string &errorMessage)
 {
     if (peek().type == expectedType)
@@ -54,9 +61,9 @@ const Token &Parser::consume(TokenType expectedType, const std::string &errorMes
         return advance();
     }
     std::string errorMsg = "Parse Error: " + errorMessage + ". Found " +
-                           tokenTypeToString(peek().type) + " ('" + peek().value + "') instead.";
+                           tokenTypeToString(peek().type) + " ('" + peek().value + "') instead" +
+                           tokenPosition(peek()) + ".";
     std::cerr << errorMsg << std::endl;
-    // Ideally, add line/column info here from the token
     throw std::runtime_error(errorMsg);
 }
 
@@ -76,7 +83,22 @@ std::unique_ptr<StatementNode> Parser::parseStatement()
 {
     if (peek().type == TOK_LET || peek().type == TOK_CONST)
     {
+        if (peek(1).type == TOK_LBRACE)
+        {
+            return parseDestructuringDeclaration();
+        }
         return parseVariableDeclarationStatement();
+    }
+    else if (peek().type == TOK_EXPORT)
+    {
+        // Modules are inlined at compile time; `export` just marks the declaration
+        advance();
+        return parseStatement();
+    }
+    else if (peek().type == TOK_IMPORT)
+    {
+        throw std::runtime_error("Parse Error: import statements are resolved by the compiler driver. "
+                                 "Compile the importing file with cscript so imports are inlined.");
     }
     else if (peek().type == TOK_FUNCTION)
     {
@@ -85,6 +107,10 @@ std::unique_ptr<StatementNode> Parser::parseStatement()
     else if (peek().type == TOK_TYPE)
     {
         return parseTypeAliasStatement();
+    }
+    else if (peek().type == TOK_INTERFACE)
+    {
+        return parseInterfaceDeclaration();
     }
     else if (peek().type == TOK_RETURN)
     {
@@ -106,54 +132,242 @@ std::unique_ptr<StatementNode> Parser::parseStatement()
     {
         return parseDoWhileStatement();
     }
-    else if (peek().type == TOK_IDENTIFIER)
+    else if (peek().type == TOK_SWITCH)
     {
-        // Look ahead to see what kind of statement this is
-        if (peek(1).type == TOK_LPAREN) {
-            // Function call as expression statement
-            auto expr = parseExpression(); // This will parse the function call
-            consume(TOK_SEMICOLON, "Expected ';' after function call");
-            return std::make_unique<ExpressionStatementNode>(std::move(expr));
-        }
-        else if (peek(1).type == TOK_EQUAL) {
-            // Simple variable assignment: identifier = expression
-            return parseAssignmentStatement();
-        }
-        else if (peek(1).type == TOK_LBRACKET) {
-            // Could be array assignment: identifier[index] = value
-            size_t pos = 2;
-            int bracketDepth = 1;
-            while (pos < m_tokens.size() && bracketDepth > 0) {
-                if (m_tokens[m_currentPos + pos].type == TOK_LBRACKET) bracketDepth++;
-                else if (m_tokens[m_currentPos + pos].type == TOK_RBRACKET) bracketDepth--;
-                pos++;
-            }
-            if (pos < m_tokens.size() && m_tokens[m_currentPos + pos].type == TOK_EQUAL) {
-                return parseArrayAssignmentStatement();
-            } else {
-                auto expr = parseExpression();
-                consume(TOK_SEMICOLON, "Expected ';' after array access statement");
-                return std::make_unique<ExpressionStatementNode>(std::move(expr));
-            }
-        }
-        else if (peek(1).type == TOK_DOT) {
-            auto expr = parseExpression();
-            consume(TOK_SEMICOLON, "Expected ';' after method call");
-            return std::make_unique<ExpressionStatementNode>(std::move(expr));
-        }
-        else {
-            std::string errorMsg = std::string("Unexpected token at start of statement: ") + 
-                                 tokenTypeToString(peek().type) + " ('" + peek().value + "')";
-            throw std::runtime_error(errorMsg);
-        }
+        return parseSwitchStatement();
+    }
+    else if (peek().type == TOK_TRY)
+    {
+        return parseTryStatement();
+    }
+    else if (peek().type == TOK_THROW)
+    {
+        return parseThrowStatement();
+    }
+    else if (peek().type == TOK_BREAK)
+    {
+        advance();
+        consume(TOK_SEMICOLON, "Expected ';' after 'break'");
+        return std::make_unique<BreakStatementNode>();
+    }
+    else if (peek().type == TOK_CONTINUE)
+    {
+        advance();
+        consume(TOK_SEMICOLON, "Expected ';' after 'continue'");
+        return std::make_unique<ContinueStatementNode>();
+    }
+    else if (peek().type == TOK_IDENTIFIER || peek().type == TOK_THIS)
+    {
+        return parseExpressionOrAssignmentStatement(true);
     }
     else
     {
         std::string errorMsg = std::string("Parsing failed: Unexpected token at start of statement: ") +
-                               tokenTypeToString(peek().type) + " ('" + peek().value + "')";
+                               tokenTypeToString(peek().type) + " ('" + peek().value + "')" +
+                               tokenPosition(peek());
         std::cerr << errorMsg << std::endl;
         throw std::runtime_error(errorMsg);
     }
+}
+
+std::unique_ptr<StatementNode> Parser::makeAssignmentStatement(std::unique_ptr<ExpressionNode> target,
+                                                               std::unique_ptr<ExpressionNode> value)
+{
+    if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(target.get())) {
+        return std::make_unique<AssignmentStatementNode>(varExpr->name, std::move(value));
+    }
+    if (dynamic_cast<ArrayAccessNode*>(target.get())) {
+        auto *arrAccess = static_cast<ArrayAccessNode*>(target.release());
+        std::unique_ptr<ArrayAccessNode> owned(arrAccess);
+        return std::make_unique<ArrayAssignmentStatementNode>(std::move(owned->array),
+                                                              std::move(owned->index),
+                                                              std::move(value));
+    }
+    if (dynamic_cast<ObjectAccessNode*>(target.get())) {
+        auto *objAccess = static_cast<ObjectAccessNode*>(target.release());
+        std::unique_ptr<ObjectAccessNode> owned(objAccess);
+        return std::make_unique<ObjectPropertyAssignmentNode>(std::move(owned->object),
+                                                              owned->property,
+                                                              std::move(value));
+    }
+    throw std::runtime_error("Parse Error: Invalid assignment target");
+}
+
+std::unique_ptr<StatementNode> Parser::parseExpressionOrAssignmentStatement(bool consumeSemicolon)
+{
+    size_t exprStart = m_currentPos;
+    auto expr = parseExpression();
+    TokenType next = peek().type;
+
+    auto reparseTarget = [&]() {
+        // Re-parse the target tokens to produce a second copy of the lhs expression
+        size_t save = m_currentPos;
+        m_currentPos = exprStart;
+        auto clone = parseExpression();
+        m_currentPos = save;
+        return clone;
+    };
+
+    std::unique_ptr<StatementNode> stmt;
+    if (next == TOK_EQUAL) {
+        advance();
+        auto value = parseExpression();
+        stmt = makeAssignmentStatement(std::move(expr), std::move(value));
+    } else if (next == TOK_PLUS_EQUAL || next == TOK_MINUS_EQUAL || next == TOK_STAR_EQUAL ||
+               next == TOK_SLASH_EQUAL || next == TOK_PERCENT_EQUAL) {
+        advance();
+        auto rhs = parseExpression();
+        BinaryExpressionNode::Operator op;
+        switch (next) {
+            case TOK_PLUS_EQUAL: op = BinaryExpressionNode::ADD; break;
+            case TOK_MINUS_EQUAL: op = BinaryExpressionNode::SUBTRACT; break;
+            case TOK_STAR_EQUAL: op = BinaryExpressionNode::MULTIPLY; break;
+            case TOK_SLASH_EQUAL: op = BinaryExpressionNode::DIVIDE; break;
+            default: op = BinaryExpressionNode::MODULO; break;
+        }
+        auto value = std::make_unique<BinaryExpressionNode>(op, reparseTarget(), std::move(rhs));
+        stmt = makeAssignmentStatement(std::move(expr), std::move(value));
+    } else if (next == TOK_PLUS_PLUS || next == TOK_MINUS_MINUS) {
+        advance();
+        auto op = (next == TOK_PLUS_PLUS) ? BinaryExpressionNode::ADD : BinaryExpressionNode::SUBTRACT;
+        auto value = std::make_unique<BinaryExpressionNode>(op, reparseTarget(),
+                                                            std::make_unique<IntegerLiteralNode>(1));
+        stmt = makeAssignmentStatement(std::move(expr), std::move(value));
+    } else {
+        stmt = std::make_unique<ExpressionStatementNode>(std::move(expr));
+    }
+
+    if (consumeSemicolon) {
+        consume(TOK_SEMICOLON, "Expected ';' after statement");
+    }
+    return stmt;
+}
+
+std::unique_ptr<StatementNode> Parser::parseDestructuringDeclaration()
+{
+    bool isConst = (peek().type == TOK_CONST);
+    advance(); // consume let/const
+    consume(TOK_LBRACE, "Expected '{' in destructuring declaration");
+    std::vector<std::string> names;
+    while (peek().type != TOK_RBRACE && !isAtEnd()) {
+        names.push_back(consume(TOK_IDENTIFIER, "Expected binding name in destructuring").value);
+        if (peek().type == TOK_COMMA) advance();
+        else break;
+    }
+    consume(TOK_RBRACE, "Expected '}' in destructuring declaration");
+    consume(TOK_EQUAL, "Expected '=' in destructuring declaration");
+    auto initializer = parseExpression();
+    consume(TOK_SEMICOLON, "Expected ';' after destructuring declaration");
+    return std::make_unique<DestructuringDeclarationNode>(std::move(names), std::move(initializer), isConst);
+}
+
+std::unique_ptr<StatementNode> Parser::parseSwitchStatement()
+{
+    consume(TOK_SWITCH, "Expected 'switch'");
+    consume(TOK_LPAREN, "Expected '(' after 'switch'");
+    auto switchNode = std::make_unique<SwitchStatementNode>(parseExpression());
+    consume(TOK_RPAREN, "Expected ')' after switch condition");
+    consume(TOK_LBRACE, "Expected '{' after switch condition");
+
+    bool sawDefault = false;
+    while (peek().type != TOK_RBRACE && !isAtEnd()) {
+        SwitchStatementNode::CaseClause clause;
+        if (peek().type == TOK_CASE) {
+            advance();
+            clause.value = parseExpression();
+            consume(TOK_COLON, "Expected ':' after case value");
+        } else if (peek().type == TOK_DEFAULT) {
+            if (sawDefault) throw std::runtime_error("Parse Error: Multiple 'default' clauses in switch");
+            sawDefault = true;
+            advance();
+            consume(TOK_COLON, "Expected ':' after 'default'");
+        } else {
+            throw std::runtime_error("Parse Error: Expected 'case' or 'default' in switch body");
+        }
+        while (peek().type != TOK_CASE && peek().type != TOK_DEFAULT &&
+               peek().type != TOK_RBRACE && !isAtEnd()) {
+            clause.statements.push_back(parseStatement());
+        }
+        switchNode->cases.push_back(std::move(clause));
+    }
+    consume(TOK_RBRACE, "Expected '}' after switch body");
+    return switchNode;
+}
+
+std::unique_ptr<StatementNode> Parser::parseInterfaceDeclaration()
+{
+    consume(TOK_INTERFACE, "Expected 'interface'");
+    const Token &nameToken = consume(TOK_IDENTIFIER, "Expected interface name");
+    auto interfaceNode = std::make_unique<InterfaceDeclarationNode>(nameToken.value);
+    if (peek().type == TOK_EXTENDS) {
+        advance();
+        interfaceNode->parentInterface = consume(TOK_IDENTIFIER, "Expected parent interface name").value;
+    }
+    consume(TOK_LBRACE, "Expected '{' after interface name");
+    while (peek().type != TOK_RBRACE && !isAtEnd()) {
+        const Token &memberName = consume(TOK_IDENTIFIER, "Expected interface member name");
+        if (peek().type == TOK_LPAREN) {
+            // Method signature: name(params): returnType — recorded but not enforced
+            advance();
+            while (peek().type != TOK_RPAREN && !isAtEnd()) advance();
+            consume(TOK_RPAREN, "Expected ')' in interface method signature");
+            std::string retType = "void";
+            if (peek().type == TOK_COLON) { advance(); retType = parseType(); }
+            interfaceNode->members.emplace_back(memberName.value, "method:" + retType);
+        } else {
+            consume(TOK_COLON, "Expected ':' after interface member name");
+            interfaceNode->members.emplace_back(memberName.value, parseType());
+        }
+        if (peek().type == TOK_SEMICOLON || peek().type == TOK_COMMA) advance();
+    }
+    consume(TOK_RBRACE, "Expected '}' after interface body");
+    return interfaceNode;
+}
+
+std::unique_ptr<StatementNode> Parser::parseTryStatement()
+{
+    consume(TOK_TRY, "Expected 'try'");
+    consume(TOK_LBRACE, "Expected '{' after 'try'");
+    auto tryNode = std::make_unique<TryCatchStatementNode>();
+    while (peek().type != TOK_RBRACE && !isAtEnd()) {
+        tryNode->tryStatements.push_back(parseStatement());
+    }
+    consume(TOK_RBRACE, "Expected '}' after try block");
+
+    if (peek().type == TOK_CATCH) {
+        advance();
+        if (peek().type == TOK_LPAREN) {
+            advance();
+            tryNode->errorVariable = consume(TOK_IDENTIFIER, "Expected catch variable name").value;
+            if (peek().type == TOK_COLON) { advance(); parseType(); } // optional annotation, ignored
+            consume(TOK_RPAREN, "Expected ')' after catch variable");
+        }
+        consume(TOK_LBRACE, "Expected '{' after 'catch'");
+        while (peek().type != TOK_RBRACE && !isAtEnd()) {
+            tryNode->catchStatements.push_back(parseStatement());
+        }
+        consume(TOK_RBRACE, "Expected '}' after catch block");
+    } else if (peek().type != TOK_FINALLY) {
+        throw std::runtime_error("Parse Error: 'try' requires a 'catch' or 'finally' block");
+    }
+
+    if (peek().type == TOK_FINALLY) {
+        advance();
+        consume(TOK_LBRACE, "Expected '{' after 'finally'");
+        while (peek().type != TOK_RBRACE && !isAtEnd()) {
+            tryNode->finallyStatements.push_back(parseStatement());
+        }
+        consume(TOK_RBRACE, "Expected '}' after finally block");
+    }
+    return tryNode;
+}
+
+std::unique_ptr<StatementNode> Parser::parseThrowStatement()
+{
+    consume(TOK_THROW, "Expected 'throw'");
+    auto expr = parseExpression();
+    consume(TOK_SEMICOLON, "Expected ';' after throw expression");
+    return std::make_unique<ThrowStatementNode>(std::move(expr));
 }
 
 std::unique_ptr<TypeAliasNode> Parser::parseTypeAliasStatement() {
@@ -210,11 +424,16 @@ std::unique_ptr<IfStatementNode> Parser::parseIfStatement()
     consume(TOK_RBRACE, "Expected '}'");
     if (peek().type == TOK_ELSE) {
         advance();
-        consume(TOK_LBRACE, "Expected '{'");
-        while (peek().type != TOK_RBRACE && !isAtEnd()) {
-            ifNode->elseStatements.push_back(parseStatement());
+        if (peek().type == TOK_IF) {
+            // else-if chain: parse the nested if as the sole else statement
+            ifNode->elseStatements.push_back(parseIfStatement());
+        } else {
+            consume(TOK_LBRACE, "Expected '{'");
+            while (peek().type != TOK_RBRACE && !isAtEnd()) {
+                ifNode->elseStatements.push_back(parseStatement());
+            }
+            consume(TOK_RBRACE, "Expected '}'");
         }
-        consume(TOK_RBRACE, "Expected '}'");
     }
     return ifNode;
 }
@@ -298,11 +517,9 @@ std::unique_ptr<StatementNode> Parser::parseForStatement()
         consume(TOK_EQUAL, "Expected '='");
         auto initExpr = parseExpression();
         initialization = std::make_unique<VariableDeclarationNode>(varNameToken.value, typeName, std::move(initExpr), isConst);
-    } else if (peek().type == TOK_IDENTIFIER && peek(1).type == TOK_EQUAL) {
-        // Parse assignment inline (without consuming semicolon)
-        const Token &varNameToken = consume(TOK_IDENTIFIER, "Expected variable name");
-        consume(TOK_EQUAL, "Expected '='");
-        initialization = std::make_unique<AssignmentStatementNode>(varNameToken.value, parseExpression());
+    } else if (peek().type == TOK_IDENTIFIER || peek().type == TOK_THIS) {
+        // Parse assignment/expression inline (without consuming semicolon)
+        initialization = parseExpressionOrAssignmentStatement(false);
     }
     consume(TOK_SEMICOLON, "Expected ';' after for-loop init");
     std::unique_ptr<ExpressionNode> condition = nullptr;
@@ -310,21 +527,8 @@ std::unique_ptr<StatementNode> Parser::parseForStatement()
     consume(TOK_SEMICOLON, "Expected ';'");
     std::unique_ptr<StatementNode> increment = nullptr;
     if (peek().type != TOK_RPAREN) {
-        if (peek().type == TOK_IDENTIFIER && peek(1).type == TOK_EQUAL) {
-            const Token &varNameToken = consume(TOK_IDENTIFIER, "Expected variable name");
-            consume(TOK_EQUAL, "Expected '='");
-            increment = std::make_unique<AssignmentStatementNode>(varNameToken.value, parseExpression());
-        } else if (peek().type == TOK_IDENTIFIER && peek(1).type == TOK_LBRACKET) {
-            // Array assignment in for increment
-            const Token &arrayNameToken = consume(TOK_IDENTIFIER, "Expected array name");
-            auto arrayExpr = std::make_unique<VariableExpressionNode>(arrayNameToken.value);
-            consume(TOK_LBRACKET, "Expected '['");
-            auto indexExpr = parseExpression();
-            consume(TOK_RBRACKET, "Expected ']'");
-            consume(TOK_EQUAL, "Expected '='");
-            auto valueExpr = parseExpression();
-            increment = std::make_unique<ArrayAssignmentStatementNode>(std::move(arrayExpr), std::move(indexExpr), std::move(valueExpr));
-        } else throw std::runtime_error("Expected assignment in for increment");
+        // Supports i = i + 1, i++, i += 2, arr[i] = v, obj.prop = v, ...
+        increment = parseExpressionOrAssignmentStatement(false);
     }
     consume(TOK_RPAREN, "Expected ')'");
     consume(TOK_LBRACE, "Expected '{'");
@@ -449,7 +653,14 @@ std::unique_ptr<ExpressionNode> Parser::parsePrimaryExpression()
     std::unique_ptr<ExpressionNode> expr = nullptr;
     if (peek().type == TOK_STRING_LITERAL) expr = parseStringLiteral();
     else if (peek().type == TOK_INT_LITERAL) expr = parseIntegerLiteral();
+    else if (peek().type == TOK_FLOAT_LITERAL) {
+        expr = std::make_unique<FloatLiteralNode>(std::stod(advance().value));
+    }
     else if (peek().type == TOK_TRUE || peek().type == TOK_FALSE) expr = parseBooleanLiteral();
+    else if (peek().type == TOK_THIS) {
+        advance();
+        expr = parseArrayOrObjectAccess(std::make_unique<VariableExpressionNode>("this"));
+    }
     else if (peek().type == TOK_IDENTIFIER) expr = parseVariableExpression();
     else if (peek().type == TOK_LPAREN) {
         advance();
@@ -459,7 +670,9 @@ std::unique_ptr<ExpressionNode> Parser::parsePrimaryExpression()
     else if (peek().type == TOK_NEW) expr = parseNewExpression();
     else if (peek().type == TOK_LBRACKET) expr = parseArrayLiteral();
     else if (peek().type == TOK_LBRACE) expr = parseObjectLiteral();
-    else throw std::runtime_error("Parsing failed: Expected an expression");
+    else throw std::runtime_error("Parsing failed: Expected an expression, found " +
+                                  std::string(tokenTypeToString(peek().type)) + " ('" + peek().value + "')" +
+                                  tokenPosition(peek()));
     while (peek().type == TOK_BANG) advance();
     return expr;
 }
@@ -479,8 +692,12 @@ std::unique_ptr<ExpressionNode> Parser::parseVariableExpression()
     const Token &varToken = consume(TOK_IDENTIFIER, "Expected variable name.");
     
     // Generic function call: func<T>(...)
-    // Only treat '<' as generic if followed by a type name (identifier), not a number/expression
-    if (peek().type == TOK_LESS && peek(1).type == TOK_IDENTIFIER) {
+    // Only treat '<' as generic if followed by a type name, not a number/expression
+    auto isTypeToken = [](TokenType t) {
+        return t == TOK_IDENTIFIER || t == TOK_TYPE_STRING || t == TOK_TYPE_I32 ||
+               t == TOK_TYPE_F64 || t == TOK_TYPE_BOOLEAN || t == TOK_TYPE_NUMBER;
+    };
+    if (peek().type == TOK_LESS && isTypeToken(peek(1).type)) {
         // Save position in case this isn't actually a generic call
         size_t savedPos = m_currentPos;
         advance(); // consume '<'
@@ -507,6 +724,69 @@ std::unique_ptr<ExpressionNode> Parser::parseVariableExpression()
         }
         // Not a generic call, backtrack
         m_currentPos = savedPos;
+    }
+
+    // TypeScript compatibility: console.log/error/warn/info map to println,
+    // multiple arguments are joined with spaces like in JS.
+    if (varToken.value == "console" && peek().type == TOK_DOT) {
+        advance();
+        const Token &methodToken = consume(TOK_IDENTIFIER, "Expected console method");
+        if (methodToken.value != "log" && methodToken.value != "error" &&
+            methodToken.value != "warn" && methodToken.value != "info") {
+            throw std::runtime_error("Parse Error: Unsupported console method 'console." + methodToken.value + "'");
+        }
+        consume(TOK_LPAREN, "Expected '(' after console." + methodToken.value);
+        std::vector<std::unique_ptr<ExpressionNode>> args;
+        while (peek().type != TOK_RPAREN && !isAtEnd()) {
+            args.push_back(parseExpression());
+            if (peek().type == TOK_COMMA) advance();
+            else break;
+        }
+        consume(TOK_RPAREN, "Expected ')'");
+
+        auto callNode = std::make_unique<FunctionCallNode>("println");
+        if (args.empty()) {
+            callNode->arguments.push_back(std::make_unique<StringLiteralNode>(""));
+        } else if (args.size() == 1) {
+            callNode->arguments.push_back(std::move(args[0]));
+        } else {
+            // Join arguments with spaces: a + " " + b + " " + c
+            std::unique_ptr<ExpressionNode> joined = std::move(args[0]);
+            for (size_t i = 1; i < args.size(); ++i) {
+                joined = std::make_unique<BinaryExpressionNode>(BinaryExpressionNode::ADD,
+                    std::move(joined), std::make_unique<StringLiteralNode>(" "));
+                joined = std::make_unique<BinaryExpressionNode>(BinaryExpressionNode::ADD,
+                    std::move(joined), std::move(args[i]));
+            }
+            callNode->arguments.push_back(std::move(joined));
+        }
+        return callNode;
+    }
+
+    // TypeScript compatibility: Math.* maps to the native math stdlib
+    if (varToken.value == "Math" && peek().type == TOK_DOT) {
+        advance();
+        const Token &methodToken = consume(TOK_IDENTIFIER, "Expected Math method");
+        std::string target;
+        if (methodToken.value == "sqrt") target = "math_sqrt";
+        else if (methodToken.value == "pow") target = "math_pow";
+        else if (methodToken.value == "abs") target = "math_abs_f64";
+        else if (methodToken.value == "floor") target = "math_floor";
+        else if (methodToken.value == "sin") target = "math_sin";
+        else if (methodToken.value == "cos") target = "math_cos";
+        else if (methodToken.value == "log") target = "math_log";
+        else if (methodToken.value == "exp") target = "math_exp";
+        else throw std::runtime_error("Parse Error: Unsupported Math method 'Math." + methodToken.value + "'");
+
+        auto callNode = std::make_unique<FunctionCallNode>(target);
+        consume(TOK_LPAREN, "Expected '(' after Math." + methodToken.value);
+        while (peek().type != TOK_RPAREN && !isAtEnd()) {
+            callNode->arguments.push_back(parseExpression());
+            if (peek().type == TOK_COMMA) advance();
+            else break;
+        }
+        consume(TOK_RPAREN, "Expected ')'");
+        return callNode;
     }
 
     if (varToken.value == "JSON" && peek().type == TOK_DOT) {
@@ -602,8 +882,19 @@ std::unique_ptr<ObjectLiteralNode> Parser::parseObjectLiteral()
         std::string key;
         if (peek().type == TOK_IDENTIFIER || peek().type == TOK_STRING_LITERAL) { key = peek().value; advance(); }
         else throw std::runtime_error("Expected property name");
-        consume(TOK_COLON, "Expected ':'");
-        objectNode->properties.emplace_back(key, parseExpression());
+        if (peek().type == TOK_LPAREN) {
+            // Shorthand method: greet(name: string): void { ... }
+            objectNode->properties.emplace_back(key, parseFunctionRest(key));
+        } else {
+            consume(TOK_COLON, "Expected ':'");
+            if (peek().type == TOK_FUNCTION) {
+                // Method property: add: function(x: i32): i32 { ... }
+                advance();
+                objectNode->properties.emplace_back(key, parseFunctionRest(key));
+            } else {
+                objectNode->properties.emplace_back(key, parseExpression());
+            }
+        }
         if (peek().type == TOK_COMMA) advance();
         else break;
     } while (peek().type != TOK_RBRACE && !isAtEnd());
@@ -636,19 +927,9 @@ std::unique_ptr<ExpressionNode> Parser::parseArrayOrObjectAccess(std::unique_ptr
     return base;
 }
 
-std::unique_ptr<FunctionDeclarationNode> Parser::parseFunctionDeclaration()
+std::unique_ptr<FunctionDeclarationNode> Parser::parseFunctionRest(const std::string& name)
 {
-    consume(TOK_FUNCTION, "Expected 'function'");
-    const Token &nameToken = consume(TOK_IDENTIFIER, "Expected name");
-    auto funcNode = std::make_unique<FunctionDeclarationNode>(nameToken.value, "void");
-    if (peek().type == TOK_LESS) {
-        advance();
-        while (peek().type != TOK_GREATER) {
-            funcNode->genericParams.push_back(consume(TOK_IDENTIFIER, "Expected generic parameter name").value);
-            if (peek().type == TOK_COMMA) advance();
-        }
-        consume(TOK_GREATER, "Expected '>'");
-    }
+    auto funcNode = std::make_unique<FunctionDeclarationNode>(name, "void");
     consume(TOK_LPAREN, "Expected '('");
     if (peek().type != TOK_RPAREN) {
         do {
@@ -663,6 +944,24 @@ std::unique_ptr<FunctionDeclarationNode> Parser::parseFunctionDeclaration()
     consume(TOK_LBRACE, "Expected '{'");
     while (peek().type != TOK_RBRACE && !isAtEnd()) funcNode->bodyStatements.push_back(parseStatement());
     consume(TOK_RBRACE, "Expected '}'");
+    return funcNode;
+}
+
+std::unique_ptr<FunctionDeclarationNode> Parser::parseFunctionDeclaration()
+{
+    consume(TOK_FUNCTION, "Expected 'function'");
+    const Token &nameToken = consume(TOK_IDENTIFIER, "Expected name");
+    std::vector<std::string> genericParams;
+    if (peek().type == TOK_LESS) {
+        advance();
+        while (peek().type != TOK_GREATER) {
+            genericParams.push_back(consume(TOK_IDENTIFIER, "Expected generic parameter name").value);
+            if (peek().type == TOK_COMMA) advance();
+        }
+        consume(TOK_GREATER, "Expected '>'");
+    }
+    auto funcNode = parseFunctionRest(nameToken.value);
+    funcNode->genericParams = std::move(genericParams);
     return funcNode;
 }
 

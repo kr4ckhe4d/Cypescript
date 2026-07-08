@@ -8,12 +8,15 @@
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
+#include <cstdio>
 #include <thread>
 #include <chrono>
 #include <sstream>
 #include <vector>
 #include <map>
 #include <cctype>
+#include <csetjmp>
+#include <setjmp.h> // for _setjmp/_longjmp pairing with generated code
 
 class DynamicArray {
 public:
@@ -115,6 +118,22 @@ extern "C" {
         }
     }
 
+    int32_t array_pop_i32(void* arr_ptr) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (!arr || arr->i32_data.empty()) return 0;
+        int32_t val = arr->i32_data.back();
+        arr->i32_data.pop_back();
+        return val;
+    }
+
+    const char* array_pop_string(void* arr_ptr) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (!arr || arr->string_data.empty()) return nullptr;
+        std::string* result = new std::string(arr->string_data.back());
+        arr->string_data.pop_back();
+        return result->c_str();
+    }
+
     void array_push_string(void* arr_ptr, const char* val) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
         if (arr && val) {
@@ -189,6 +208,10 @@ extern "C" {
         return std::abs(x);
     }
     
+    double math_floor(double x) {
+        return std::floor(x);
+    }
+
     double math_sin(double x) {
         return std::sin(x);
     }
@@ -263,6 +286,24 @@ extern "C" {
         return pos == std::string::npos ? -1 : (int)pos;
     }
     
+    // ===================
+    // VALUE -> STRING CONVERSION (used by `+` concatenation and template literals)
+    // ===================
+    const char* cyps_i32_to_string(int32_t value) {
+        std::string s = std::to_string(value);
+        char* result = new char[s.length() + 1];
+        std::strcpy(result, s.c_str());
+        return result;
+    }
+
+    const char* cyps_f64_to_string(double value) {
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "%g", value);
+        char* result = new char[std::strlen(buf) + 1];
+        std::strcpy(result, buf);
+        return result;
+    }
+
     const char* string_concat(const char* str1, const char* str2) {
         if (!str1 && !str2) return nullptr;
         if (!str1) str1 = "";
@@ -842,6 +883,44 @@ extern "C" {
     }
     
     // Memory management helper
+    // ===================
+    // EXCEPTION RUNTIME (try/catch/throw)
+    // Generated code calls _setjmp on a buffer from cyps_try_push; cyps_throw
+    // longjmps back to the innermost registered recovery point.
+    // ===================
+    static const int CYPS_MAX_TRY_DEPTH = 64;
+    static jmp_buf g_cyps_try_stack[CYPS_MAX_TRY_DEPTH];
+    static int g_cyps_try_top = 0;
+    static std::string g_cyps_last_error;
+
+    void* cyps_try_push() {
+        if (g_cyps_try_top >= CYPS_MAX_TRY_DEPTH) {
+            std::fprintf(stderr, "Runtime Error: try blocks nested too deeply\n");
+            std::exit(1);
+        }
+        return static_cast<void*>(g_cyps_try_stack[g_cyps_try_top++]);
+    }
+
+    void cyps_try_pop() {
+        if (g_cyps_try_top > 0) g_cyps_try_top--;
+    }
+
+    const char* cyps_last_error() {
+        char* result = new char[g_cyps_last_error.length() + 1];
+        std::strcpy(result, g_cyps_last_error.c_str());
+        return result;
+    }
+
+    void cyps_throw(const char* message) {
+        g_cyps_last_error = message ? message : "error";
+        if (g_cyps_try_top == 0) {
+            std::fprintf(stderr, "Uncaught exception: %s\n", g_cyps_last_error.c_str());
+            std::exit(1);
+        }
+        g_cyps_try_top--;
+        _longjmp(g_cyps_try_stack[g_cyps_try_top], 1);
+    }
+
     void free_string(const char* str) {
         delete[] str;
     }

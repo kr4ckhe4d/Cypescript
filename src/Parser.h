@@ -37,6 +37,19 @@ private:
     std::unique_ptr<DoWhileStatementNode> parseDoWhileStatement();  // For do-while loops
     std::unique_ptr<StatementNode> parseAssignmentStatement();      // For variable assignments
     std::unique_ptr<StatementNode> parseArrayAssignmentStatement(); // For array element assignments
+    std::unique_ptr<StatementNode> parseSwitchStatement();          // For switch/case
+    std::unique_ptr<StatementNode> parseInterfaceDeclaration();     // For interface declarations
+    std::unique_ptr<StatementNode> parseTryStatement();             // For try/catch/finally
+    std::unique_ptr<StatementNode> parseThrowStatement();           // For throw
+    std::unique_ptr<StatementNode> parseDestructuringDeclaration(); // For let { a, b } = obj
+    // Parses expression-initiated statements: assignments (=, +=, ...), i++/i--,
+    // property/array assignments, and plain expression statements.
+    std::unique_ptr<StatementNode> parseExpressionOrAssignmentStatement(bool consumeSemicolon);
+    // Builds the correct assignment statement node for the given target expression
+    std::unique_ptr<StatementNode> makeAssignmentStatement(std::unique_ptr<ExpressionNode> target,
+                                                           std::unique_ptr<ExpressionNode> value);
+    // Parses "(params): returnType { body }" after a function name/key
+    std::unique_ptr<FunctionDeclarationNode> parseFunctionRest(const std::string& name);
     
     // Helper methods
     bool isKnownFunction(const std::string& name);                  // Check if function is known

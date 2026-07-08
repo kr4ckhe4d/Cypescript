@@ -26,12 +26,91 @@ llvm::Value *CodeGen::ensureI1(llvm::Value *val)
 {
     if (!val) return nullptr;
     if (val->getType()->isIntegerTy(1)) return val;
-    
+
     if (val->getType()->isPointerTy()) {
         return m_builder.CreateICmpNE(val, llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(val->getType())), "truthy_ptr");
+    } else if (val->getType()->isDoubleTy()) {
+        return m_builder.CreateFCmpONE(val, llvm::ConstantFP::get(val->getType(), 0.0), "truthy_f64");
     } else {
         return m_builder.CreateICmpNE(val, llvm::ConstantInt::get(val->getType(), 0), "truthy_val");
     }
+}
+
+llvm::Value *CodeGen::coerceValue(llvm::Value *val, llvm::Type *targetType)
+{
+    if (!val || !targetType || val->getType() == targetType) return val;
+
+    llvm::Type *srcType = val->getType();
+    if (srcType->isIntegerTy(1) && targetType->isIntegerTy(32)) {
+        return m_builder.CreateZExt(val, targetType, "bool_ext");
+    }
+    if (srcType->isIntegerTy(32) && targetType->isIntegerTy(1)) {
+        return m_builder.CreateICmpNE(val, llvm::ConstantInt::get(srcType, 0), "bool_trunc");
+    }
+    if (srcType->isIntegerTy() && targetType->isDoubleTy()) {
+        return m_builder.CreateSIToFP(val, targetType, "int_to_f64");
+    }
+    if (srcType->isDoubleTy() && targetType->isIntegerTy(32)) {
+        return m_builder.CreateFPToSI(val, targetType, "f64_to_int");
+    }
+    return val;
+}
+
+llvm::Value *CodeGen::toStringValue(llvm::Value *val)
+{
+    if (!val) return nullptr;
+    llvm::Type *type = val->getType();
+    llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+
+    if (type->isPointerTy()) {
+        return val; // already a string pointer
+    }
+    if (type->isDoubleTy()) {
+        llvm::FunctionCallee toStr = m_module->getOrInsertFunction("cyps_f64_to_string",
+            charPtr, llvm::Type::getDoubleTy(m_context));
+        return m_builder.CreateCall(toStr, {val}, "f64_str");
+    }
+    // Integers (including i1 booleans)
+    if (type->isIntegerTy(1)) {
+        val = m_builder.CreateZExt(val, llvm::Type::getInt32Ty(m_context), "bool_ext");
+    }
+    llvm::FunctionCallee toStr = m_module->getOrInsertFunction("cyps_i32_to_string",
+        charPtr, llvm::Type::getInt32Ty(m_context));
+    return m_builder.CreateCall(toStr, {val}, "i32_str");
+}
+
+llvm::FunctionCallee CodeGen::getOrDeclareSetjmp()
+{
+    llvm::Function *fn = m_module->getFunction("_setjmp");
+    if (!fn) {
+        llvm::FunctionType *fnType = llvm::FunctionType::get(
+            llvm::Type::getInt32Ty(m_context),
+            {llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0)},
+            false);
+        fn = llvm::Function::Create(fnType, llvm::Function::ExternalLinkage, "_setjmp", m_module.get());
+        fn->addFnAttr(llvm::Attribute::ReturnsTwice);
+    }
+    return llvm::FunctionCallee(fn->getFunctionType(), fn);
+}
+
+void CodeGen::emitTryPops(int count)
+{
+    if (count <= 0) return;
+    llvm::FunctionCallee popFn = m_module->getOrInsertFunction("cyps_try_pop",
+        llvm::Type::getVoidTy(m_context));
+    for (int i = 0; i < count; ++i) {
+        m_builder.CreateCall(popFn, {});
+    }
+}
+
+void CodeGen::branchAndSealBlock(llvm::BasicBlock *target, const std::string& deadName)
+{
+    m_builder.CreateBr(target);
+    // Statements after break/continue/throw land in an unreachable block so
+    // codegen can continue without emitting into a terminated block.
+    llvm::Function *fn = m_builder.GetInsertBlock()->getParent();
+    llvm::BasicBlock *deadBlock = llvm::BasicBlock::Create(m_context, deadName, fn);
+    m_builder.SetInsertPoint(deadBlock);
 }
 
 // --- Helper Methods ---
@@ -53,11 +132,21 @@ llvm::Type *CodeGen::getLLVMType(const std::string &typeName)
     }
     else if (typeName == "boolean")
     {
-        return llvm::Type::getInt1Ty(m_context);
+        // Booleans are represented as i32 throughout (literals, printing, C interop)
+        return llvm::Type::getInt32Ty(m_context);
+    }
+    else if (typeName == "number")
+    {
+        return llvm::Type::getDoubleTy(m_context);
     }
     else if (typeName == "void")
     {
         return llvm::Type::getVoidTy(m_context);
+    }
+    else if (typeName == "object" || interfaces.count(typeName))
+    {
+        // Native objects and interface-typed values are opaque pointers
+        return llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
     }
     else if (typeName.find('<') != std::string::npos || typeName.length() == 1)
     {
@@ -118,6 +207,21 @@ void CodeGen::visit(ProgramNode *node)
     variableTypes.clear();
     arraySizes.clear();
     declaredFunctions.clear();
+    interfaces.clear();
+    objectMethods.clear();
+    methodFunctions.clear();
+    loopTargets.clear();
+    loopTargetTryDepths.clear();
+    tryDepth = 0;
+
+    // Pass 0: Register all interfaces so they are usable as types everywhere
+    for (const auto &stmt : node->statements)
+    {
+        if (auto *interfaceNode = dynamic_cast<InterfaceDeclarationNode *>(stmt.get()))
+        {
+            interfaces[interfaceNode->interfaceName] = interfaceNode;
+        }
+    }
 
     // First pass: Process all function declarations at module level
     for (const auto &stmt : node->statements)
@@ -132,7 +236,8 @@ void CodeGen::visit(ProgramNode *node)
     std::vector<StatementNode*> mainStatements;
     for (const auto &stmt : node->statements)
     {
-        if (!dynamic_cast<FunctionDeclarationNode *>(stmt.get()))
+        if (!dynamic_cast<FunctionDeclarationNode *>(stmt.get()) &&
+            !dynamic_cast<InterfaceDeclarationNode *>(stmt.get()))
         {
             mainStatements.push_back(stmt.get());
         }
@@ -219,6 +324,38 @@ void CodeGen::visit(StatementNode *node)
     {
         visit(arrayAssignNode);
     }
+    else if (auto *breakNode = dynamic_cast<BreakStatementNode *>(node))
+    {
+        visit(breakNode);
+    }
+    else if (auto *continueNode = dynamic_cast<ContinueStatementNode *>(node))
+    {
+        visit(continueNode);
+    }
+    else if (auto *switchNode = dynamic_cast<SwitchStatementNode *>(node))
+    {
+        visit(switchNode);
+    }
+    else if (auto *interfaceNode = dynamic_cast<InterfaceDeclarationNode *>(node))
+    {
+        visit(interfaceNode);
+    }
+    else if (auto *propAssignNode = dynamic_cast<ObjectPropertyAssignmentNode *>(node))
+    {
+        visit(propAssignNode);
+    }
+    else if (auto *destructNode = dynamic_cast<DestructuringDeclarationNode *>(node))
+    {
+        visit(destructNode);
+    }
+    else if (auto *tryNode = dynamic_cast<TryCatchStatementNode *>(node))
+    {
+        visit(tryNode);
+    }
+    else if (auto *throwNode = dynamic_cast<ThrowStatementNode *>(node))
+    {
+        visit(throwNode);
+    }
     else
     {
         std::cerr << "Codegen Error: Unsupported statement type.\n";
@@ -228,161 +365,93 @@ void CodeGen::visit(StatementNode *node)
 
 void CodeGen::visit(VariableDeclarationNode *node)
 {
-    llvm::Type *varLLVMType;
-    
-    // Handle type inference
-    if (node->typeName == "auto") {
-        // Infer type from initializer
-        if (node->initializer) {
-            // Try to determine type from the initializer
-            if (auto *strLit = dynamic_cast<StringLiteralNode*>(node->initializer.get())) {
-                varLLVMType = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
-            } else if (auto *intLit = dynamic_cast<IntegerLiteralNode*>(node->initializer.get())) {
-                varLLVMType = llvm::Type::getInt32Ty(m_context);
-            } else if (auto *boolLit = dynamic_cast<BooleanLiteralNode*>(node->initializer.get())) {
-                varLLVMType = llvm::Type::getInt32Ty(m_context); // Booleans are stored as i32
-            } else if (auto *objLit = dynamic_cast<ObjectLiteralNode*>(node->initializer.get())) {
-                // Object literal - we'll determine the actual struct type during object creation
-                // For now, use a generic pointer that will be cast appropriately
-                varLLVMType = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
-                
-                // Track this variable as an object
-                std::string objectKey = "obj_" + std::to_string(reinterpret_cast<uintptr_t>(objLit));
-                variableToObjectKey[node->variableName] = objectKey;
-            } else if (auto *arrLit = dynamic_cast<ArrayLiteralNode*>(node->initializer.get())) {
-                // For arrays, use pointer to element type
-                if (arrLit->elementType == "i32") {
-                    varLLVMType = llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0);
-                } else if (arrLit->elementType == "string") {
-                    varLLVMType = llvm::PointerType::get(llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0), 0);
-                } else {
-                    varLLVMType = llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0);
+    // Structural type check when declaring against an interface
+    if (interfaces.count(node->typeName)) {
+        if (auto *objLit = dynamic_cast<ObjectLiteralNode*>(node->initializer.get())) {
+            checkInterfaceConformance(node->typeName, objLit, node->variableName);
+        }
+    }
+
+    // Generate the initializer first so its value can drive type inference
+    llvm::Value *initVal = nullptr;
+    if (node->initializer) {
+        initVal = visit(node->initializer.get());
+        if (!initVal) {
+            throw std::runtime_error("Codegen Error: Failed to generate initializer for variable " + node->variableName);
+        }
+    }
+
+    // Determine the recorded type name for this variable
+    std::string typeToStore = node->typeName;
+    if (auto *objLit = dynamic_cast<ObjectLiteralNode*>(node->initializer.get())) {
+        // Native object: track the layout key regardless of the declared type
+        typeToStore = "object";
+        variableToObjectKey[node->variableName] =
+            "opt_obj_" + std::to_string(reinterpret_cast<uintptr_t>(objLit));
+    } else if (auto *arrLit = dynamic_cast<ArrayLiteralNode*>(node->initializer.get())) {
+        if (node->typeName == "auto") typeToStore = arrLit->elementType + "[]";
+        arraySizes[node->variableName] = arrLit->elements.size();
+    } else if (node->typeName == "auto") {
+        if (auto *callNode = dynamic_cast<FunctionCallNode*>(node->initializer.get())) {
+            if (callNode->functionName == "JSON.parse") typeToStore = "json";
+            else if (callNode->functionName == "JSON.stringify") typeToStore = "string";
+            else typeToStore = "";
+        } else if (auto *newExpr = dynamic_cast<NewExpressionNode*>(node->initializer.get())) {
+            // e.g. new Map<string, string[]>() -> "Map<string,string[]>"
+            typeToStore = newExpr->className;
+            if (!newExpr->genericTypes.empty()) {
+                typeToStore += "<";
+                for (size_t i = 0; i < newExpr->genericTypes.size(); ++i) {
+                    if (i > 0) typeToStore += ",";
+                    typeToStore += newExpr->genericTypes[i];
                 }
-            } else if (auto *arrAccess = dynamic_cast<ArrayAccessNode*>(node->initializer.get())) {
-                // Array access - infer from context, default to i32
-                varLLVMType = llvm::Type::getInt32Ty(m_context);
-            } else if (auto *callNode = dynamic_cast<FunctionCallNode*>(node->initializer.get())) {
-                if (callNode->functionName == "JSON.parse" || callNode->functionName == "JSON.stringify") {
-                    varLLVMType = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
-                } else {
-                    varLLVMType = llvm::Type::getInt32Ty(m_context);
-                }
-            } else {
-                // Default to i32 for unknown types
-                varLLVMType = llvm::Type::getInt32Ty(m_context);
-                std::cerr << "Codegen Warning: Could not infer type for variable '" << node->variableName << "', defaulting to i32\n";
+                typeToStore += ">";
+            }
+        } else if (auto *varRef = dynamic_cast<VariableExpressionNode*>(node->initializer.get())) {
+            // Aliasing another variable: copy its recorded type and object key
+            auto typeIt = variableTypes.find(varRef->name);
+            typeToStore = (typeIt != variableTypes.end()) ? typeIt->second : "";
+            auto keyIt = variableToObjectKey.find(varRef->name);
+            if (keyIt != variableToObjectKey.end()) {
+                variableToObjectKey[node->variableName] = keyIt->second;
             }
         } else {
-            varLLVMType = llvm::Type::getInt32Ty(m_context);
-            std::cerr << "Codegen Warning: No initializer for auto variable '" << node->variableName << "', defaulting to i32\n";
+            typeToStore = "";
         }
-    } else {
-        varLLVMType = getLLVMType(node->typeName);
+        if (typeToStore.empty()) {
+            // Fall back to the LLVM type of the generated value
+            if (!initVal) typeToStore = "i32";
+            else if (initVal->getType()->isPointerTy()) typeToStore = "string";
+            else if (initVal->getType()->isDoubleTy()) typeToStore = "f64";
+            else if (initVal->getType()->isIntegerTy(1)) typeToStore = "boolean";
+            else typeToStore = "i32";
+        }
     }
-    
+
+    // Determine the LLVM storage type
+    llvm::Type *varLLVMType = (node->typeName == "auto" || typeToStore == "object")
+        ? getLLVMType(typeToStore)
+        : getLLVMType(node->typeName);
+
     // Create alloca at the beginning of the function
     llvm::Function *currentFunction = m_builder.GetInsertBlock()->getParent();
     llvm::IRBuilder<> TmpB(&currentFunction->getEntryBlock(), currentFunction->getEntryBlock().begin());
     llvm::AllocaInst *allocaInst = TmpB.CreateAlloca(varLLVMType, nullptr, node->variableName);
 
     namedValues[node->variableName] = allocaInst;
-    
-    // Store type information for later use (especially for array element types)
-    std::string typeToStore = node->typeName;
-    if (node->typeName == "auto" && node->initializer) {
-        // For auto variables, store the inferred type
-        if (auto *strLit = dynamic_cast<StringLiteralNode*>(node->initializer.get())) {
-            typeToStore = "string";
-        } else if (auto *intLit = dynamic_cast<IntegerLiteralNode*>(node->initializer.get())) {
-            typeToStore = "i32";
-        } else if (auto *boolLit = dynamic_cast<BooleanLiteralNode*>(node->initializer.get())) {
-            typeToStore = "boolean";
-        } else if (auto *objLit = dynamic_cast<ObjectLiteralNode*>(node->initializer.get())) {
-            typeToStore = "object";
-            
-            // PHASE 1 OPTIMIZATION: Store object key mapping for optimized access
-            std::string objectKey = "opt_obj_" + std::to_string(reinterpret_cast<uintptr_t>(objLit));
-            variableToObjectKey[node->variableName] = objectKey;  // Map variable name to object key
-        } else if (auto *arrLit = dynamic_cast<ArrayLiteralNode*>(node->initializer.get())) {
-            typeToStore = arrLit->elementType + "[]";
-            // Store array size for .length property access
-            arraySizes[node->variableName] = arrLit->elements.size();
-        } else if (auto *callNode = dynamic_cast<FunctionCallNode*>(node->initializer.get())) {
-            if (callNode->functionName == "JSON.parse") {
-                typeToStore = "json";
-            } else if (callNode->functionName == "JSON.stringify") {
-                typeToStore = "string";
-            } else {
-                typeToStore = "i32"; // default
-            }
-        } else {
-            typeToStore = "i32"; // default
-        }
-    } else if (node->typeName.length() > 2 && node->typeName.substr(node->typeName.length() - 2) == "[]") {
-        // Explicit array type declaration
-        if (auto *arrLit = dynamic_cast<ArrayLiteralNode*>(node->initializer.get())) {
-            // Store array size for .length property access
-            arraySizes[node->variableName] = arrLit->elements.size();
-        }
-    }
     variableTypes[node->variableName] = typeToStore;
     constVariables[node->variableName] = node->isConst;
 
-    if (node->initializer)
-    {
-        llvm::Value *initVal = visit(node->initializer.get());
-        if (!initVal)
-        {
-            throw std::runtime_error("Codegen Error: Failed to generate initializer for variable " + node->variableName);
-        }
-        
-        // Special handling for array assignments
-        if (node->typeName.length() > 2 && node->typeName.substr(node->typeName.length() - 2) == "[]") {
-            // This is an array type assignment
-            // The initVal should be a pointer to the array data
-            if (initVal->getType()->isPointerTy() && varLLVMType->isPointerTy()) {
-                // Both are pointers, store the pointer value
-                m_builder.CreateStore(initVal, allocaInst);
-            } else {
-                std::cerr << "Codegen Warning: Array type mismatch for variable '" << node->variableName << "'\n";
-                m_builder.CreateStore(initVal, allocaInst);
-            }
-        } else if (auto *objLit = dynamic_cast<ObjectLiteralNode*>(node->initializer.get())) {
-            // Special handling for object assignments - cast struct pointer to generic pointer
-            if (initVal->getType()->isPointerTy() && varLLVMType->isPointerTy()) {
-                // Cast the struct pointer to the generic pointer type for storage
-                llvm::Value* castedPtr = m_builder.CreateBitCast(initVal, varLLVMType, "obj_cast");
-                m_builder.CreateStore(castedPtr, allocaInst);
-            } else {
-                std::cerr << "Codegen Warning: Object type mismatch for variable '" << node->variableName << "'\n";
-                m_builder.CreateStore(initVal, allocaInst);
+    if (initVal) {
+        if (initVal->getType()->isPointerTy() && varLLVMType->isPointerTy()) {
+            // Pointers (strings, arrays, objects, collections) store directly
+            if (initVal->getType() != varLLVMType) {
+                initVal = m_builder.CreateBitCast(initVal, varLLVMType, "ptr_cast");
             }
         } else {
-            // Regular type compatibility check
-            if (initVal->getType() != varLLVMType)
-            {
-                // Allow compatible pointer types (string literals to string variables)
-                if (varLLVMType->isPointerTy() && initVal->getType()->isPointerTy())
-                {
-                    // Both are pointers, allow the assignment (LLVM will handle compatibility)
-                }
-                else if (varLLVMType->isIntegerTy() && initVal->getType()->isIntegerTy())
-                {
-                    // Both are integers, allow the assignment
-                }
-                else
-                {
-                    // For array access results, be more lenient
-                    if (auto *arrAccess = dynamic_cast<ArrayAccessNode*>(node->initializer.get())) {
-                        // Array access - allow type mismatches for now
-                    } else {
-                        std::cerr << "Codegen Warning: Type mismatch for variable '" << node->variableName << "'\n";
-                    }
-                }
-            }
-            
-            m_builder.CreateStore(initVal, allocaInst);
+            initVal = coerceValue(initVal, varLLVMType);
         }
+        m_builder.CreateStore(initVal, allocaInst);
     }
 }
 
@@ -399,6 +468,10 @@ llvm::Value *CodeGen::visit(ExpressionNode *node)
     else if (auto *boolNode = dynamic_cast<BooleanLiteralNode *>(node))
     {
         return visit(boolNode);
+    }
+    else if (auto *floatNode = dynamic_cast<FloatLiteralNode *>(node))
+    {
+        return visit(floatNode);
     }
     else if (auto *varNode = dynamic_cast<VariableExpressionNode *>(node))
     {
@@ -463,6 +536,11 @@ llvm::Value *CodeGen::visit(BooleanLiteralNode *node)
     return llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), node->value ? 1 : 0, false);
 }
 
+llvm::Value *CodeGen::visit(FloatLiteralNode *node)
+{
+    return llvm::ConstantFP::get(llvm::Type::getDoubleTy(m_context), node->value);
+}
+
 llvm::Value *CodeGen::visit(VariableExpressionNode *node)
 {
     llvm::AllocaInst *allocaInst = namedValues[node->name];
@@ -491,6 +569,9 @@ llvm::Value *CodeGen::visit(UnaryExpressionNode *node)
                 return m_builder.CreateZExt(isZero, llvm::Type::getInt32Ty(m_context), "nottmp");
             }
         case UnaryExpressionNode::MINUS:
+            if (operand->getType()->isDoubleTy()) {
+                return m_builder.CreateFNeg(operand, "fnegtmp");
+            }
             return m_builder.CreateNeg(operand, "negtmp");
         default:
             throw std::runtime_error("Unknown unary operator");
@@ -546,9 +627,63 @@ llvm::Value *CodeGen::visit(BinaryExpressionNode *node)
         throw std::runtime_error("Codegen Error: Failed to generate operands for binary expression");
     }
     
+    // String concatenation: `+` where either side is a string.
+    // Non-string operands are converted with cyps_i32_to_string / cyps_f64_to_string.
+    if (node->op == BinaryExpressionNode::ADD &&
+        (leftVal->getType()->isPointerTy() || rightVal->getType()->isPointerTy())) {
+        llvm::Value *leftStr = toStringValue(leftVal);
+        llvm::Value *rightStr = toStringValue(rightVal);
+        llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+        llvm::FunctionCallee concatFunc = m_module->getOrInsertFunction("string_concat",
+            charPtr, charPtr, charPtr);
+        return m_builder.CreateCall(concatFunc, {leftStr, rightStr}, "concat");
+    }
+
+    // Floating-point arithmetic: promote to double when either side is f64
+    if (leftVal->getType()->isDoubleTy() || rightVal->getType()->isDoubleTy()) {
+        llvm::Type *doubleTy = llvm::Type::getDoubleTy(m_context);
+        leftVal = coerceValue(leftVal, doubleTy);
+        rightVal = coerceValue(rightVal, doubleTy);
+
+        switch (node->op) {
+            case BinaryExpressionNode::ADD:
+                return m_builder.CreateFAdd(leftVal, rightVal, "faddtmp");
+            case BinaryExpressionNode::SUBTRACT:
+                return m_builder.CreateFSub(leftVal, rightVal, "fsubtmp");
+            case BinaryExpressionNode::MULTIPLY:
+                return m_builder.CreateFMul(leftVal, rightVal, "fmultmp");
+            case BinaryExpressionNode::DIVIDE:
+                return m_builder.CreateFDiv(leftVal, rightVal, "fdivtmp");
+            case BinaryExpressionNode::MODULO:
+                return m_builder.CreateFRem(leftVal, rightVal, "fmodtmp");
+            case BinaryExpressionNode::EQUAL:
+                return m_builder.CreateFCmpOEQ(leftVal, rightVal, "feqtmp");
+            case BinaryExpressionNode::NOT_EQUAL:
+                return m_builder.CreateFCmpONE(leftVal, rightVal, "fnetmp");
+            case BinaryExpressionNode::LESS_THAN:
+                return m_builder.CreateFCmpOLT(leftVal, rightVal, "flttmp");
+            case BinaryExpressionNode::LESS_EQUAL:
+                return m_builder.CreateFCmpOLE(leftVal, rightVal, "fletmp");
+            case BinaryExpressionNode::GREATER_THAN:
+                return m_builder.CreateFCmpOGT(leftVal, rightVal, "fgttmp");
+            case BinaryExpressionNode::GREATER_EQUAL:
+                return m_builder.CreateFCmpOGE(leftVal, rightVal, "fgetmp");
+            default:
+                throw std::runtime_error("Codegen Error: Unknown binary operator for f64");
+        }
+    }
+
+    // Normalize mixed integer widths (i1 comparisons combined with i32 values)
+    if (leftVal->getType()->isIntegerTy() && rightVal->getType()->isIntegerTy() &&
+        leftVal->getType() != rightVal->getType()) {
+        llvm::Type *i32Ty = llvm::Type::getInt32Ty(m_context);
+        leftVal = coerceValue(leftVal, i32Ty);
+        rightVal = coerceValue(rightVal, i32Ty);
+    }
+
     // Check if we're dealing with strings
     bool isStringComparison = leftVal->getType()->isPointerTy() && rightVal->getType()->isPointerTy();
-    
+
     // Handle string comparisons
     if (isStringComparison && (node->op == BinaryExpressionNode::EQUAL || node->op == BinaryExpressionNode::NOT_EQUAL)) {
         // For string comparison, we need to call strcmp
@@ -700,16 +835,136 @@ void CodeGen::visit(WhileStatementNode *node)
     
     // Generate body block
     m_builder.SetInsertPoint(bodyBlock);
+    loopTargets.push_back({condBlock, exitBlock});
+    loopTargetTryDepths.push_back(tryDepth);
     for (const auto &stmt : node->bodyStatements) {
         visit(stmt.get());
     }
-    
+    loopTargets.pop_back();
+    loopTargetTryDepths.pop_back();
+
     // Branch back to condition (creating the loop)
     if (!m_builder.GetInsertBlock()->getTerminator()) {
         m_builder.CreateBr(condBlock);
     }
-    
+
     // Continue with exit block
+    m_builder.SetInsertPoint(exitBlock);
+}
+
+void CodeGen::visit(BreakStatementNode *node)
+{
+    (void)node;
+    if (loopTargets.empty()) {
+        throw std::runtime_error("Codegen Error: 'break' used outside of a loop or switch");
+    }
+    // Pop recovery points of any try blocks this break jumps out of
+    emitTryPops(tryDepth - loopTargetTryDepths.back());
+    branchAndSealBlock(loopTargets.back().second, "after_break");
+}
+
+void CodeGen::visit(ContinueStatementNode *node)
+{
+    (void)node;
+    // Find the nearest enclosing loop (switch entries have a null continue target)
+    for (size_t i = loopTargets.size(); i-- > 0;) {
+        if (loopTargets[i].first) {
+            emitTryPops(tryDepth - loopTargetTryDepths[i]);
+            branchAndSealBlock(loopTargets[i].first, "after_continue");
+            return;
+        }
+    }
+    throw std::runtime_error("Codegen Error: 'continue' used outside of a loop");
+}
+
+void CodeGen::visit(SwitchStatementNode *node)
+{
+    llvm::Value *condVal = visit(node->condition.get());
+    if (!condVal) {
+        throw std::runtime_error("Codegen Error: Failed to generate switch condition");
+    }
+
+    llvm::Function *fn = m_builder.GetInsertBlock()->getParent();
+    llvm::BasicBlock *exitBlock = llvm::BasicBlock::Create(m_context, "switch_exit", fn);
+
+    // One body block per clause, in source order (enables fallthrough)
+    std::vector<llvm::BasicBlock*> bodyBlocks;
+    for (size_t i = 0; i < node->cases.size(); ++i) {
+        bodyBlocks.push_back(llvm::BasicBlock::Create(m_context, "case_body_" + std::to_string(i), fn));
+    }
+
+    // Default clause body (if present) is the fallback of the comparison chain
+    llvm::BasicBlock *defaultBlock = exitBlock;
+    for (size_t i = 0; i < node->cases.size(); ++i) {
+        if (!node->cases[i].value) {
+            defaultBlock = bodyBlocks[i];
+            break;
+        }
+    }
+
+    // Emit the comparison chain
+    for (size_t i = 0; i < node->cases.size(); ++i) {
+        if (!node->cases[i].value) continue; // default has no test
+
+        llvm::Value *caseVal = visit(node->cases[i].value.get());
+
+        // Next test target: the next non-default case's check block, or default
+        llvm::BasicBlock *nextCheck = nullptr;
+        for (size_t j = i + 1; j < node->cases.size(); ++j) {
+            if (node->cases[j].value) {
+                nextCheck = llvm::BasicBlock::Create(m_context, "case_check_" + std::to_string(j), fn);
+                break;
+            }
+        }
+        if (!nextCheck) nextCheck = defaultBlock;
+
+        llvm::Value *matches;
+        if (condVal->getType()->isPointerTy() && caseVal->getType()->isPointerTy()) {
+            llvm::Function *strcmpFunc = m_module->getFunction("strcmp");
+            if (!strcmpFunc) {
+                llvm::FunctionType *strcmpType = llvm::FunctionType::get(
+                    llvm::Type::getInt32Ty(m_context),
+                    {llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                     llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0)},
+                    false);
+                strcmpFunc = llvm::Function::Create(strcmpType, llvm::Function::ExternalLinkage, "strcmp", m_module.get());
+            }
+            llvm::Value *cmp = m_builder.CreateCall(strcmpFunc, {condVal, caseVal}, "case_strcmp");
+            matches = m_builder.CreateICmpEQ(cmp, llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), 0), "case_match");
+        } else if (condVal->getType()->isDoubleTy() || caseVal->getType()->isDoubleTy()) {
+            llvm::Type *doubleTy = llvm::Type::getDoubleTy(m_context);
+            matches = m_builder.CreateFCmpOEQ(coerceValue(condVal, doubleTy), coerceValue(caseVal, doubleTy), "case_match");
+        } else {
+            matches = m_builder.CreateICmpEQ(condVal, coerceValue(caseVal, condVal->getType()), "case_match");
+        }
+
+        m_builder.CreateCondBr(matches, bodyBlocks[i], nextCheck);
+        if (nextCheck != defaultBlock) {
+            m_builder.SetInsertPoint(nextCheck);
+        }
+    }
+
+    // If there were no testable cases at all, jump straight to default/exit
+    if (!m_builder.GetInsertBlock()->getTerminator()) {
+        m_builder.CreateBr(defaultBlock);
+    }
+
+    // Emit clause bodies; `break` exits, falling off a body falls through to the next one
+    loopTargets.push_back({nullptr, exitBlock});
+    loopTargetTryDepths.push_back(tryDepth);
+    for (size_t i = 0; i < node->cases.size(); ++i) {
+        m_builder.SetInsertPoint(bodyBlocks[i]);
+        for (const auto &stmt : node->cases[i].statements) {
+            visit(stmt.get());
+        }
+        if (!m_builder.GetInsertBlock()->getTerminator()) {
+            llvm::BasicBlock *fallthrough = (i + 1 < node->cases.size()) ? bodyBlocks[i + 1] : exitBlock;
+            m_builder.CreateBr(fallthrough);
+        }
+    }
+    loopTargets.pop_back();
+    loopTargetTryDepths.pop_back();
+
     m_builder.SetInsertPoint(exitBlock);
 }
 
@@ -727,14 +982,15 @@ void CodeGen::visit(AssignmentStatementNode *node)
         throw std::runtime_error("Codegen Error: Cannot reassign to const variable '" + node->variableName + "'");
     }
 
-    llvm::AllocaInst *varAlloca = it->second;    
+    llvm::AllocaInst *varAlloca = it->second;
     // Generate code for the value expression
     llvm::Value *value = visit(node->value.get());
     if (!value) {
         throw std::runtime_error("Codegen Error: Failed to generate value for assignment");
     }
-    
-    // Store the value in the variable's memory location
+
+    // Store the value in the variable's memory location (with i1/i32/f64 coercion)
+    value = coerceValue(value, varAlloca->getAllocatedType());
     m_builder.CreateStore(value, varAlloca);
 }
 
@@ -838,18 +1094,24 @@ void CodeGen::visit(ForStatementNode *node)
     
     // Generate body block
     m_builder.SetInsertPoint(bodyBlock);
+    loopTargets.push_back({incrBlock, exitBlock});
+    loopTargetTryDepths.push_back(tryDepth);
     for (const auto &stmt : node->bodyStatements) {
         visit(stmt.get());
     }
-    m_builder.CreateBr(incrBlock);
-    
+    loopTargets.pop_back();
+    loopTargetTryDepths.pop_back();
+    if (!m_builder.GetInsertBlock()->getTerminator()) {
+        m_builder.CreateBr(incrBlock);
+    }
+
     // Generate increment block
     m_builder.SetInsertPoint(incrBlock);
     if (node->increment) {
         visit(node->increment.get());
     }
     m_builder.CreateBr(condBlock); // Loop back to condition
-    
+
     // Continue with exit block
     m_builder.SetInsertPoint(exitBlock);
 }
@@ -934,16 +1196,22 @@ void CodeGen::visit(ForOfStatementNode *node)
     constVariables[node->iteratorVariable->variableName] = node->iteratorVariable->isConst;
 
     // Visit body statements
+    loopTargets.push_back({incrBlock, exitBlock});
+    loopTargetTryDepths.push_back(tryDepth);
     for (const auto &stmt : node->bodyStatements) {
         visit(stmt.get());
     }
+    loopTargets.pop_back();
+    loopTargetTryDepths.pop_back();
 
     // Restore scope
     namedValues = oldNamedValues;
     variableTypes = oldVariableTypes;
     constVariables = oldConstVariables;
 
-    m_builder.CreateBr(incrBlock);
+    if (!m_builder.GetInsertBlock()->getTerminator()) {
+        m_builder.CreateBr(incrBlock);
+    }
 
     // 8. Increment block: i = i + 1
     m_builder.SetInsertPoint(incrBlock);
@@ -970,11 +1238,17 @@ void CodeGen::visit(DoWhileStatementNode *node)
     
     // Generate body block
     m_builder.SetInsertPoint(bodyBlock);
+    loopTargets.push_back({condBlock, exitBlock});
+    loopTargetTryDepths.push_back(tryDepth);
     for (const auto &stmt : node->bodyStatements) {
         visit(stmt.get());
     }
+    loopTargets.pop_back();
+    loopTargetTryDepths.pop_back();
     // Generate condition check after body
-    m_builder.CreateBr(condBlock);
+    if (!m_builder.GetInsertBlock()->getTerminator()) {
+        m_builder.CreateBr(condBlock);
+    }
     m_builder.SetInsertPoint(condBlock);
     llvm::Value *conditionVal = ensureI1(visit(node->condition.get()));
     if (!conditionVal) {
@@ -1010,14 +1284,19 @@ llvm::Value *CodeGen::visit(FunctionCallNode *node)
                                    std::to_string(node->arguments.size()));
         }
         
-        // Generate arguments
+        // Generate arguments (coerced to the declared parameter types)
         std::vector<llvm::Value*> args;
+        size_t argIndex = 0;
         for (const auto& arg : node->arguments) {
             llvm::Value* argValue = visit(arg.get());
             if (!argValue) {
                 throw std::runtime_error("Failed to generate argument for function call");
             }
+            if (argIndex < function->arg_size()) {
+                argValue = coerceValue(argValue, function->getFunctionType()->getParamType(argIndex));
+            }
             args.push_back(argValue);
+            argIndex++;
         }
         
         // Create function call
@@ -1317,9 +1596,12 @@ llvm::Value *CodeGen::visit(FunctionCallNode *node)
                 m_builder.CreateCall(printfFunc, printfArgs, "printfCall");
             }
         }
-        else if (argType->isIntegerTy(32))
+        else if (argType->isIntegerTy())
         {
-            // Argument is i32
+            // Argument is an integer (i1 booleans widened to i32)
+            if (!argType->isIntegerTy(32)) {
+                argValue = coerceValue(argValue, llvm::Type::getInt32Ty(m_context));
+            }
             llvm::FunctionCallee printfFunc = getOrDeclarePrintf();
             // Create format string with or without newline
             std::string formatString = addNewline ? "%d\n" : "%d";
@@ -1327,9 +1609,17 @@ llvm::Value *CodeGen::visit(FunctionCallNode *node)
             std::vector<llvm::Value *> printfArgs = {formatStr, argValue};
             m_builder.CreateCall(printfFunc, printfArgs, "printfCall");
         }
+        else if (argType->isDoubleTy())
+        {
+            llvm::FunctionCallee printfFunc = getOrDeclarePrintf();
+            std::string formatString = addNewline ? "%g\n" : "%g";
+            llvm::Value *formatStr = m_builder.CreateGlobalString(formatString, ".format_f64");
+            std::vector<llvm::Value *> printfArgs = {formatStr, argValue};
+            m_builder.CreateCall(printfFunc, printfArgs, "printfCall");
+        }
         else
         {
-            std::cerr << "Codegen Error: '" << node->functionName << "' argument type not supported. Expected string or i32.\n";
+            std::cerr << "Codegen Error: '" << node->functionName << "' argument type not supported. Expected string, i32, f64, or boolean.\n";
             throw std::runtime_error("'" + node->functionName + "' argument type not supported.");
         }
         
@@ -1493,9 +1783,8 @@ llvm::Value *CodeGen::visit(ObjectLiteralNode *node)
 // Helper function to create an empty object
 llvm::Value *CodeGen::createEmptyObject()
 {
-    // For now, return a simple marker value for empty objects
-    // In a full implementation, this would be a proper object structure
-    return llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), 0);
+    // Empty objects are represented as a null object pointer
+    return llvm::ConstantPointerNull::get(llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
 }
 
 // Helper function to create object with properties
@@ -1584,6 +1873,9 @@ llvm::Value *CodeGen::createObjectWithProperties(ObjectLiteralNode *node)
 
 std::string CodeGen::getExpressionObjectKey(ExpressionNode* expr) {
     if (auto* varExpr = dynamic_cast<VariableExpressionNode*>(expr)) {
+        if (varExpr->name == "this" && !currentThisObjectKey.empty()) {
+            return currentThisObjectKey;
+        }
         auto it = variableToObjectKey.find(varExpr->name);
         if (it != variableToObjectKey.end()) return it->second;
     } else if (auto* objAccess = dynamic_cast<ObjectAccessNode*>(expr)) {
@@ -1610,14 +1902,23 @@ llvm::Value *CodeGen::createOptimizedObjectWithProperties(ObjectLiteralNode *nod
 {
     // Phase 1 Optimization: Replace hash map storage with direct struct access
     
+    // Generate unique object key that matches property access
+    std::string objectKey = "opt_obj_" + std::to_string(reinterpret_cast<uintptr_t>(node));
+
     // Extract property information for layout creation
     std::vector<std::pair<std::string, std::string>> propertyInfo;
     std::vector<llvm::Value*> propertyValues;
-    
+
     for (const auto& prop : node->properties) {
         std::string propertyType;
         llvm::Value* propValue = nullptr;
-        
+
+        // Methods are compiled as functions taking `this`; they occupy no struct slot
+        if (prop.method) {
+            objectMethods[objectKey][prop.key] = prop.method.get();
+            continue;
+        }
+
         // Determine property type and generate value
         if (auto* strLit = dynamic_cast<StringLiteralNode*>(prop.value.get())) {
             propertyType = "string";
@@ -1641,30 +1942,49 @@ llvm::Value *CodeGen::createOptimizedObjectWithProperties(ObjectLiteralNode *nod
             propertyType = "boolean";
             propValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), boolLit->value ? 1 : 0);
         }
+        else if (auto* floatLit = dynamic_cast<FloatLiteralNode*>(prop.value.get())) {
+            propertyType = "f64";
+            propValue = llvm::ConstantFP::get(llvm::Type::getDoubleTy(m_context), floatLit->value);
+        }
         else if (auto* objLit = dynamic_cast<ObjectLiteralNode*>(prop.value.get())) {
             propValue = visit(objLit);
             std::string childKey = "opt_obj_" + std::to_string(reinterpret_cast<uintptr_t>(objLit));
             propertyType = "object:" + childKey;
-            
+
             // Cast to generic pointer for storage
             propValue = m_builder.CreateBitCast(propValue, llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
         }
         else {
-            // Default case
-            propertyType = "i32";
-            propValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), 0);
+            // General expression: generate and classify by the produced value type
+            propValue = visit(prop.value.get());
+            if (!propValue) {
+                throw std::runtime_error("Codegen Error: Failed to generate object property '" + prop.key + "'");
+            }
+            if (propValue->getType()->isPointerTy()) {
+                propertyType = "string";
+            } else if (propValue->getType()->isDoubleTy()) {
+                propertyType = "f64";
+            } else {
+                if (propValue->getType()->isIntegerTy(1)) {
+                    propValue = m_builder.CreateZExt(propValue, llvm::Type::getInt32Ty(m_context), "bool_ext");
+                }
+                propertyType = "i32";
+            }
         }
-        
+
         propertyInfo.push_back({prop.key, propertyType});
         propertyValues.push_back(propValue);
     }
-    
+
+    // Objects consisting only of methods still need a non-empty struct
+    if (propertyInfo.empty()) {
+        propertyInfo.push_back({"__pad", "i32"});
+        propertyValues.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), 0));
+    }
+
     // Create optimized object layout (compile-time calculation)
     ObjectOptimizer::ObjectLayout layout = objectOptimizer.createObjectLayout(propertyInfo, m_context);
-    
-    // Generate unique object key that matches property access
-    std::string objectKey = "opt_obj_" + std::to_string(reinterpret_cast<uintptr_t>(node));
-    
+
     // Store layout for property access optimization
     objectLayouts[objectKey] = layout;
     
@@ -1881,6 +2201,39 @@ llvm::Value *CodeGen::visit(MethodCallNode *node)
         throw std::runtime_error("Codegen Error: Failed to evaluate object for method call");
     }
 
+    // Is it a user-defined object method? (compiled with an implicit `this` parameter)
+    std::string methodObjectKey = getExpressionObjectKey(node->object.get());
+    if (!methodObjectKey.empty()) {
+        auto objMethodsIt = objectMethods.find(methodObjectKey);
+        if (objMethodsIt != objectMethods.end()) {
+            auto methodIt = objMethodsIt->second.find(node->methodName);
+            if (methodIt != objMethodsIt->second.end()) {
+                llvm::Function *methodFn = getOrCreateMethodFunction(methodObjectKey, node->methodName);
+
+                std::vector<llvm::Value*> args;
+                args.push_back(objectValue); // `this`
+                size_t argIndex = 1;
+                for (const auto& arg : node->arguments) {
+                    llvm::Value *argValue = visit(arg.get());
+                    if (!argValue) {
+                        throw std::runtime_error("Codegen Error: Failed to generate method argument");
+                    }
+                    if (argIndex < methodFn->arg_size()) {
+                        argValue = coerceValue(argValue, methodFn->getFunctionType()->getParamType(argIndex));
+                    }
+                    args.push_back(argValue);
+                    argIndex++;
+                }
+
+                if (methodFn->getReturnType()->isVoidTy()) {
+                    m_builder.CreateCall(methodFn, args);
+                    return nullptr;
+                }
+                return m_builder.CreateCall(methodFn, args, node->methodName + "_call");
+            }
+        }
+    }
+
     // Is it an array method?
     if (varType.length() > 2 && varType.substr(varType.length() - 2) == "[]") {
         std::string elemType = varType.substr(0, varType.length() - 2);
@@ -1904,18 +2257,18 @@ llvm::Value *CodeGen::visit(MethodCallNode *node)
             }
         } else if (node->methodName == "shift" || node->methodName == "pop") {
             if (node->arguments.size() != 0) throw std::runtime_error("shift/pop expects 0 arguments");
-            
-            // For simplicity, we route pop/shift to shift
+
+            std::string runtimeName = (node->methodName == "pop") ? "array_pop" : "array_shift";
             if (elemType == "string" || elemType.length() == 1 || elemType.find('<') != std::string::npos) {
-                llvm::FunctionCallee shiftFunc = m_module->getOrInsertFunction("array_shift_string",
+                llvm::FunctionCallee popFunc = m_module->getOrInsertFunction(runtimeName + "_string",
                     llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
                     llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
-                return m_builder.CreateCall(shiftFunc, {objectValue}, "shifted_val");
+                return m_builder.CreateCall(popFunc, {objectValue}, "removed_val");
             } else {
-                llvm::FunctionCallee shiftFunc = m_module->getOrInsertFunction("array_shift_i32",
+                llvm::FunctionCallee popFunc = m_module->getOrInsertFunction(runtimeName + "_i32",
                     llvm::Type::getInt32Ty(m_context),
                     llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
-                return m_builder.CreateCall(shiftFunc, {objectValue}, "shifted_val");
+                return m_builder.CreateCall(popFunc, {objectValue}, "removed_val");
             }
         }
     }
@@ -2016,14 +2369,20 @@ llvm::Value *CodeGen::generateExternalFunctionCall(FunctionCallNode *node)
         return nullptr; // Function not found
     }
     
-    // Generate arguments
+    // Generate arguments, coerced to the declared parameter types (e.g. i32 -> f64 for Math.*)
     std::vector<llvm::Value*> args;
+    llvm::FunctionType* fnType = func.getFunctionType();
+    size_t argIndex = 0;
     for (auto& arg : node->arguments) {
         llvm::Value* argValue = visit(arg.get());
         if (!argValue) {
             throw std::runtime_error("Codegen Error: Failed to generate argument for function " + node->functionName);
         }
+        if (argIndex < fnType->getNumParams()) {
+            argValue = coerceValue(argValue, fnType->getParamType(argIndex));
+        }
         args.push_back(argValue);
+        argIndex++;
     }
     
     // Check if the function returns void
@@ -2061,6 +2420,11 @@ llvm::FunctionCallee CodeGen::getOrDeclareExternalFunction(const std::string& na
         return m_module->getOrInsertFunction("math_abs_i32",
             llvm::Type::getInt32Ty(m_context),
             llvm::Type::getInt32Ty(m_context));
+    }
+    else if (name == "math_floor") {
+        return m_module->getOrInsertFunction("math_floor",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context));
     }
     else if (name == "math_sin") {
         return m_module->getOrInsertFunction("math_sin",
@@ -2546,12 +2910,15 @@ void CodeGen::visit(FunctionDeclarationNode *node)
         visit(stmt.get());
     }
     
-    // If function returns void and no explicit return, add return void
-    if (node->returnType == "void") {
-        // Check if the last instruction is already a return
-        llvm::BasicBlock* currentBlock = m_builder.GetInsertBlock();
-        if (currentBlock->empty() || !llvm::isa<llvm::ReturnInst>(currentBlock->back())) {
+    // Terminate the final block: void functions get an implicit return; for
+    // non-void functions an unterminated block here is unreachable (e.g. the
+    // dead block created after a trailing `return`).
+    llvm::BasicBlock* currentBlock = m_builder.GetInsertBlock();
+    if (!currentBlock->getTerminator()) {
+        if (node->returnType == "void") {
             m_builder.CreateRetVoid();
+        } else {
+            m_builder.CreateUnreachable();
         }
     }
     
@@ -2569,16 +2936,378 @@ void CodeGen::visit(ReturnStatementNode *node)
     }
     
     if (node->expression) {
-        // Return with value
+        // Return with value (coerced to the function's declared return type)
         llvm::Value* returnValue = visit(node->expression.get());
+        returnValue = coerceValue(returnValue, currentFunction->getReturnType());
+        // Pop recovery points of any try blocks this return exits
+        emitTryPops(tryDepth);
         m_builder.CreateRet(returnValue);
     } else {
         // Return void
+        emitTryPops(tryDepth);
         m_builder.CreateRetVoid();
     }
+    // Statements after a return land in an unreachable block
+    llvm::Function *fn = m_builder.GetInsertBlock()->getParent();
+    llvm::BasicBlock *deadBlock = llvm::BasicBlock::Create(m_context, "after_return", fn);
+    m_builder.SetInsertPoint(deadBlock);
 }
 
 void CodeGen::visit(TypeAliasNode *node)
 {
     // Type aliases are a compile-time construct only and don't generate code
+}
+
+void CodeGen::visit(InterfaceDeclarationNode *node)
+{
+    // Interfaces are compile-time only; register for structural checks
+    interfaces[node->interfaceName] = node;
+}
+
+void CodeGen::collectInterfaceMembers(const std::string& interfaceName,
+                                      std::vector<InterfaceDeclarationNode::Member>& out)
+{
+    auto it = interfaces.find(interfaceName);
+    if (it == interfaces.end()) return;
+    if (!it->second->parentInterface.empty()) {
+        collectInterfaceMembers(it->second->parentInterface, out);
+    }
+    for (const auto& member : it->second->members) {
+        out.push_back(member);
+    }
+}
+
+void CodeGen::checkInterfaceConformance(const std::string& interfaceName, ObjectLiteralNode* literal,
+                                        const std::string& variableName)
+{
+    std::vector<InterfaceDeclarationNode::Member> members;
+    collectInterfaceMembers(interfaceName, members);
+
+    for (const auto& member : members) {
+        const ObjectLiteralNode::Property* found = nullptr;
+        for (const auto& prop : literal->properties) {
+            if (prop.key == member.name) { found = &prop; break; }
+        }
+        if (!found) {
+            throw std::runtime_error("Type Error: Object assigned to '" + variableName +
+                                     "' does not satisfy interface '" + interfaceName +
+                                     "': missing property '" + member.name + "'");
+        }
+
+        if (member.type.rfind("method:", 0) == 0) {
+            if (!found->method) {
+                throw std::runtime_error("Type Error: Interface '" + interfaceName + "' requires '" +
+                                         member.name + "' to be a method on '" + variableName + "'");
+            }
+            continue;
+        }
+
+        // Check literal value kinds where they are statically known
+        ExpressionNode* value = found->value.get();
+        if (!value) {
+            throw std::runtime_error("Type Error: Interface '" + interfaceName + "' property '" +
+                                     member.name + "' must not be a method on '" + variableName + "'");
+        }
+        bool ok = true;
+        if (member.type == "string") {
+            if (dynamic_cast<IntegerLiteralNode*>(value) || dynamic_cast<BooleanLiteralNode*>(value) ||
+                dynamic_cast<FloatLiteralNode*>(value) || dynamic_cast<ObjectLiteralNode*>(value)) ok = false;
+        } else if (member.type == "i32" || member.type == "number") {
+            if (dynamic_cast<StringLiteralNode*>(value) || dynamic_cast<BooleanLiteralNode*>(value) ||
+                dynamic_cast<ObjectLiteralNode*>(value)) ok = false;
+        } else if (member.type == "boolean") {
+            if (dynamic_cast<StringLiteralNode*>(value) || dynamic_cast<ObjectLiteralNode*>(value) ||
+                dynamic_cast<FloatLiteralNode*>(value)) ok = false;
+        } else if (member.type == "f64") {
+            if (dynamic_cast<StringLiteralNode*>(value) || dynamic_cast<BooleanLiteralNode*>(value) ||
+                dynamic_cast<ObjectLiteralNode*>(value)) ok = false;
+        } else if (interfaces.count(member.type)) {
+            if (auto* nested = dynamic_cast<ObjectLiteralNode*>(value)) {
+                checkInterfaceConformance(member.type, nested, variableName + "." + member.name);
+            } else {
+                ok = false;
+            }
+        }
+        if (!ok) {
+            throw std::runtime_error("Type Error: Property '" + member.name + "' of '" + variableName +
+                                     "' does not match interface '" + interfaceName +
+                                     "' (expected " + member.type + ")");
+        }
+    }
+}
+
+llvm::Function *CodeGen::getOrCreateMethodFunction(const std::string& objectKey,
+                                                   const std::string& methodName)
+{
+    std::string cacheKey = objectKey + "::" + methodName;
+    auto cached = methodFunctions.find(cacheKey);
+    if (cached != methodFunctions.end()) return cached->second;
+
+    FunctionDeclarationNode *decl = objectMethods[objectKey][methodName];
+    if (!decl) {
+        throw std::runtime_error("Codegen Error: Unknown method '" + methodName + "'");
+    }
+
+    llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+    std::vector<llvm::Type*> paramTypes;
+    paramTypes.push_back(charPtr); // implicit `this`
+    for (const auto& param : decl->parameters) {
+        paramTypes.push_back(getLLVMType(param.type));
+    }
+    llvm::FunctionType *fnType = llvm::FunctionType::get(getLLVMType(decl->returnType), paramTypes, false);
+    llvm::Function *fn = llvm::Function::Create(fnType, llvm::Function::InternalLinkage,
+                                                objectKey + "_" + methodName, m_module.get());
+    methodFunctions[cacheKey] = fn;
+
+    // Save the entire generation context: methods are generated lazily at first call site
+    llvm::IRBuilderBase::InsertPoint savedIP = m_builder.saveIP();
+    llvm::Function *prevFunction = currentFunction;
+    auto prevNamedValues = namedValues;
+    auto prevVariableTypes = variableTypes;
+    auto prevConstVariables = constVariables;
+    auto prevVariableToObjectKey = variableToObjectKey;
+    std::string prevThisKey = currentThisObjectKey;
+
+    int prevTryDepth = tryDepth;
+    tryDepth = 0; // method bodies start outside any try protection
+
+    currentFunction = fn;
+    currentThisObjectKey = objectKey;
+
+    llvm::BasicBlock *entryBlock = llvm::BasicBlock::Create(m_context, "entry", fn);
+    m_builder.SetInsertPoint(entryBlock);
+
+    auto argIt = fn->arg_begin();
+    argIt->setName("this");
+    llvm::AllocaInst *thisAlloca = m_builder.CreateAlloca(charPtr, nullptr, "this");
+    m_builder.CreateStore(&*argIt, thisAlloca);
+    namedValues["this"] = thisAlloca;
+    variableTypes["this"] = "object";
+    variableToObjectKey["this"] = objectKey;
+    ++argIt;
+
+    for (size_t i = 0; i < decl->parameters.size(); ++i, ++argIt) {
+        const auto& param = decl->parameters[i];
+        argIt->setName(param.name);
+        llvm::AllocaInst *alloca = m_builder.CreateAlloca(getLLVMType(param.type), nullptr, param.name);
+        m_builder.CreateStore(&*argIt, alloca);
+        namedValues[param.name] = alloca;
+        variableTypes[param.name] = param.type;
+    }
+
+    for (const auto& stmt : decl->bodyStatements) {
+        visit(stmt.get());
+    }
+
+    if (!m_builder.GetInsertBlock()->getTerminator()) {
+        if (fn->getReturnType()->isVoidTy()) {
+            m_builder.CreateRetVoid();
+        } else if (fn->getReturnType()->isPointerTy()) {
+            m_builder.CreateRet(llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(fn->getReturnType())));
+        } else if (fn->getReturnType()->isDoubleTy()) {
+            m_builder.CreateRet(llvm::ConstantFP::get(fn->getReturnType(), 0.0));
+        } else {
+            m_builder.CreateRet(llvm::ConstantInt::get(fn->getReturnType(), 0));
+        }
+    }
+
+    // Restore the caller's context
+    currentFunction = prevFunction;
+    namedValues = prevNamedValues;
+    variableTypes = prevVariableTypes;
+    constVariables = prevConstVariables;
+    variableToObjectKey = prevVariableToObjectKey;
+    currentThisObjectKey = prevThisKey;
+    tryDepth = prevTryDepth;
+    m_builder.restoreIP(savedIP);
+
+    return fn;
+}
+
+void CodeGen::visit(ObjectPropertyAssignmentNode *node)
+{
+    std::string objectKey = getExpressionObjectKey(node->object.get());
+    if (objectKey.empty()) {
+        throw std::runtime_error("Codegen Error: Property assignment is only supported on native objects");
+    }
+    auto layoutIt = objectLayouts.find(objectKey);
+    if (layoutIt == objectLayouts.end()) {
+        throw std::runtime_error("Codegen Error: Unknown object layout for property assignment");
+    }
+    const ObjectOptimizer::ObjectLayout& layout = layoutIt->second;
+
+    auto idxIt = layout.propertyIndices.find(node->property);
+    if (idxIt == layout.propertyIndices.end()) {
+        throw std::runtime_error("Codegen Error: Property '" + node->property + "' not found for assignment");
+    }
+
+    // Resolve the object pointer
+    llvm::Value *objectPtr = nullptr;
+    if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(node->object.get())) {
+        auto namedValueIt = namedValues.find(varExpr->name);
+        if (namedValueIt != namedValues.end()) {
+            objectPtr = m_builder.CreateLoad(
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                namedValueIt->second,
+                "obj_ptr_load");
+        }
+    } else {
+        objectPtr = visit(node->object.get());
+    }
+    if (!objectPtr) {
+        throw std::runtime_error("Codegen Error: Failed to resolve object for property assignment");
+    }
+
+    llvm::Value *structPtr = m_builder.CreateBitCast(
+        objectPtr, llvm::PointerType::get(layout.structType, 0), "struct_cast");
+
+    llvm::Value *value = visit(node->value.get());
+    if (!value) {
+        throw std::runtime_error("Codegen Error: Failed to generate value for property assignment");
+    }
+    value = coerceValue(value, layout.properties[idxIt->second].second.type);
+
+    objectOptimizer.generateDirectPropertyStore(m_builder, structPtr, node->property, layout, value);
+}
+
+void CodeGen::visit(DestructuringDeclarationNode *node)
+{
+    auto *varRef = dynamic_cast<VariableExpressionNode*>(node->initializer.get());
+    if (!varRef) {
+        throw std::runtime_error("Codegen Error: Destructuring currently requires an object variable "
+                                 "on the right-hand side (e.g. let { a, b } = user;)");
+    }
+
+    std::string objectKey = getExpressionObjectKey(varRef);
+    const ObjectOptimizer::ObjectLayout* layout = nullptr;
+    if (!objectKey.empty()) {
+        auto layoutIt = objectLayouts.find(objectKey);
+        if (layoutIt != objectLayouts.end()) layout = &layoutIt->second;
+    }
+
+    for (const auto& binding : node->bindings) {
+        // Reuse the normal property-access codegen via a temporary access node
+        ObjectAccessNode access(std::make_unique<VariableExpressionNode>(varRef->name), binding);
+        llvm::Value *value = visit(&access);
+        if (!value) {
+            throw std::runtime_error("Codegen Error: Failed to destructure property '" + binding + "'");
+        }
+
+        // Work out the recorded type for the new binding
+        std::string bindingType = "string";
+        if (layout) {
+            auto idxIt = layout->propertyIndices.find(binding);
+            if (idxIt == layout->propertyIndices.end()) {
+                throw std::runtime_error("Codegen Error: Property '" + binding + "' not found while destructuring '" +
+                                         varRef->name + "'");
+            }
+            const std::string& propType = layout->properties[idxIt->second].second.typeName;
+            if (propType.rfind("object:", 0) == 0) {
+                bindingType = "object";
+                variableToObjectKey[binding] = propType.substr(7);
+            } else {
+                bindingType = propType;
+            }
+        } else if (value->getType()->isDoubleTy()) {
+            bindingType = "f64";
+        } else if (value->getType()->isIntegerTy()) {
+            bindingType = "i32";
+        }
+
+        llvm::Type *bindingLLVMType = value->getType();
+        llvm::Function *fn = m_builder.GetInsertBlock()->getParent();
+        llvm::IRBuilder<> TmpB(&fn->getEntryBlock(), fn->getEntryBlock().begin());
+        llvm::AllocaInst *alloca = TmpB.CreateAlloca(bindingLLVMType, nullptr, binding);
+        m_builder.CreateStore(value, alloca);
+
+        namedValues[binding] = alloca;
+        variableTypes[binding] = bindingType;
+        constVariables[binding] = node->isConst;
+    }
+}
+
+void CodeGen::visit(ThrowStatementNode *node)
+{
+    llvm::Value *value = visit(node->expression.get());
+    if (!value) {
+        throw std::runtime_error("Codegen Error: Failed to generate throw expression");
+    }
+    llvm::Value *message = toStringValue(value);
+
+    llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+    llvm::FunctionCallee throwFn = m_module->getOrInsertFunction("cyps_throw",
+        llvm::Type::getVoidTy(m_context), charPtr);
+    if (auto *fn = llvm::dyn_cast<llvm::Function>(throwFn.getCallee())) {
+        fn->addFnAttr(llvm::Attribute::NoReturn);
+    }
+    m_builder.CreateCall(throwFn, {message});
+    m_builder.CreateUnreachable();
+
+    // Statements after a throw land in an unreachable block
+    llvm::Function *parentFn = m_builder.GetInsertBlock()->getParent();
+    llvm::BasicBlock *deadBlock = llvm::BasicBlock::Create(m_context, "after_throw", parentFn);
+    m_builder.SetInsertPoint(deadBlock);
+}
+
+void CodeGen::visit(TryCatchStatementNode *node)
+{
+    llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+    llvm::FunctionCallee pushFn = m_module->getOrInsertFunction("cyps_try_push", charPtr);
+    llvm::FunctionCallee popFn = m_module->getOrInsertFunction("cyps_try_pop",
+        llvm::Type::getVoidTy(m_context));
+    llvm::FunctionCallee errFn = m_module->getOrInsertFunction("cyps_last_error", charPtr);
+
+    llvm::Function *fn = m_builder.GetInsertBlock()->getParent();
+    llvm::BasicBlock *tryBlock = llvm::BasicBlock::Create(m_context, "try_body", fn);
+    llvm::BasicBlock *catchBlock = llvm::BasicBlock::Create(m_context, "catch_body", fn);
+    llvm::BasicBlock *contBlock = llvm::BasicBlock::Create(m_context, "try_cont", fn);
+
+    // Register the recovery point: cyps_throw longjmps back here with rc != 0
+    llvm::Value *buf = m_builder.CreateCall(pushFn, {}, "try_buf");
+    llvm::Value *rc = m_builder.CreateCall(getOrDeclareSetjmp(), {buf}, "setjmp_rc");
+    llvm::Value *isNormal = m_builder.CreateICmpEQ(rc,
+        llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), 0), "try_normal");
+    m_builder.CreateCondBr(isNormal, tryBlock, catchBlock);
+
+    // Try body: pop the recovery point on normal completion.
+    // tryDepth lets return/break/continue inside the body pop it too.
+    m_builder.SetInsertPoint(tryBlock);
+    tryDepth++;
+    for (const auto& stmt : node->tryStatements) {
+        visit(stmt.get());
+    }
+    tryDepth--;
+    if (!m_builder.GetInsertBlock()->getTerminator()) {
+        m_builder.CreateCall(popFn, {});
+        m_builder.CreateBr(contBlock);
+    }
+
+    // Catch body (cyps_throw already popped the recovery point)
+    m_builder.SetInsertPoint(catchBlock);
+    auto savedNamedValues = namedValues;
+    auto savedVariableTypes = variableTypes;
+    auto savedConstVariables = constVariables;
+    if (!node->errorVariable.empty()) {
+        llvm::Value *errMsg = m_builder.CreateCall(errFn, {}, "err_msg");
+        llvm::AllocaInst *errAlloca = m_builder.CreateAlloca(charPtr, nullptr, node->errorVariable);
+        m_builder.CreateStore(errMsg, errAlloca);
+        namedValues[node->errorVariable] = errAlloca;
+        variableTypes[node->errorVariable] = "string";
+        constVariables[node->errorVariable] = true;
+    }
+    for (const auto& stmt : node->catchStatements) {
+        visit(stmt.get());
+    }
+    namedValues = savedNamedValues;
+    variableTypes = savedVariableTypes;
+    constVariables = savedConstVariables;
+    if (!m_builder.GetInsertBlock()->getTerminator()) {
+        m_builder.CreateBr(contBlock);
+    }
+
+    // Continuation: finally statements run on both paths that reach here
+    m_builder.SetInsertPoint(contBlock);
+    for (const auto& stmt : node->finallyStatements) {
+        visit(stmt.get());
+    }
 }

@@ -31,7 +31,22 @@ enum TokenType {
     TOK_OF,             // of
     TOK_NEW,            // new
     TOK_TYPE,           // type
-    
+    TOK_BREAK,          // break
+    TOK_CONTINUE,       // continue
+    TOK_SWITCH,         // switch
+    TOK_CASE,           // case
+    TOK_DEFAULT,        // default
+    TOK_INTERFACE,      // interface
+    TOK_EXTENDS,        // extends
+    TOK_THIS,           // this
+    TOK_IMPORT,         // import
+    TOK_EXPORT,         // export
+    TOK_FROM,           // from
+    TOK_TRY,            // try
+    TOK_CATCH,          // catch
+    TOK_FINALLY,        // finally
+    TOK_THROW,          // throw
+
     // Type keywords
     TOK_TYPE_NUMBER,    // number
     TOK_TYPE_STRING,    // string
@@ -76,7 +91,12 @@ enum TokenType {
     TOK_PLUS_PLUS,      // ++
     TOK_MINUS_MINUS,    // --
     TOK_ARROW,          // =>
-    
+    TOK_PLUS_EQUAL,     // +=
+    TOK_MINUS_EQUAL,    // -=
+    TOK_STAR_EQUAL,     // *=
+    TOK_SLASH_EQUAL,    // /=
+    TOK_PERCENT_EQUAL,  // %=
+
     // Special tokens
     TOK_EOF,            // End of file
     TOK_UNKNOWN         // Error/unknown token
@@ -109,6 +129,21 @@ inline const char* tokenTypeToString(TokenType type) {
         case TOK_OF: return "OF";
         case TOK_NEW: return "NEW";
         case TOK_TYPE: return "TYPE";
+        case TOK_BREAK: return "BREAK";
+        case TOK_CONTINUE: return "CONTINUE";
+        case TOK_SWITCH: return "SWITCH";
+        case TOK_CASE: return "CASE";
+        case TOK_DEFAULT: return "DEFAULT";
+        case TOK_INTERFACE: return "INTERFACE";
+        case TOK_EXTENDS: return "EXTENDS";
+        case TOK_THIS: return "THIS";
+        case TOK_IMPORT: return "IMPORT";
+        case TOK_EXPORT: return "EXPORT";
+        case TOK_FROM: return "FROM";
+        case TOK_TRY: return "TRY";
+        case TOK_CATCH: return "CATCH";
+        case TOK_FINALLY: return "FINALLY";
+        case TOK_THROW: return "THROW";
         
         // Type keywords
         case TOK_TYPE_NUMBER: return "TYPE_NUMBER";
@@ -154,6 +189,11 @@ inline const char* tokenTypeToString(TokenType type) {
         case TOK_PLUS_PLUS: return "PLUS_PLUS";
         case TOK_MINUS_MINUS: return "MINUS_MINUS";
         case TOK_ARROW: return "ARROW";
+        case TOK_PLUS_EQUAL: return "PLUS_EQUAL";
+        case TOK_MINUS_EQUAL: return "MINUS_EQUAL";
+        case TOK_STAR_EQUAL: return "STAR_EQUAL";
+        case TOK_SLASH_EQUAL: return "SLASH_EQUAL";
+        case TOK_PERCENT_EQUAL: return "PERCENT_EQUAL";
         
         // Special tokens
         case TOK_EOF: return "EOF";
@@ -167,10 +207,9 @@ inline const char* tokenTypeToString(TokenType type) {
 struct Token {
     TokenType type;
     std::string value;
-    // Future: Add line/column information for better error reporting
-    // int line = 1;
-    // int column = 1;
-    
+    int line = 0;   // 1-based; 0 means "unknown"
+    int column = 0; // 1-based; 0 means "unknown"
+
     // Constructors
     Token(TokenType t, std::string v) : type(t), value(std::move(v)) {}
     Token() : type(TOK_UNKNOWN) {}

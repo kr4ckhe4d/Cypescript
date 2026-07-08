@@ -101,6 +101,37 @@ llvm::Value* ObjectOptimizer::generateDirectPropertyAccess(
     return value;
 }
 
+// Generate direct property store (single GEP + store)
+bool ObjectOptimizer::generateDirectPropertyStore(
+    llvm::IRBuilder<>& builder,
+    llvm::Value* objectPtr,
+    const std::string& property,
+    const ObjectLayout& layout,
+    llvm::Value* value) {
+
+    auto indexIt = layout.propertyIndices.find(property);
+    if (indexIt == layout.propertyIndices.end()) {
+        return false;
+    }
+
+    size_t memberIndex = indexIt->second;
+
+    std::vector<llvm::Value*> indices = {
+        llvm::ConstantInt::get(llvm::Type::getInt32Ty(builder.getContext()), 0),
+        llvm::ConstantInt::get(llvm::Type::getInt32Ty(builder.getContext()), memberIndex)
+    };
+
+    llvm::Value* memberPtr = builder.CreateGEP(
+        layout.structType,
+        objectPtr,
+        indices,
+        property + "_store_ptr"
+    );
+
+    builder.CreateStore(value, memberPtr);
+    return true;
+}
+
 // Inline constant properties at compile time
 llvm::Value* ObjectOptimizer::tryInlineProperty(
     const std::string& objectKey,

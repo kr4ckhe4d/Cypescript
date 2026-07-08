@@ -41,6 +41,16 @@ public:
         const std::string& property,
         const ObjectLayout& layout
     );
+
+    // Generate direct property store (obj.prop = value). Returns false if the
+    // property does not exist in the layout.
+    bool generateDirectPropertyStore(
+        llvm::IRBuilder<>& builder,
+        llvm::Value* objectPtr,
+        const std::string& property,
+        const ObjectLayout& layout,
+        llvm::Value* value
+    );
     
     // Inline constant properties at compile time
     llvm::Value* tryInlineProperty(

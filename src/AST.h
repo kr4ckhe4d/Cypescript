@@ -157,6 +157,19 @@ public:
     }
 };
 
+class FloatLiteralNode : public ExpressionNode
+{
+public:
+    double value;
+    explicit FloatLiteralNode(double val) : value(val) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "FloatLiteralNode: " << value << "\n";
+    }
+};
+
 class VariableExpressionNode : public ExpressionNode
 {
 public:
@@ -502,6 +515,184 @@ public:
     }
 };
 
+// Break statement (loops and switch)
+class BreakStatementNode : public StatementNode
+{
+public:
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "BreakStatementNode\n";
+    }
+};
+
+// Continue statement (loops)
+class ContinueStatementNode : public StatementNode
+{
+public:
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "ContinueStatementNode\n";
+    }
+};
+
+// Switch statement with case/default clauses (fallthrough semantics, break exits)
+class SwitchStatementNode : public StatementNode
+{
+public:
+    struct CaseClause {
+        std::unique_ptr<ExpressionNode> value; // null => default clause
+        std::vector<std::unique_ptr<StatementNode>> statements;
+    };
+
+    std::unique_ptr<ExpressionNode> condition;
+    std::vector<CaseClause> cases;
+
+    explicit SwitchStatementNode(std::unique_ptr<ExpressionNode> cond)
+        : condition(std::move(cond)) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "SwitchStatementNode:\n";
+        printIndent(os, indent + 1);
+        os << "Condition:\n";
+        if (condition) condition->printNode(os, indent + 2);
+        for (const auto &clause : cases) {
+            printIndent(os, indent + 1);
+            os << (clause.value ? "Case:\n" : "Default:\n");
+            if (clause.value) clause.value->printNode(os, indent + 2);
+            for (const auto &stmt : clause.statements) {
+                if (stmt) stmt->printNode(os, indent + 2);
+            }
+        }
+    }
+};
+
+// Interface declaration: compile-time structural type
+class InterfaceDeclarationNode : public StatementNode
+{
+public:
+    struct Member {
+        std::string name;
+        std::string type;
+        Member(std::string n, std::string t) : name(std::move(n)), type(std::move(t)) {}
+    };
+
+    std::string interfaceName;
+    std::string parentInterface; // from "extends", empty if none
+    std::vector<Member> members;
+
+    explicit InterfaceDeclarationNode(std::string name) : interfaceName(std::move(name)) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "InterfaceDeclarationNode: " << interfaceName;
+        if (!parentInterface.empty()) os << " extends " << parentInterface;
+        os << "\n";
+        for (const auto &m : members) {
+            printIndent(os, indent + 1);
+            os << m.name << ": " << m.type << "\n";
+        }
+    }
+};
+
+// Object property assignment: obj.prop = value (also this.prop = value)
+class ObjectPropertyAssignmentNode : public StatementNode
+{
+public:
+    std::unique_ptr<ExpressionNode> object;
+    std::string property;
+    std::unique_ptr<ExpressionNode> value;
+
+    ObjectPropertyAssignmentNode(std::unique_ptr<ExpressionNode> obj, std::string prop,
+                                 std::unique_ptr<ExpressionNode> val)
+        : object(std::move(obj)), property(std::move(prop)), value(std::move(val)) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "ObjectPropertyAssignmentNode: ." << property << " =\n";
+        printIndent(os, indent + 1);
+        os << "Object:\n";
+        if (object) object->printNode(os, indent + 2);
+        printIndent(os, indent + 1);
+        os << "Value:\n";
+        if (value) value->printNode(os, indent + 2);
+    }
+};
+
+// Object destructuring: let { a, b } = obj;
+class DestructuringDeclarationNode : public StatementNode
+{
+public:
+    std::vector<std::string> bindings;
+    std::unique_ptr<ExpressionNode> initializer;
+    bool isConst;
+
+    DestructuringDeclarationNode(std::vector<std::string> names,
+                                 std::unique_ptr<ExpressionNode> init, bool isConstVal)
+        : bindings(std::move(names)), initializer(std::move(init)), isConst(isConstVal) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "DestructuringDeclarationNode: " << (isConst ? "const {" : "let {");
+        for (size_t i = 0; i < bindings.size(); ++i) {
+            if (i > 0) os << ", ";
+            os << bindings[i];
+        }
+        os << "} =\n";
+        if (initializer) initializer->printNode(os, indent + 1);
+    }
+};
+
+// Throw statement
+class ThrowStatementNode : public StatementNode
+{
+public:
+    std::unique_ptr<ExpressionNode> expression;
+
+    explicit ThrowStatementNode(std::unique_ptr<ExpressionNode> expr)
+        : expression(std::move(expr)) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "ThrowStatementNode:\n";
+        if (expression) expression->printNode(os, indent + 1);
+    }
+};
+
+// Try/catch/finally statement
+class TryCatchStatementNode : public StatementNode
+{
+public:
+    std::vector<std::unique_ptr<StatementNode>> tryStatements;
+    std::string errorVariable; // catch (e) — empty if no binding
+    std::vector<std::unique_ptr<StatementNode>> catchStatements;
+    std::vector<std::unique_ptr<StatementNode>> finallyStatements;
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "TryCatchStatementNode:\n";
+        printIndent(os, indent + 1);
+        os << "Try:\n";
+        for (const auto &stmt : tryStatements) if (stmt) stmt->printNode(os, indent + 2);
+        printIndent(os, indent + 1);
+        os << "Catch (" << errorVariable << "):\n";
+        for (const auto &stmt : catchStatements) if (stmt) stmt->printNode(os, indent + 2);
+        if (!finallyStatements.empty()) {
+            printIndent(os, indent + 1);
+            os << "Finally:\n";
+            for (const auto &stmt : finallyStatements) if (stmt) stmt->printNode(os, indent + 2);
+        }
+    }
+};
+
 // Expression Statement Node - for expressions used as statements (like function calls)
 class ExpressionStatementNode : public StatementNode
 {
@@ -676,13 +867,16 @@ public:
     struct Property {
         std::string key;
         std::unique_ptr<ExpressionNode> value;
-        
+        std::unique_ptr<FunctionDeclarationNode> method; // non-null for method properties
+
         Property(std::string k, std::unique_ptr<ExpressionNode> v)
             : key(std::move(k)), value(std::move(v)) {}
+        Property(std::string k, std::unique_ptr<FunctionDeclarationNode> m)
+            : key(std::move(k)), method(std::move(m)) {}
     };
-    
+
     std::vector<Property> properties;
-    
+
     void printNode(llvm::raw_ostream &os, int indent = 0) const override
     {
         printIndent(os, indent);
@@ -693,8 +887,10 @@ public:
             printIndent(os, indent + 2);
             os << "Key: " << prop.key << "\n";
             printIndent(os, indent + 2);
-            os << "Value:\n";
-            if (prop.value) {
+            os << (prop.method ? "Method:\n" : "Value:\n");
+            if (prop.method) {
+                prop.method->printNode(os, indent + 3);
+            } else if (prop.value) {
                 prop.value->printNode(os, indent + 3);
             }
         }

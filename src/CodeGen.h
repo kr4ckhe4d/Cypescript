@@ -75,10 +75,52 @@ private:
 
     // Helper to get the object key for an expression
     std::string getExpressionObjectKey(ExpressionNode* expr);
-    
+
     // Function context tracking
     llvm::Function *currentFunction = nullptr;  // Track current function being generated
     std::map<std::string, llvm::Function*> declaredFunctions; // Track declared functions
+
+    // Loop/switch target stack for break/continue.
+    // Each entry is {continueTarget (may be null inside switch), breakTarget}.
+    std::vector<std::pair<llvm::BasicBlock*, llvm::BasicBlock*>> loopTargets;
+    // Try-nesting depth recorded when each loop/switch was entered (parallel to loopTargets)
+    std::vector<int> loopTargetTryDepths;
+
+    // Current try-nesting depth in the function being generated. return/break/continue
+    // that exit try blocks must pop the exception recovery points they skip.
+    int tryDepth = 0;
+    // Emits `count` calls to cyps_try_pop()
+    void emitTryPops(int count);
+
+    // Interface registry for structural type checking (nodes owned by the AST)
+    std::map<std::string, const InterfaceDeclarationNode*> interfaces;
+
+    // Object methods: objectKey -> methodName -> declaration (owned by the AST)
+    std::map<std::string, std::map<std::string, FunctionDeclarationNode*>> objectMethods;
+    // Cache of generated method functions, keyed by "objectKey::method"
+    std::map<std::string, llvm::Function*> methodFunctions;
+    // Object key bound to `this` while generating a method body
+    std::string currentThisObjectKey;
+
+    // Lazily generates the LLVM function for an object method
+    llvm::Function *getOrCreateMethodFunction(const std::string& objectKey,
+                                              const std::string& methodName);
+
+    // Structural check of an object literal against an interface
+    void checkInterfaceConformance(const std::string& interfaceName, ObjectLiteralNode* literal,
+                                   const std::string& variableName);
+    // Collects all members including inherited ones
+    void collectInterfaceMembers(const std::string& interfaceName,
+                                 std::vector<InterfaceDeclarationNode::Member>& out);
+
+    // Converts any value to a C string (for concatenation / throw)
+    llvm::Value *toStringValue(llvm::Value *val);
+    // Coerces a value to the target type (i1<->i32, i32<->f64)
+    llvm::Value *coerceValue(llvm::Value *val, llvm::Type *targetType);
+    // Declares _setjmp with the returns_twice attribute
+    llvm::FunctionCallee getOrDeclareSetjmp();
+    // Emits a branch to `target` and re-anchors the builder in a dead block
+    void branchAndSealBlock(llvm::BasicBlock *target, const std::string& deadName);
 
     // Helper to get LLVM type from our string type names
     llvm::Type *getLLVMType(const std::string &typeName);
@@ -99,9 +141,18 @@ private:
     void visit(DoWhileStatementNode *node);    // For do-while loops
     void visit(AssignmentStatementNode *node); // For variable assignments
     void visit(ArrayAssignmentStatementNode *node); // For array element assignments
+    void visit(BreakStatementNode *node);      // For break
+    void visit(ContinueStatementNode *node);   // For continue
+    void visit(SwitchStatementNode *node);     // For switch/case
+    void visit(InterfaceDeclarationNode *node); // For interface declarations
+    void visit(ObjectPropertyAssignmentNode *node); // For obj.prop = value
+    void visit(DestructuringDeclarationNode *node); // For let { a, b } = obj
+    void visit(TryCatchStatementNode *node);   // For try/catch/finally
+    void visit(ThrowStatementNode *node);      // For throw
 
     llvm::Value *visit(ExpressionNode *node); // Dispatcher
     llvm::Value *visit(StringLiteralNode *node);
+    llvm::Value *visit(FloatLiteralNode *node);       // For f64 literals
     llvm::Value *visit(IntegerLiteralNode *node);     // New
     llvm::Value *visit(BooleanLiteralNode *node);     // New
     llvm::Value *visit(VariableExpressionNode *node); // New
