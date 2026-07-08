@@ -33,6 +33,8 @@ The web documentation includes:
 - **All loop constructs**: `while`, `for`, `do-while`, `for...of` — with `break` and `continue`
 - **Exception handling**: `try`/`catch`/`finally` and `throw`
 - **User-defined functions** with parameters, return values, and local scoping
+- **Arrow functions & closures** (`(x: i32) => x * 2`, capture-by-value snapshots)
+- **Callback array methods**: `.map()`, `.filter()`, `.reduce()`, `.find()`, `.forEach()`
 - **Generic functions and type aliases** (`function bfs<T>(...)`, `type Graph<T> = Map<T, T[]>`)
 - **Interfaces** with `extends` and compile-time structural type checking
 - **Native TypeScript-style objects** with property access, property assignment, nested objects, and object printing
@@ -690,12 +692,16 @@ minute changes. The following TypeScript constructs work **as-is**:
 - `try` / `catch` / `finally` / `throw`, `switch`, `break` / `continue`
 - Object literals with methods and `this`
 
+- Arrow functions and closures (`x => x * 2`), including `.map`/`.filter`/`.reduce`/
+  `.find`/`.forEach` with arrow callbacks — note: captures are **by-value snapshots**
+  (capture an object to share mutable state, e.g. `let s = {n: 0}; () => s.n += 1`)
+
 Typical minute changes when porting a `.ts` file:
 
 | TypeScript | Cypescript |
 |---|---|
 | `x++` as an *expression* (`arr[i++]`) | statement-level `x++` only |
-| arrow functions `(x) => x * 2` | named `function` declarations |
+| closures mutating captured primitives | capture an object instead (by-value snapshots) |
 | `class` | object literals with methods |
 | `import` from npm packages | only local `./file.csc` module imports |
 | `number` for integer loops (slow) | use `i32` for integer math (fast) |
@@ -1414,12 +1420,16 @@ println("JSON: " + json_prettify(user));
 - [x] Comprehensive error handling and reporting
 - [x] Interactive web documentation with runnable examples
 
+- [x] Arrow functions and closures (`(x: i32) => x * 2`; captures are by-value snapshots)
+- [x] Callback array methods: `.map()`, `.filter()`, `.reduce()`, `.find()`, `.forEach()`
+- [x] Line/column numbers in lexer/parser error messages
+
 ### 🚧 Planned Features
-- [ ] Arrow functions and closures (`(x) => x * 2`)
 - [ ] Classes (`class` keyword — object literals with methods work today)
 - [ ] Union types (`string | i32`) and type guards
-- [ ] `f64[]` arrays and vectorized array methods (`.map()`, `.filter()`, `.reduce()`)
-- [ ] Line/column numbers in error messages
+- [ ] By-reference closure captures (currently by-value; capture an object for shared state)
+- [ ] `f64[]` arrays
+- [ ] Line/column numbers in codegen-stage errors + a semantic type-checker pass
 - [ ] Reference-counted heap objects (escape-safe object returns)
 - [ ] JIT compilation and profile-guided runtime optimization (see OPTIMIZATION_ROADMAP.md)
 

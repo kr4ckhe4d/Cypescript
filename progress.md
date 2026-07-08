@@ -115,6 +115,28 @@ and the README "Planned Features" list. **Status: DONE.** All 18 tests pass
 - ⏳ LICENSE — user is handling.
 - SHIPPING_BLOCKERS.md annotated with per-item status.
 
+## Session 6 additions — arrow functions & closures (2026-07-08)
+- **ArrowFunctionNode** (AST), parser lookahead disambiguation (`(...) =>` vs parens,
+  `x =>` single param; untyped params default i32; optional `: ret` annotation;
+  expression bodies desugar to return).
+- **Closures**: `{i8* fn, i8* env}` malloc'd pairs; free-variable analysis
+  (`collectFreeVars*` in CodeGen) determines captures; env snapshots captured values
+  **by value** at creation (captured object/array pointers share underlying data — the
+  documented idiom for mutable state). Arrow bodies generated lazily with full context
+  save/restore incl. loopTargets/tryDepth. Calls through variables bind statically via
+  `variableToArrow` (aliasing copies the binding).
+- **Callback array methods** on `T[]`: `.map` (elem type can change, e.g. i32->string),
+  `.filter`, `.forEach`, `.reduce(cb, init)`, `.find` (early exit) — all generated as
+  inline loops calling the arrow function directly (no dispatch overhead).
+  Var-decl inference knows map/filter/reduce/find/shift/pop result types.
+- `.length` now works on arbitrary array expressions (`arr.filter(f).length`).
+- Tests: `tests/test_arrows.csc` (+ expected out, suite now 19); example
+  `19_arrow_functions.csc`; docs/README/blockers updated.
+- **Limitations**: captures are by-value (mutating a captured primitive doesn't affect
+  the outer var — capture an object instead); closures can't yet be passed as params
+  to user-defined `function`s (only stored in vars / passed to array methods);
+  un-annotated return types use a heuristic — annotate for exotic cases.
+
 ## How to resume
 ```bash
 ./build.sh          # or: cmake --build build

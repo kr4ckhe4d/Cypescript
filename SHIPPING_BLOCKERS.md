@@ -79,17 +79,29 @@ Grammar/snippets predate: `switch/case`, `interface`, `try/catch/throw`,
 extend it (double maintenance) or drop the in-browser execution in favor of
 `cscript -r` instructions. Static doc content updated 2026-07-07.
 
-### 12. Define the supported TypeScript subset
-"Runs TS with minute changes" should be a precise claim. Not yet supported:
-arrow functions/closures, `class`, union types, npm imports, `x++` as an
-expression, f64 arrays / array methods (`.map/.filter/.reduce`).
+### 12. Define the supported TypeScript subset — 🔶 SHRINKING
+"Runs TS with minute changes" should be a precise claim.
+✅ Now supported: arrow functions & closures (by-value captures), callback array
+methods (`.map/.filter/.reduce/.find/.forEach`).
+Still not supported: `class`, union types, npm imports, `x++` as an expression,
+by-reference closure captures, f64 arrays.
 Publish the compatibility table (now in README) as part of the docs.
 
-## Suggested attack order
-1. LICENSE + repo cleanup (30 min)
-2. Relocatable stdlib (`libcypescript.a`) (half day)
-3. Line/column error messages (1–2 days)
-4. CI + output-assertion tests (half day)
-5. Homebrew formula + GitHub release (half day)
-6. VSCode extension refresh (half day)
-7. Memory-model documentation, then arena/refcounting (ongoing)
+## Suggested attack order (updated 2026-07-08)
+
+**Already done:** repo cleanup, relocatable stdlib (`libcypescript.a`),
+line/column parser errors, CI workflow, output-assertion tests, `--version`,
+Homebrew formula template, VSCode grammar refresh, try/return fix.
+
+**Remaining, in order:**
+1. **LICENSE** (owner: user) — blocks any distribution (5 min)
+2. **Tag `v1.0.0` + GitHub release**, then publish the Homebrew tap
+   (fill url/sha256 in `packaging/cypescript.rb`) (half day)
+3. **Repackage the VSCode `.vsix`** — grammar is updated but snippets/completions
+   still predate the new features; needs `vsce package` (half day)
+4. **Codegen-stage error positions + a semantic type-checker pass** — parser
+   errors have line/col now; codegen errors don't (1–2 days)
+5. **Memory model** — document script-lifetime memory for v1.0; arena or
+   refcounted heap objects afterwards (ongoing)
+6. **Docs playground decision** — extend the in-browser interpreter to the new
+   language, or drop it in favor of `cscript -r` instructions (half day–ongoing)

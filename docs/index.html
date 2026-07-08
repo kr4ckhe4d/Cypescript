@@ -1150,6 +1150,36 @@ import { square } from "./math_utils";
 println(square(7)); // 49</code></pre>
                 </div>
 
+                <h2>Arrow Functions &amp; Closures</h2>
+                <p>
+                    Arrows are first-class expressions. Captures are <strong>by-value snapshots</strong> —
+                    capture an object to share mutable state through its pointer.
+                </p>
+                <div class="code-example">
+                    <div class="code-header">
+                        <span class="filename">arrows.csc</span>
+                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
+                    </div>
+                    <pre><code class="language-typescript">let double = (x: i32): i32 => x * 2;
+let add = (a: i32, b: i32) => a + b;      // return type inferred
+println(double(21));                       // 42
+
+// Callback array methods
+let numbers: i32[] = [1, 2, 3, 4, 5, 6];
+let doubled = numbers.map(x => x * 2);
+let evens = numbers.filter(x => x % 2 == 0);
+let sum = numbers.reduce((acc, x) => acc + x, 0);   // 21
+let firstBig = numbers.find(x => x > 4);            // 5
+numbers.forEach(x => { println(x); });
+
+// Shared mutable state: capture an object
+let counter = { count: 0 };
+let increment = (): i32 => {
+    counter.count += 1;
+    return counter.count;
+};</code></pre>
+                </div>
+
                 <h2>TypeScript Compatibility Layer</h2>
                 <p>These TypeScript idioms work as-is, so many <code>.ts</code> scripts compile with minute changes:</p>
                 <div class="code-example">
