@@ -1,12 +1,9 @@
+// 18 — Capstone: Breadth-First Search
+// Generics, type aliases, Map/Set collections, arrays-as-queues, for...of.
+// Compare with 18_bfs_graph.ts — the TypeScript source is nearly identical.
+
 type Graph<T> = Map<T, T[]>;
 
-/**
- * Performs a Breadth-First Search on a graph.
- * 
- * @param graph - The graph represented as an adjacency list.
- * @param startNode - The node to start the traversal from.
- * @returns An array of nodes in the order they were visited.
- */
 function breadthFirstSearch<T>(graph: Graph<T>, startNode: T): T[] {
     const visited: Set<T> = new Set<T>();
     const queue: T[] = [];
@@ -32,7 +29,7 @@ function breadthFirstSearch<T>(graph: Graph<T>, startNode: T): T[] {
     return traversalOrder;
 }
 
-// Example Usage:
+// Build the graph:  A -> B, C   B -> D, E   C -> F   E -> F
 let graph: Map<string, string[]> = new Map<string, string[]>();
 graph.set("A", ["B", "C"]);
 graph.set("B", ["D", "E"]);
@@ -41,9 +38,8 @@ graph.set("D", []);
 graph.set("E", ["F"]);
 graph.set("F", []);
 
-println("Breadth-First Search Order starting from 'A':");
+println("BFS traversal from 'A':");
 let result: string[] = breadthFirstSearch<string>(graph, "A");
-
 for (const node of result) {
     println(node);
 }

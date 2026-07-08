@@ -59,7 +59,7 @@ if [[ -f "build/cscript" ]]; then
     echo ""
     echo -e "${YELLOW}Next steps:${NC}"
     echo -e "  Test the compiler: ${BLUE}./test.sh${NC}"
-    echo -e "  Run manually:      ${BLUE}./build/cscript example/hello.csc${NC}"
+    echo -e "  Run manually:      ${BLUE}./build/cscript example/01_hello.csc${NC}"
 else
     echo -e "${RED}❌ Build failed!${NC}"
     exit 1

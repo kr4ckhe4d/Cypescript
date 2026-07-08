@@ -1,3 +1,7 @@
+// 18 — TypeScript version of 18_bfs_graph.csc, for comparison.
+// Run with:  node example/18_bfs_graph.ts
+// Note how little differs from the Cypescript version.
+
 type Graph<T> = Map<T, T[]>;
 
 function breadthFirstSearch<T>(graph: Graph<T>, startNode: T): T[] {
@@ -6,28 +10,16 @@ function breadthFirstSearch<T>(graph: Graph<T>, startNode: T): T[] {
     const traversalOrder: T[] = [];
 
     visited.add(startNode);
-    println("Added startNode to visited");
     queue.push(startNode);
-    println("Pushed startNode to queue");
-    
-    println("Queue length:");
-    println(queue.length);
 
     while (queue.length > 0) {
-        println("Queue length > 0");
         const currentNode: T = queue.shift()!;
-        println("Processing node:");
-        println(currentNode);
         traversalOrder.push(currentNode);
 
         const neighbors: T[] = graph.get(currentNode) || [];
-        println("Neighbors found");
 
         for (const neighbor of neighbors) {
-            println("Checking neighbor:");
-            println(neighbor);
             if (!visited.has(neighbor)) {
-                println("Visiting neighbor");
                 visited.add(neighbor);
                 queue.push(neighbor);
             }
@@ -37,16 +29,16 @@ function breadthFirstSearch<T>(graph: Graph<T>, startNode: T): T[] {
     return traversalOrder;
 }
 
-// Test BFS
-let graph: Map<string, string[]> = new Map<string, string[]>();
+const graph: Graph<string> = new Map<string, string[]>();
 graph.set("A", ["B", "C"]);
-graph.set("B", ["D"]);
-graph.set("C", ["D"]);
+graph.set("B", ["D", "E"]);
+graph.set("C", ["F"]);
 graph.set("D", []);
+graph.set("E", ["F"]);
+graph.set("F", []);
 
-println("BFS starting from A:");
-let order: string[] = breadthFirstSearch<string>(graph, "A");
-
-for (const node of order) {
-    println(node);
+console.log("BFS traversal from 'A':");
+const result: string[] = breadthFirstSearch<string>(graph, "A");
+for (const node of result) {
+    console.log(node);
 }

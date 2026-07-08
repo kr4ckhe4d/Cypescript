@@ -15,8 +15,8 @@ NC='\033[0m'
 # Check arguments
 if [[ $# -eq 0 ]]; then
     echo -e "${RED}Usage: $0 <cypescript-file> [output-name]${NC}"
-    echo -e "Example: $0 example/hello.csc"
-    echo -e "Example: $0 example/hello.csc my_program"
+    echo -e "Example: $0 example/01_hello.csc"
+    echo -e "Example: $0 example/01_hello.csc my_program"
     exit 1
 fi
 
