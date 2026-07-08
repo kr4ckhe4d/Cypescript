@@ -62,13 +62,26 @@ include_directories(${LLVM_INCLUDE_DIRS})
 separate_arguments(LLVM_DEFINITIONS_LIST UNIX_COMMAND "${LLVM_DEFINITIONS}")
 add_definitions(${LLVM_DEFINITIONS_LIST})
 
+# --- Cypescript Runtime Library ---
+# Precompiled so the installed compiler does not need the stdlib sources.
+add_library(cypescript_stdlib STATIC
+    src/cypescript_stdlib.cpp
+)
+set_target_properties(cypescript_stdlib PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    OUTPUT_NAME "cypescript"          # -> libcypescript.a
+    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+
 # --- Our Compiler Executable ---
 add_executable(cscript
     src/main.cpp
     src/Lexer.cpp
     src/Parser.cpp
     src/CodeGen.cpp
-    src/ObjectOptimizer.cpp  # NEW: Phase 1 optimization
+    src/ObjectOptimizer.cpp  # Phase 1 optimization: direct struct property access
+    src/Optimizer.cpp        # Phase 3 optimization: AST constant folding + dead branches
 )
 
 # Set target properties
@@ -77,6 +90,8 @@ set_target_properties(cscript PROPERTIES
     CXX_STANDARD_REQUIRED ON
     OUTPUT_NAME "cscript"
 )
+add_dependencies(cscript cypescript_stdlib)
+target_compile_definitions(cscript PRIVATE CYPESCRIPT_VERSION="${PROJECT_VERSION}")
 
 # --- Link against LLVM Libraries ---
 # LLVM components we need (simplified for compatibility)
@@ -123,7 +138,12 @@ message(STATUS "LLVM Components: ${LLVM_COMPONENTS}")
 message(STATUS "Target: cscript")
 message(STATUS "=====================================")
 
-# --- Install target (optional) ---
+# --- Install target ---
+# Layout: <prefix>/bin/cscript + <prefix>/lib/libcypescript.a
+# cscript locates the runtime library relative to its own path (or CYPESCRIPT_HOME).
 install(TARGETS cscript
     RUNTIME DESTINATION bin
+)
+install(TARGETS cypescript_stdlib
+    ARCHIVE DESTINATION lib
 )

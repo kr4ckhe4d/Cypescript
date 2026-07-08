@@ -12,13 +12,84 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 
+#include <set>
+
 #include "Lexer.h"
 #include "Token.h"
 #include "Parser.h"
 #include "AST.h"
 #include "CodeGen.h"
+#include "Optimizer.h"
+
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#elif defined(__linux__)
+#include <unistd.h>
+#endif
 
 namespace fs = std::filesystem;
+
+#ifndef CYPESCRIPT_VERSION
+#define CYPESCRIPT_VERSION "dev"
+#endif
+
+// Absolute path of the running cscript binary (empty if it cannot be determined)
+fs::path getExecutablePath(const char* argv0) {
+#ifdef __APPLE__
+    char buf[4096];
+    uint32_t size = sizeof(buf);
+    if (_NSGetExecutablePath(buf, &size) == 0) {
+        std::error_code ec;
+        fs::path p = fs::canonical(buf, ec);
+        if (!ec) return p;
+        return fs::path(buf);
+    }
+#elif defined(__linux__)
+    std::error_code ec;
+    fs::path p = fs::read_symlink("/proc/self/exe", ec);
+    if (!ec) return p;
+#endif
+    if (argv0 && fs::exists(argv0)) {
+        std::error_code ec;
+        fs::path p = fs::canonical(argv0, ec);
+        if (!ec) return p;
+    }
+    return fs::path();
+}
+
+// Locates the Cypescript runtime to link against. Search order:
+//   1. $CYPESCRIPT_HOME/lib/libcypescript.a
+//   2. libcypescript.a next to the cscript binary        (build-tree layout)
+//   3. ../lib/libcypescript.a relative to the binary     (installed layout)
+//   4. ../src/cypescript_stdlib.cpp relative to the binary (repo source fallback)
+std::string findRuntimeLibrary(const char* argv0) {
+    if (const char* home = std::getenv("CYPESCRIPT_HOME")) {
+        fs::path candidate = fs::path(home) / "lib" / "libcypescript.a";
+        if (fs::exists(candidate)) return candidate.string();
+    }
+
+    fs::path exePath = getExecutablePath(argv0);
+    if (!exePath.empty()) {
+        fs::path exeDir = exePath.parent_path();
+        fs::path candidates[] = {
+            exeDir / "libcypescript.a",
+            exeDir / ".." / "lib" / "libcypescript.a",
+            exeDir / ".." / "src" / "cypescript_stdlib.cpp",
+        };
+        for (const auto& candidate : candidates) {
+            if (fs::exists(candidate)) return candidate.string();
+        }
+    }
+
+    // Last resort: current working directory is the repo root
+    if (fs::exists("src/cypescript_stdlib.cpp")) {
+        return "src/cypescript_stdlib.cpp";
+    }
+
+    throw std::runtime_error(
+        "Could not locate the Cypescript runtime library (libcypescript.a). "
+        "Set CYPESCRIPT_HOME to the installation prefix or rebuild with ./build.sh");
+}
 
 // ANSI color codes for better output
 namespace Colors {
@@ -45,7 +116,9 @@ public:
     bool printTokens = false;
     bool printAST = false;
     bool help = false;
+    bool version = false;
     bool run = false;
+    bool noFold = false;
     
     static CompilerOptions parseArgs(int argc, char** argv) {
         CompilerOptions opts;
@@ -55,10 +128,14 @@ public:
             
             if (arg == "-h" || arg == "--help") {
                 opts.help = true;
+            } else if (arg == "-V" || arg == "--version") {
+                opts.version = true;
             } else if (arg == "-v" || arg == "--verbose") {
                 opts.verbose = true;
             } else if (arg == "-r" || arg == "--run") {
                 opts.run = true;
+            } else if (arg == "--no-fold") {
+                opts.noFold = true;
             } else if (arg == "--print-tokens") {
                 opts.printTokens = true;
             } else if (arg == "--print-ast") {
@@ -88,9 +165,11 @@ public:
         std::cout << "    cscript [OPTIONS] <input-file>\n\n";
         std::cout << Colors::BOLD << "OPTIONS:" << Colors::RESET << "\n";
         std::cout << "    -h, --help          Show this help message\n";
+        std::cout << "    -V, --version       Print compiler version\n";
         std::cout << "    -v, --verbose       Enable verbose output\n";
         std::cout << "    -r, --run           Compile and run the program immediately\n";
         std::cout << "    -o, --output FILE   Specify output executable name\n";
+        std::cout << "    --no-fold           Disable AST constant folding / dead-branch elimination\n";
         std::cout << "    --print-tokens      Print lexer tokens\n";
         std::cout << "    --print-ast         Print abstract syntax tree\n\n";
         std::cout << Colors::BOLD << "EXAMPLES:" << Colors::RESET << "\n";
@@ -129,6 +208,74 @@ std::string readFile(const std::string& filename) {
     return buffer.str();
 }
 
+// --- Module resolution -------------------------------------------------------
+// Cypescript modules are inlined at compile time: every
+//   import { name, ... } from "./file";
+// line is replaced by the (recursively resolved) source of the referenced
+// file, once per file. `export` markers are handled by the parser.
+
+std::string resolveImportsImpl(const std::string& source, const fs::path& baseDir,
+                               std::set<std::string>& visited);
+
+std::string loadModule(const fs::path& modulePath, std::set<std::string>& visited) {
+    fs::path resolved = modulePath;
+    if (resolved.extension().empty()) {
+        resolved += ".csc";
+    }
+    if (!fs::exists(resolved)) {
+        throw std::runtime_error("Imported module not found: " + resolved.string());
+    }
+    std::string canonical = fs::canonical(resolved).string();
+    if (visited.count(canonical)) {
+        return ""; // already inlined (also breaks import cycles)
+    }
+    visited.insert(canonical);
+
+    std::ifstream file(resolved);
+    if (!file) {
+        throw std::runtime_error("Could not open imported module: " + resolved.string());
+    }
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    return resolveImportsImpl(buffer.str(), resolved.parent_path(), visited);
+}
+
+std::string resolveImportsImpl(const std::string& source, const fs::path& baseDir,
+                               std::set<std::string>& visited) {
+    std::stringstream output;
+    std::stringstream input(source);
+    std::string line;
+
+    while (std::getline(input, line)) {
+        std::string trimmed = line;
+        size_t firstChar = trimmed.find_first_not_of(" \t");
+        trimmed = (firstChar == std::string::npos) ? "" : trimmed.substr(firstChar);
+
+        if (starts_with(trimmed, "import ") || starts_with(trimmed, "import{")) {
+            size_t firstQuote = line.find('"');
+            size_t lastQuote = line.rfind('"');
+            if (firstQuote == std::string::npos || lastQuote <= firstQuote) {
+                throw std::runtime_error("Malformed import statement: " + line);
+            }
+            std::string modulePath = line.substr(firstQuote + 1, lastQuote - firstQuote - 1);
+            fs::path resolved = baseDir / modulePath;
+            output << loadModule(resolved, visited) << "\n";
+        } else {
+            output << line << "\n";
+        }
+    }
+    return output.str();
+}
+
+std::string resolveImports(const std::string& source, const std::string& inputFile) {
+    std::set<std::string> visited;
+    fs::path inputPath(inputFile);
+    if (fs::exists(inputPath)) {
+        visited.insert(fs::canonical(inputPath).string());
+    }
+    return resolveImportsImpl(source, inputPath.parent_path(), visited);
+}
+
 void printStageHeader(const std::string& stage, bool verbose) {
     if (verbose) {
         llvm::outs() << Colors::CYAN << "=== " << stage << " ===" << Colors::RESET << "\n";
@@ -160,6 +307,11 @@ int main(int argc, char** argv) {
             opts.printHelp();
             return 0;
         }
+
+        if (opts.version) {
+            std::cout << "cypescript " << CYPESCRIPT_VERSION << "\n";
+            return 0;
+        }
         
         if (opts.inputFile.empty()) {
             printError("No input file provided");
@@ -178,6 +330,12 @@ int main(int argc, char** argv) {
         Timer readTimer;
         std::string sourceCode = readFile(opts.inputFile);
         printSuccess("Source code read (" + std::to_string(readTimer.elapsed()) + "ms)", opts.verbose);
+
+        // Module Resolution (import/export inlining)
+        printStageHeader("Module Resolution", opts.verbose);
+        Timer importTimer;
+        sourceCode = resolveImports(sourceCode, opts.inputFile);
+        printSuccess("Imports resolved (" + std::to_string(importTimer.elapsed()) + "ms)", opts.verbose);
         
         // Lexical Analysis
         printStageHeader("Lexical Analysis", opts.verbose);
@@ -212,7 +370,18 @@ int main(int argc, char** argv) {
         }
         
         printSuccess("Syntax analysis complete (" + std::to_string(parseTimer.elapsed()) + "ms)", opts.verbose);
-        
+
+        // AST Optimization (constant folding + dead-branch elimination)
+        if (!opts.noFold) {
+            printStageHeader("AST Optimization", opts.verbose);
+            Timer optTimer;
+            ASTOptimizer optimizer;
+            ASTOptimizer::Stats optStats = optimizer.optimize(astRoot.get());
+            printSuccess("Constant folding complete (" + std::to_string(optTimer.elapsed()) + "ms, "
+                        + std::to_string(optStats.foldedExpressions) + " expressions folded, "
+                        + std::to_string(optStats.eliminatedBranches) + " dead branches removed)", opts.verbose);
+        }
+
         if (opts.printAST || opts.verbose) {
             llvm::outs() << "\n" << Colors::MAGENTA << "=== Abstract Syntax Tree ===" << Colors::RESET << "\n";
             astRoot->printNode(llvm::outs());
@@ -272,11 +441,11 @@ int main(int argc, char** argv) {
             printStageHeader("Compiling to Executable", opts.verbose);
             Timer compileTimer;
             
-            // Find stdlib path - assume it's in the same directory as src/
-            // For a distributed app, this would be in a fixed location
-            std::string stdlibPath = "src/cypescript_stdlib.cpp";
-            
-            std::string compileCmd = "clang++ -O2 " + irFile + " " + stdlibPath + " -o " + executableName + " -std=c++17";
+            // Locate the runtime: precompiled libcypescript.a next to the binary
+            // (or CYPESCRIPT_HOME), falling back to the stdlib source in the repo
+            std::string stdlibPath = findRuntimeLibrary(argv[0]);
+
+            std::string compileCmd = "clang++ -O2 " + irFile + " \"" + stdlibPath + "\" -o " + executableName + " -std=c++17";
             if (opts.verbose) {
                 llvm::outs() << "Running: " << Colors::CYAN << compileCmd << Colors::RESET << "\n";
             }
