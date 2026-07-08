@@ -1832,3 +1832,18 @@ body {
         text-align: left;
     }
 }
+
+/* Badge for examples that require the native compiler (not the browser playground) */
+.native-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    background: rgba(74, 222, 128, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(74, 222, 128, 0.4);
+    white-space: nowrap;
+}

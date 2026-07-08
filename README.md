@@ -25,20 +25,28 @@ The web documentation includes:
 - **TypeScript-inspired syntax** with type annotations
 - **Variable declarations** with `let`, `const`, and type inference
 - **Built-in types**: `string`, `i32`, `f64`, `boolean`, `void`, arrays (`i32[]`), objects
+- **Full floating-point support**: `f64` literals, arithmetic, comparisons, and automatic i32→f64 promotion
 - **Complete arithmetic operations** (`+`, `-`, `*`, `/`, `%`)
+- **Compound assignment & increment operators** (`+=`, `-=`, `*=`, `/=`, `%=`, `++`, `--`)
 - **Comparison & logical operators** (`==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `!`)
-- **Control flow** with `if`/`else` statements and nesting
-- **All loop constructs**: `while`, `for`, `do-while`, `for...of`
+- **Control flow**: `if`/`else`/`else if` chains, `switch`/`case`/`default` (with fallthrough)
+- **All loop constructs**: `while`, `for`, `do-while`, `for...of` — with `break` and `continue`
+- **Exception handling**: `try`/`catch`/`finally` and `throw`
 - **User-defined functions** with parameters, return values, and local scoping
 - **Generic functions and type aliases** (`function bfs<T>(...)`, `type Graph<T> = Map<T, T[]>`)
-- **Native TypeScript-style objects** with property access, nested objects, and object printing
+- **Interfaces** with `extends` and compile-time structural type checking
+- **Native TypeScript-style objects** with property access, property assignment, nested objects, and object printing
+- **Object methods with `this`** (`add: function(x: i32): i32 { this.value += x; ... }` and shorthand `area(): i32 { ... }`)
+- **Object destructuring** (`let { name, age } = user;`)
+- **Module system**: `import { x } from "./file";` and `export` (compile-time inlining)
 - **JSON integration**: `JSON.stringify(obj)` and `JSON.parse(str)` with native objects
-- **Arrays**: literal syntax, index access, `.length`, `.push()`, `.shift()`
+- **Arrays**: literal syntax, index access, `.length`, `.push()`, `.pop()`, `.shift()`
 - **Advanced collections** via C++ stdlib: `Map<K,V>`, `Set<T>` with `.get()`, `.set()`, `.has()`, `.add()`
-- **String operations**: concatenation (`+`), escape sequences (`\n`, `\t`, `\\`, `\"`)
-- **`const` keyword** for immutable bindings
+- **String operations**: concatenation (`+`, including numbers), template literals (`` `Hi ${name}` ``), escape sequences
+- **`const` keyword** for immutable bindings (reassignment is a compile error)
 - **Built-in functions** (`print` and `println`)
 - **Comments** (single-line `//` and multi-line `/* */`)
+- **AST optimizer**: compile-time constant folding and dead-branch elimination (disable with `--no-fold`)
 - **LLVM -O2 native compilation** (3–17x faster than Node.js)
 - **C++ integration** with 30+ stdlib functions (strings, arrays, file I/O, JSON, random)
 - **VSCode Extension** with syntax highlighting and IntelliSense
@@ -103,32 +111,54 @@ This provides:
 ### 6. Manual Usage
 
 #### Basic Compilation
+
+> `cscript` is relocatable: it finds the precompiled runtime
+> (`libcypescript.a`) next to its own binary, so you can run it from any
+> directory. Set `CYPESCRIPT_HOME=<prefix>` to point at a custom install
+> (expects `<prefix>/lib/libcypescript.a`). Producing executables requires
+> `clang++` on your PATH (Xcode Command Line Tools on macOS).
+
 ```bash
-# Compile a Cypescript file
-./build/cscript example/hello.csc
+# Compile straight to a native executable (named after the input file)
+./build/cscript example/01_hello.csc
+./hello
+
+# Compile AND run in one step
+./build/cscript -r example/01_hello.csc
+
+# Choose the executable name
+./build/cscript -o my_program example/01_hello.csc
+
+# Emit LLVM IR only (give the output a .ll extension)
+./build/cscript -o my_output.ll example/01_hello.csc
+
+# Disable the AST optimizer (constant folding / dead branches)
+./build/cscript --no-fold example/01_hello.csc
 
 # With verbose output and debugging
-./build/cscript -v --print-tokens --print-ast example/hello.csc
-
-# Specify output file
-./build/cscript -o my_output.ll example/hello.csc
+./build/cscript -v --print-tokens --print-ast example/01_hello.csc
 
 # Get help
 ./build/cscript --help
 ```
 
-#### Complete Compilation Pipeline
+`cscript` performs the whole pipeline for you: module resolution (imports) →
+lexing → parsing → AST optimization → LLVM IR → `clang++ -O2` link against the
+Cypescript stdlib. Exceptions, dynamic arrays, `Map`/`Set`, JSON, and string
+helpers are all part of the automatically linked stdlib — no extra flags needed.
+
+#### Manual Pipeline (optional)
+
+Only needed if you want to inspect or post-process the IR yourself:
+
 ```bash
-# 1. Compile Cypescript to LLVM IR
-./build/cscript example/hello.csc
+# 1. Emit LLVM IR
+./build/cscript -o output.ll example/01_hello.csc
 
-# 2. Compile LLVM IR to object file
-llc -filetype=obj -relocation-model=pic output.ll -o output.o
+# 2. Compile IR + stdlib to an executable
+clang++ -O2 output.ll src/cypescript_stdlib.cpp -o my_program -std=c++17
 
-# 3. Link to create executable
-clang output.o -o my_program
-
-# 4. Run the program
+# 3. Run the program
 ./my_program
 ```
 
@@ -138,7 +168,7 @@ For programs that need additional functionality, Cypescript provides seamless C+
 
 ```bash
 # One-command compilation with C++ integration
-./compile-with-cpp.sh example/cpp_integration_basic.csc my_program
+./compile-with-cpp.sh example/17_cpp_stdlib.csc my_program
 
 # Then run the program
 ./my_program
@@ -213,6 +243,26 @@ Prime Sieve (500K)              13ms         87ms       6.6x 🔥
 Run benchmarks yourself:
 ```bash
 ./benchmarks/run_benchmarks.sh
+```
+
+### **Cross-Language Benchmarks (Cypescript vs TypeScript vs Python vs Rust)**
+
+The same algorithm implemented identically in all four languages
+(`benchmarks/cross/`), best of 3 wall-clock runs on Apple Silicon
+(Node v26, Python 3.14, rustc 1.89):
+
+```
+Benchmark                     Cypescript   Node (TS)     Python       Rust
+──────────────────────────────────────────────────────────────────────────
+Primes < 1M (trial division)     0.051s      0.146s      1.777s     0.050s
+Fibonacci fib(35) recursive      0.025s      0.125s      0.621s     0.026s
+```
+
+**Cypescript runs within ~2% of Rust, 2.9–5x faster than Node.js on the
+identical TypeScript source, and 25–35x faster than Python.**
+
+```bash
+bash benchmarks/cross/run_cross_benchmarks.sh   # reproduce (best of 3)
 ```
 
 ## Language Syntax
@@ -336,21 +386,178 @@ let quotient: i32 = a / b;   // 3 (integer division)
 let remainder: i32 = a % b;  // 1
 ```
 
+### Floating-Point Arithmetic
+
+```typescript
+let pi: f64 = 3.14159;
+let radius: f64 = 2.0;
+let area: f64 = pi * radius * radius;   // 12.5664
+let mixed: f64 = 2 * pi;                // i32 automatically promotes to f64
+
+function circleArea(r: f64): f64 {
+    return 3.14159 * r * r;
+}
+println(circleArea(3.0));               // 28.2743
+```
+
+### Strings and Template Literals
+
+```typescript
+let name: string = "Alice";
+let age: i32 = 28;
+
+// Concatenation works with strings, integers, floats, and booleans
+let msg: string = "Name: " + name + ", age: " + age;
+
+// Template literals with ${expression} interpolation
+println(`Hello ${name}, next year you are ${age + 1}!`);
+```
+
 ### Control Flow
 
 ```typescript
 let score: i32 = 85;
 
+// if / else if / else chains
 if (score >= 90) {
-    print("Grade: A");
+    println("Grade: A");
+} else if (score >= 80) {
+    println("Grade: B");
 } else {
-    if (score >= 80) {
-        print("Grade: B");
-    } else {
-        print("Grade: C or below");
-    }
+    println("Grade: C or below");
+}
+
+// switch/case with fallthrough and default
+let day: i32 = 6;
+switch (day) {
+    case 6:
+    case 7:
+        println("Weekend");
+        break;
+    default:
+        println("Weekday");
+}
+
+// Also works with string conditions
+switch (command) {
+    case "start": println("starting"); break;
+    case "stop":  println("stopping"); break;
+    default:      println("unknown");
 }
 ```
+
+### break / continue
+
+```typescript
+let total: i32 = 0;
+for (let i: i32 = 0; i < 10; i++) {
+    if (i == 3) { continue; }  // skip 3
+    if (i == 7) { break; }     // stop at 7
+    total += i;
+}
+println(total); // 18
+```
+
+### Compound Assignment and Increment
+
+```typescript
+let x: i32 = 10;
+x += 5;   // 15
+x -= 3;   // 12
+x *= 2;   // 24
+x /= 4;   // 6
+x %= 4;   // 2
+x++;      // 3
+x--;      // 2
+
+// Works on object properties too
+counter.value += 10;
+```
+
+### Interfaces
+
+```typescript
+interface User {
+    name: string;
+    age: i32;
+}
+
+interface Admin extends User {
+    level: i32;
+}
+
+// Structurally checked at compile time — a missing or mistyped
+// property is a compile error.
+let user: User = { name: "Alice", age: 28 };
+let admin: Admin = { name: "Bob", age: 35, level: 9 };
+```
+
+### Object Methods and `this`
+
+```typescript
+let calculator = {
+    value: 0,
+    add: function(x: i32): i32 {
+        this.value = this.value + x;
+        return this.value;
+    },
+    reset(): void {          // shorthand method syntax
+        this.value = 0;
+    }
+};
+
+calculator.add(5);           // 5
+calculator.add(7);           // 12
+calculator.reset();
+
+// Direct property assignment
+calculator.value = 42;
+```
+
+### Object Destructuring
+
+```typescript
+let user = { name: "Alice", age: 28, active: true };
+let { name, age } = user;
+println(name);  // Alice
+println(age);   // 28
+```
+
+### Exception Handling
+
+```typescript
+function risky(n: i32): i32 {
+    if (n < 0) {
+        throw "negative input: " + n;
+    }
+    return n * 2;
+}
+
+try {
+    println(risky(21));   // 42
+    println(risky(-1));   // throws
+} catch (e) {
+    println("caught: " + e);
+} finally {
+    println("cleanup always runs");
+}
+```
+
+### Modules (import / export)
+
+```typescript
+// math_utils.csc
+export function square(x: i32): i32 {
+    return x * x;
+}
+export const GREETING: string = "Hello";
+
+// main.csc
+import { square, GREETING } from "./math_utils";
+println(square(7)); // 49
+```
+
+Imports are resolved at compile time by inlining each module once (cycles are detected and broken automatically).
 
 ### Loops
 
@@ -468,25 +675,33 @@ let x: i32 = 10;
 let y: string = "test";
 ```
 
-## Complete Compilation Pipeline
+## Running TypeScript Scripts (Compatibility)
 
-### Native Cypescript Programs
+Cypescript's goal is to run existing TypeScript scripts natively with only
+minute changes. The following TypeScript constructs work **as-is**:
 
-For TypeScript-style programs with native objects:
+- `console.log(...)` / `console.error(...)` — including multiple arguments
+  (`console.log("x =", x)`)
+- `===` and `!==` (treated as `==` / `!=`)
+- `Math.sqrt`, `Math.pow`, `Math.abs`, `Math.floor`, `Math.sin`, `Math.cos`, `Math.log`, `Math.exp`
+- `let` / `const`, type annotations, `number` (compiles to `f64`), `string`, `boolean`
+- Interfaces, generics, type aliases, template literals, destructuring
+- `Map` / `Set`, arrays with `.push()` / `.pop()` / `.shift()` / `.length`, `for...of`
+- `try` / `catch` / `finally` / `throw`, `switch`, `break` / `continue`
+- Object literals with methods and `this`
 
-```bash
-# 1. Compile Cypescript to LLVM IR
-./build/cscript example/hello.csc
+Typical minute changes when porting a `.ts` file:
 
-# 2. Compile LLVM IR to object file
-llc -filetype=obj -relocation-model=pic output.ll -o output.o
+| TypeScript | Cypescript |
+|---|---|
+| `x++` as an *expression* (`arr[i++]`) | statement-level `x++` only |
+| arrow functions `(x) => x * 2` | named `function` declarations |
+| `class` | object literals with methods |
+| `import` from npm packages | only local `./file.csc` module imports |
+| `number` for integer loops (slow) | use `i32` for integer math (fast) |
 
-# 3. Link to create executable
-clang output.o -o my_program
-
-# 4. Run the program
-./my_program
-```
+See `example/18_bfs_graph.csc` vs `example/18_bfs_graph.ts` — the BFS algorithm
+is byte-for-byte almost identical, and both produce identical output.
 
 ## Example Programs
 
@@ -651,24 +866,36 @@ println("JSON: " + json_prettify(user));
 ```
 Cypescript/
 ├── src/
-│   ├── main.cpp      # Compiler entry point
-│   ├── Lexer.cpp/h   # Lexical analysis
+│   ├── main.cpp      # Compiler entry point + module resolution
+│   ├── Lexer.cpp/h   # Lexical analysis (incl. template literals)
 │   ├── Parser.cpp/h  # Syntax analysis
 │   ├── AST.h         # Abstract Syntax Tree
 │   ├── CodeGen.cpp/h # LLVM IR generation
+│   ├── Optimizer.cpp/h # AST constant folding + dead-branch elimination
+│   ├── ObjectOptimizer.cpp/h # Direct struct property access (Phase 1)
 │   ├── Token.h       # Token definitions
-│   └── cypescript_stdlib.cpp # C++ standard library
+│   └── cypescript_stdlib.cpp # C++ standard library + exception runtime
 ├── tests/
 │   ├── run_tests.sh  # Test suite runner
 │   ├── test_variables.csc    # Variable declarations
 │   ├── test_arithmetic.csc   # Arithmetic operations
 │   ├── test_if_else.csc      # Control flow
+│   ├── test_control_flow.csc # break/continue, else-if, switch
 │   ├── test_for.csc          # For loops
 │   ├── test_while.csc        # While loops
 │   ├── test_do_while.csc     # Do-while loops
+│   ├── test_floats.csc       # f64 arithmetic
+│   ├── test_strings.csc      # Concatenation + template literals
+│   ├── test_compound_assign.csc # +=, -=, ++, --
 │   ├── test_functions.csc    # User-defined functions
 │   ├── test_arrays.csc       # Arrays and array.length
-│   └── test_objects.csc      # Native objects
+│   ├── test_objects.csc      # Native objects
+│   ├── test_interfaces.csc   # Interfaces + structural typing
+│   ├── test_methods.csc      # Object methods and `this`
+│   ├── test_destructuring.csc # Object destructuring
+│   ├── test_exceptions.csc   # try/catch/finally/throw
+│   ├── test_modules.csc      # import/export
+│   └── modules/              # Helper modules for module tests
 ├── benchmarks/
 │   ├── run_benchmarks.sh     # Benchmark suite runner
 │   ├── benchmark_simple.csc  # Simple loop (100M iterations)
@@ -679,11 +906,18 @@ Cypescript/
 │   ├── bench_matrix.ts       # Node.js comparison
 │   ├── bench_primes.csc      # Prime sieve (500K)
 │   └── bench_primes.ts       # Node.js comparison
-├── example/
-│   ├── README.md     # Example organization guide
-│   ├── basic/        # Basic examples (native compilation)
-│   ├── cpp-integration/ # C++ integration examples
-│   └── browser-only/ # Browser interpreter examples
+├── example/          # Guided tour, easiest → most complex
+│   ├── README.md            # How to run + progression table
+│   ├── 01_hello.csc         # print/println/console.log
+│   ├── 02_variables.csc     # types, let/const, inference
+│   ├── ...                  # operators, control flow, loops, functions,
+│   │                        # strings, arrays, objects, interfaces,
+│   │                        # methods/this, destructuring, exceptions
+│   ├── 14_modules/          # import/export (run main.csc)
+│   ├── 15_json.csc          # JSON.stringify/parse
+│   ├── 16_typescript_compat.csc # near-plain TypeScript
+│   ├── 17_cpp_stdlib.csc    # C++ stdlib integration
+│   └── 18_bfs_graph.csc/.ts # capstone: BFS in both languages
 ├── docs/             # Web documentation
 ├── build.sh          # Build script
 ├── test.sh           # Test script (runs tests/run_tests.sh)
@@ -706,7 +940,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 
 # Run
-./build/cscript example/hello.csc
+./build/cscript example/01_hello.csc
 ```
 
 ### Debugging
@@ -714,7 +948,7 @@ cmake --build build
 Enable verbose output to see compilation stages:
 
 ```bash
-./build/cscript -v --print-tokens --print-ast example/hello.csc
+./build/cscript -v --print-tokens --print-ast example/01_hello.csc
 ```
 
 This will show:
@@ -727,9 +961,19 @@ This will show:
 
 - **macOS** (Intel or Apple Silicon)
 - **CMake** 3.15+
-- **LLVM** (any recent version, installed via Homebrew)
-- **Clang** (for linking final executable)
+- **LLVM** (any recent version, installed via Homebrew) — build-time only
+- **clang++** (Xcode Command Line Tools) — required at compile time to link executables
 - **Python 3** (for web documentation)
+
+### Installing system-wide (optional)
+
+```bash
+cmake --install build --prefix /usr/local   # installs bin/cscript + lib/libcypescript.a
+cscript --version
+```
+
+A Homebrew formula template lives in `packaging/cypescript.rb` for publishing
+releases, and `.github/workflows/ci.yml` builds and tests every push.
 
 ## C++ Integration
 
@@ -739,7 +983,7 @@ Cypescript provides seamless integration with C++ through a comprehensive standa
 
 ```bash
 # Compile a Cypescript program with C++ functions
-./compile-with-cpp.sh example/cpp-integration/cpp_integration_basic.csc my_program
+./compile-with-cpp.sh example/17_cpp_stdlib.csc my_program
 
 # Run the compiled program
 ./my_program
@@ -969,7 +1213,7 @@ For programs that need additional functionality beyond native TypeScript feature
 
 ```bash
 # Compile a Cypescript program with C++ functions
-./compile-with-cpp.sh example/cpp_integration_basic.csc my_program
+./compile-with-cpp.sh example/17_cpp_stdlib.csc my_program
 
 # Run the compiled program
 ./my_program
@@ -1121,24 +1365,34 @@ println("JSON: " + json_prettify(user));
 - [x] Variable declarations (`let`, `const`) with type annotations
 - [x] Variable assignments with type checking
 - [x] All arithmetic operators (`+`, `-`, `*`, `/`, `%`)
+- [x] Compound assignment (`+=`, `-=`, `*=`, `/=`, `%=`) and increment/decrement (`++`, `--`)
 - [x] All comparison operators (`==`, `!=`, `<`, `<=`, `>`, `>=`)
 - [x] Logical operators (`&&`, `||`) with short-circuit evaluation
 - [x] Unary operators (`!`, `-`)
 - [x] Control flow with `if`/`else` statements and nesting
+- [x] `else if` chains
+- [x] Switch/case statements with fallthrough, `default`, and string conditions
+- [x] `break` and `continue` statements in all loops (and `break` in switch)
 - [x] While loops with complex conditions
-- [x] Traditional for loops (`for (init; condition; increment)`)
+- [x] Traditional for loops (`for (init; condition; increment)`, including `i++` and `i += n`)
 - [x] Do-while loops (post-condition loops)
 - [x] `for...of` loops for arrays and collections
 - [x] Nested loops of all types
-- [x] Built-in `print` and `println` functions
+- [x] Floating-point arithmetic (`f64` literals, operations, comparisons, i32→f64 promotion)
+- [x] Built-in `print` and `println` functions (strings, i32, f64, booleans, objects)
 - [x] String literals with escape sequences (`\n`, `\t`, `\\`, `\"`)
-- [x] String concatenation with `+` operator
+- [x] String concatenation with `+` operator (strings, integers, floats, booleans)
+- [x] String interpolation / template literals (`` `Hello ${name}` ``)
 - [x] Integer and boolean literal support (`true`, `false`)
 - [x] Single-line (`//`) and multi-line (`/* */`) comments
 - [x] Arrays with literal syntax (`[1, 2, 3]`), index access, and assignment
 - [x] Array `.length` property
-- [x] Dynamic arrays with `.push()` and `.shift()` (via C++ stdlib)
+- [x] Dynamic arrays with `.push()`, `.pop()`, and `.shift()` (via C++ stdlib)
 - [x] Native TypeScript-style objects with property access (`obj.property`)
+- [x] Object property assignment (`obj.property = value`)
+- [x] Object methods and `this` keyword (function-expression and shorthand syntax)
+- [x] Object destructuring (`let { name, age } = user`)
+- [x] Interface definitions with `extends` and compile-time structural checking
 - [x] Nested objects (`company.employee.name`)
 - [x] Object printing (`println(obj)` outputs JSON representation)
 - [x] `JSON.stringify(obj)` and `JSON.parse(str)` with native objects
@@ -1151,6 +1405,9 @@ println("JSON: " + json_prettify(user));
 - [x] Non-null assertion operator (`!`)
 - [x] `new` expressions (`new Set<T>()`, `new Map<K,V>()`)
 - [x] Method calls (`.get()`, `.set()`, `.has()`, `.add()`)
+- [x] Exception handling (`try` / `catch` / `finally` / `throw`)
+- [x] Module system (`import { x } from "./file"` / `export`, compile-time inlining)
+- [x] AST constant folding and dead-branch elimination (`--no-fold` to disable)
 - [x] LLVM IR code generation with `-O2` optimizations
 - [x] Native executable compilation (3–17x faster than Node.js)
 - [x] C++ integration with 30+ stdlib functions
@@ -1158,16 +1415,13 @@ println("JSON: " + json_prettify(user));
 - [x] Interactive web documentation with runnable examples
 
 ### 🚧 Planned Features
-- [ ] `break` and `continue` statements in loops
-- [ ] Switch/case statements
-- [ ] `else if` chains (currently requires nested `if` inside `else`)
-- [ ] Floating-point arithmetic (`f64` literals and operations)
-- [ ] String interpolation / template literals
-- [ ] Interface definitions
-- [ ] Object methods and `this` keyword
-- [ ] Object destructuring (`let { name, age } = user`)
-- [ ] Module system (`import` / `export`)
-- [ ] Exception handling (`try` / `catch` / `throw`)
+- [ ] Arrow functions and closures (`(x) => x * 2`)
+- [ ] Classes (`class` keyword — object literals with methods work today)
+- [ ] Union types (`string | i32`) and type guards
+- [ ] `f64[]` arrays and vectorized array methods (`.map()`, `.filter()`, `.reduce()`)
+- [ ] Line/column numbers in error messages
+- [ ] Reference-counted heap objects (escape-safe object returns)
+- [ ] JIT compilation and profile-guided runtime optimization (see OPTIMIZATION_ROADMAP.md)
 
 ## Contributing
 

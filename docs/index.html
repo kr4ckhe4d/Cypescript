@@ -28,6 +28,7 @@
                 <li><a href="#loops" class="nav-link">Loops</a></li>
                 <li><a href="#functions" class="nav-link">Functions</a></li>
                 <li><a href="#objects" class="nav-link">Objects</a></li>
+                <li><a href="#modern-features" class="nav-link">Modern Features <span style="font-size:0.7em;color:#4ade80;">NEW</span></a></li>
                 <li><a href="#cpp-integration" class="nav-link">C++ Integration</a></li>
                 <li><a href="#performance" class="nav-link">Performance</a></li>
                 <li><a href="#architecture" class="nav-link">Architecture</a></li>
@@ -122,6 +123,23 @@ cd cypescript</code></pre>
                         <div class="step-content">
                             <h3>Build Compiler</h3>
                             <pre><code class="language-bash">./build.sh</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h3>Compile &amp; Run</h3>
+                            <p>Run <code>cscript</code> from the repository root — it produces a native executable directly (and links the C++ stdlib automatically):</p>
+                            <pre><code class="language-bash"># Compile and run in one step
+./build/cscript -r example/01_hello.csc
+
+# Or compile to a named executable
+./build/cscript -o my_program example/01_hello.csc
+./my_program
+
+# Emit LLVM IR only
+./build/cscript -o out.ll example/01_hello.csc</code></pre>
                         </div>
                     </div>
                 </div>
@@ -952,6 +970,208 @@ if (employee.isRemote == 1) {
                 </div>
             </section>
 
+            <!-- Modern Features Section -->
+            <section id="modern-features" class="content-section">
+                <h1><i class="fas fa-bolt"></i> Modern Language Features</h1>
+                <p class="section-intro">
+                    Cypescript now supports the full set of modern TypeScript constructs below.
+                    <strong>These examples run with the native compiler</strong> (<code>./build/cscript -r file.csc</code>) —
+                    the in-browser playground only supports the core language subset.
+                </p>
+
+                <h2>Control Flow: else-if, switch, break/continue</h2>
+                <div class="code-example">
+                    <div class="code-header">
+                        <span class="filename">control.csc</span>
+                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
+                    </div>
+                    <pre><code class="language-typescript">let score: i32 = 85;
+if (score >= 90) {
+    println("A");
+} else if (score >= 80) {
+    println("B");
+} else {
+    println("C");
+}
+
+let day: i32 = 6;
+switch (day) {
+    case 6:
+    case 7:
+        println("Weekend");   // fallthrough works
+        break;
+    default:
+        println("Weekday");
+}
+
+let total: i32 = 0;
+for (let i: i32 = 0; i < 10; i++) {
+    if (i == 3) { continue; }
+    if (i == 7) { break; }
+    total += i;
+}
+println(total); // 18</code></pre>
+                </div>
+
+                <h2>Floating-Point Arithmetic (f64)</h2>
+                <div class="code-example">
+                    <div class="code-header">
+                        <span class="filename">floats.csc</span>
+                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
+                    </div>
+                    <pre><code class="language-typescript">let pi: f64 = 3.14159;
+let r: f64 = 2.0;
+println(pi * r * r);      // 12.5664
+let mixed: f64 = 2 * pi;  // i32 promotes to f64 automatically
+
+function circleArea(radius: f64): f64 {
+    return 3.14159 * radius * radius;
+}
+println(circleArea(3.0)); // 28.2743</code></pre>
+                </div>
+
+                <h2>Template Literals &amp; String Concatenation</h2>
+                <div class="code-example">
+                    <div class="code-header">
+                        <span class="filename">strings.csc</span>
+                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
+                    </div>
+                    <pre><code class="language-typescript">let name: string = "Alice";
+let age: i32 = 28;
+
+// + concatenation works with strings, numbers, and booleans
+println("Name: " + name + ", age: " + age);
+
+// Backtick template literals with ${expression} interpolation
+println(`Hello ${name}, next year you are ${age + 1}!`);</code></pre>
+                </div>
+
+                <h2>Compound Assignment &amp; Increment</h2>
+                <div class="code-example">
+                    <div class="code-header">
+                        <span class="filename">compound.csc</span>
+                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
+                    </div>
+                    <pre><code class="language-typescript">let x: i32 = 10;
+x += 5;   // 15
+x *= 2;   // 30
+x++;      // 31
+x--;      // 30
+
+// Works on object properties too
+counter.value += 10;</code></pre>
+                </div>
+
+                <h2>Interfaces (Structural Typing)</h2>
+                <div class="code-example">
+                    <div class="code-header">
+                        <span class="filename">interfaces.csc</span>
+                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
+                    </div>
+                    <pre><code class="language-typescript">interface User {
+    name: string;
+    age: i32;
+}
+
+interface Admin extends User {
+    level: i32;
+}
+
+// Checked at compile time: a missing or mistyped property is a compile error
+let user: User = { name: "Alice", age: 28 };
+let admin: Admin = { name: "Bob", age: 35, level: 9 };</code></pre>
+                </div>
+
+                <h2>Object Methods &amp; <code>this</code></h2>
+                <div class="code-example">
+                    <div class="code-header">
+                        <span class="filename">methods.csc</span>
+                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
+                    </div>
+                    <pre><code class="language-typescript">let calculator = {
+    value: 0,
+    add: function(x: i32): i32 {
+        this.value = this.value + x;
+        return this.value;
+    },
+    reset(): void {          // shorthand method syntax
+        this.value = 0;
+    }
+};
+
+calculator.add(5);           // 5
+calculator.value = 42;       // direct property assignment</code></pre>
+                </div>
+
+                <h2>Object Destructuring</h2>
+                <div class="code-example">
+                    <div class="code-header">
+                        <span class="filename">destructure.csc</span>
+                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
+                    </div>
+                    <pre><code class="language-typescript">let user = { name: "Alice", age: 28 };
+let { name, age } = user;
+println(`${name} is ${age}`); // Alice is 28</code></pre>
+                </div>
+
+                <h2>Exception Handling</h2>
+                <div class="code-example">
+                    <div class="code-header">
+                        <span class="filename">exceptions.csc</span>
+                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
+                    </div>
+                    <pre><code class="language-typescript">function risky(n: i32): i32 {
+    if (n < 0) {
+        throw "negative input: " + n;
+    }
+    return n * 2;
+}
+
+try {
+    println(risky(-1));
+} catch (e) {
+    println("caught: " + e);
+} finally {
+    println("cleanup always runs");
+}</code></pre>
+                </div>
+
+                <h2>Modules (import / export)</h2>
+                <div class="code-example">
+                    <div class="code-header">
+                        <span class="filename">main.csc</span>
+                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
+                    </div>
+                    <pre><code class="language-typescript">// math_utils.csc
+export function square(x: i32): i32 { return x * x; }
+
+// main.csc — modules are inlined at compile time
+import { square } from "./math_utils";
+println(square(7)); // 49</code></pre>
+                </div>
+
+                <h2>TypeScript Compatibility Layer</h2>
+                <p>These TypeScript idioms work as-is, so many <code>.ts</code> scripts compile with minute changes:</p>
+                <div class="code-example">
+                    <div class="code-header">
+                        <span class="filename">ts_compat.csc</span>
+                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
+                    </div>
+                    <pre><code class="language-typescript">console.log("multiple", "args", 42);   // maps to println, space-joined
+if (x === 5 && y !== 3) { ... }        // strict equality operators
+console.log(Math.sqrt(16), Math.pow(2, 10), Math.floor(3.7));
+const n: number = 1.5;                  // number compiles to f64</code></pre>
+                </div>
+
+                <h2>Compile-Time Optimizer</h2>
+                <p>
+                    The compiler folds constant expressions and removes dead branches
+                    (<code>if (false) {...}</code>, <code>while (false) {...}</code>) before LLVM codegen,
+                    then applies LLVM <code>-O2</code>. Disable the AST pass with
+                    <code>--no-fold</code> for debugging.
+                </p>
+            </section>
+
             <!-- C++ Integration Section -->
             <section id="cpp-integration" class="content-section">
                 <h1>C++ Integration (Advanced)</h1>
@@ -1150,6 +1370,49 @@ if (exists == 1) {
                 <p class="section-intro">
                     Comprehensive performance comparison between Cypescript native compilation and JavaScript/TypeScript.
                 </p>
+
+                <!-- Cross-language benchmark (2026) -->
+                <div class="benchmark-summary">
+                    <h2>🌍 Cross-Language: Cypescript vs TypeScript vs Python vs Rust</h2>
+                    <p>
+                        The <em>exact same algorithm</em> in four languages (<code>benchmarks/cross/</code>),
+                        best of 3 wall-clock runs on Apple Silicon — Node v26, Python 3.14, rustc 1.89:
+                    </p>
+                    <div style="overflow-x:auto;">
+                        <table style="width:100%; border-collapse:collapse; margin:1rem 0;">
+                            <thead>
+                                <tr style="border-bottom:2px solid rgba(128,128,128,0.4); text-align:left;">
+                                    <th style="padding:0.5rem;">Benchmark</th>
+                                    <th style="padding:0.5rem;">Cypescript</th>
+                                    <th style="padding:0.5rem;">Node (TS)</th>
+                                    <th style="padding:0.5rem;">Python</th>
+                                    <th style="padding:0.5rem;">Rust</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr style="border-bottom:1px solid rgba(128,128,128,0.2);">
+                                    <td style="padding:0.5rem;">Primes &lt; 1M (trial division)</td>
+                                    <td style="padding:0.5rem;"><strong>0.051s</strong> 🥇</td>
+                                    <td style="padding:0.5rem;">0.146s</td>
+                                    <td style="padding:0.5rem;">1.777s</td>
+                                    <td style="padding:0.5rem;">0.050s</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:0.5rem;">Fibonacci fib(35) recursive</td>
+                                    <td style="padding:0.5rem;"><strong>0.025s</strong> 🥇</td>
+                                    <td style="padding:0.5rem;">0.125s</td>
+                                    <td style="padding:0.5rem;">0.621s</td>
+                                    <td style="padding:0.5rem;">0.026s</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p>
+                        <strong>Within ~2% of Rust</strong>, 2.9–5x faster than Node.js running the
+                        identical TypeScript source, and 25–35x faster than Python.
+                        Reproduce with <code>bash benchmarks/cross/run_cross_benchmarks.sh</code>.
+                    </p>
+                </div>
 
                 <!-- Performance Overview -->
                 <div class="performance-overview">
