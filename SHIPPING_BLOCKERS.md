@@ -33,7 +33,7 @@ Users need `clang++` (Xcode CLT on macOS) and, to build the compiler, Homebrew L
 **Fix:** document as prerequisites (like Rust requiring a linker), or bundle `lld`.
 Decide minimum supported LLVM version (currently built against LLVM 22).
 
-### 5. No packaging / release pipeline — ✅ MOSTLY FIXED (--version, CI workflow, formula template; actual GitHub release/tap still to publish)
+### 5. No packaging / release pipeline — ✅ FIXED (v1.0.0 released 2026-07-08; brew tap kr4ckhe4d/cypescript && brew install cypescript verified working end-to-end)
 **Fix:**
 - `--version` flag + semantic versioning (start v0.x honestly, or v1.0 with the
   documented TS-subset scope)
@@ -94,15 +94,15 @@ Publish the compatibility table (now in README) as part of the docs.
 line/column parser errors, CI workflow, output-assertion tests, `--version`,
 Homebrew formula template, VSCode grammar refresh, try/return fix.
 
-**Remaining, in order:**
-1. **Create the GitHub release for tag `v1.0.0`** — tag is pushed; draft the
-   release on GitHub (attach CI artifacts if desired), then create the
-   `homebrew-cypescript` tap repo with `packaging/cypescript.rb` as
-   `Formula/cypescript.rb` (sha256 already filled in)
-2. **Memory model** — document script-lifetime memory for v1.0; arena or
-   refcounted heap objects afterwards (ongoing)
-3. **Full type checker** — the semantic pass covers scoping/arity/const; property
+**v1.0.0 SHIPPED 2026-07-08** — GitHub release published, Homebrew tap live,
+`brew install cypescript` verified end-to-end on a real machine.
+
+**Remaining (post-1.0):**
+1. **Memory model** — document script-lifetime memory; arena or refcounted
+   heap objects afterwards (ongoing)
+2. **Full type checker** — the semantic pass covers scoping/arity/const; property
    and type mismatches still surface at codegen without positions
+3. **Language**: class inheritance (`extends`), union types, by-reference captures
 
 **Done 2026-07-08:** LICENSE (MIT), semantic analysis pass, VSCode extension
 1.1.0 (grammar + snippets, packaged), playground labeled core-subset-only,

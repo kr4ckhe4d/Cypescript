@@ -1,6 +1,24 @@
 # Cypescript
 
+[![CI](https://github.com/kr4ckhe4d/Cypescript/actions/workflows/ci.yml/badge.svg)](https://github.com/kr4ckhe4d/Cypescript/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/kr4ckhe4d/Cypescript)](https://github.com/kr4ckhe4d/Cypescript/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A TypeScript-style language compiler built with C++ and LLVM. Cypescript aims to provide a familiar syntax for developers coming from TypeScript/JavaScript while compiling to efficient native code through LLVM.
+
+## Install
+
+```bash
+brew tap kr4ckhe4d/cypescript
+brew install cypescript
+
+# Then compile and run any .csc file:
+echo 'println("hello, cypescript!");' > hello.csc
+cscript -r hello.csc
+```
+
+Requires `clang++` (Xcode Command Line Tools) at compile time. To build from
+source instead, see [Quick Start](#quick-start).
 
 ## 📖 Interactive Documentation
 

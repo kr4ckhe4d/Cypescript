@@ -1,5 +1,9 @@
 # Progress — Language Completion Session (2026-07-07)
 
+> **v1.0.0 SHIPPED 2026-07-08**: GitHub release published, Homebrew tap
+> (kr4ckhe4d/homebrew-cypescript) live, `brew install cypescript` verified
+> building from the tag tarball in 9s on the user's machine. CI green.
+
 ## Goal
 Implement everything outstanding in `NATIVE_OBJECTS_ROADMAP.md`, `OPTIMIZATION_ROADMAP.md`,
 and the README "Planned Features" list. **Status: DONE.** All 18 tests pass
