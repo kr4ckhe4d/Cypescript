@@ -51,6 +51,7 @@ done
 | 17 | `17_cpp_stdlib.csc` | C++ stdlib: strings, file I/O, random |
 | 18 | `18_bfs_graph.csc` | **capstone**: generics + `Map`/`Set` + BFS algorithm |
 | 19 | `19_arrow_functions.csc` | arrow functions, closures, `.map`/`.filter`/`.reduce`/`.find`/`.forEach` |
+| 20 | `20_classes.csc` | classes: fields, constructors, methods, `new` |
 
 `18_bfs_graph.ts` is the same algorithm in real TypeScript (`node example/18_bfs_graph.ts`) —
 diff it against the `.csc` file to see how close the languages are.
