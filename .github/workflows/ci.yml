@@ -49,9 +49,6 @@ jobs:
 
   build-and-test-linux:
     runs-on: ubuntu-latest
-    # Linux support is CI-validated only (primary dev platform is macOS);
-    # keep failures visible but non-blocking until it has a track record.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
