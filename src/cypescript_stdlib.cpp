@@ -20,12 +20,13 @@
 
 class DynamicArray {
 public:
-    enum class Type { I32, String, Object };
+    enum class Type { I32, F64, String, Object };
     Type type;
     std::vector<int32_t> i32_data;
+    std::vector<double> f64_data;
     std::vector<std::string> string_data;
     std::vector<void*> object_data;
-    
+
     DynamicArray(Type t) : type(t) {}
 };
 
@@ -99,13 +100,50 @@ extern "C" {
     // DYNAMIC ARRAY FUNCTIONS
     // ===================
     void* array_create_i32() { return new DynamicArray(DynamicArray::Type::I32); }
+    void* array_create_f64() { return new DynamicArray(DynamicArray::Type::F64); }
     void* array_create_string() { return new DynamicArray(DynamicArray::Type::String); }
     void* array_create_object() { return new DynamicArray(DynamicArray::Type::Object); }
 
     int32_t array_length(void* arr_ptr) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
         if (!arr) return 0;
-        return std::max({arr->i32_data.size(), arr->string_data.size(), arr->object_data.size()});
+        return std::max({arr->i32_data.size(), arr->f64_data.size(),
+                         arr->string_data.size(), arr->object_data.size()});
+    }
+
+    // --- f64 arrays ---
+    void array_push_f64(void* arr_ptr, double val) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (arr) arr->f64_data.push_back(val);
+    }
+
+    double array_get_f64(void* arr_ptr, int32_t index) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (!arr || index < 0 || index >= (int32_t)arr->f64_data.size()) return 0.0;
+        return arr->f64_data[index];
+    }
+
+    void array_set_f64(void* arr_ptr, int32_t index, double val) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (!arr || index < 0) return;
+        if (index >= (int32_t)arr->f64_data.size()) arr->f64_data.resize(index + 1);
+        arr->f64_data[index] = val;
+    }
+
+    double array_shift_f64(void* arr_ptr) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (!arr || arr->f64_data.empty()) return 0.0;
+        double val = arr->f64_data.front();
+        arr->f64_data.erase(arr->f64_data.begin());
+        return val;
+    }
+
+    double array_pop_f64(void* arr_ptr) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (!arr || arr->f64_data.empty()) return 0.0;
+        double val = arr->f64_data.back();
+        arr->f64_data.pop_back();
+        return val;
     }
 
     void array_push_i32(void* arr_ptr, int32_t val) {

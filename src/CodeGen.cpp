@@ -143,9 +143,11 @@ llvm::Type *CodeGen::getLLVMType(const std::string &typeName)
     {
         return llvm::Type::getVoidTy(m_context);
     }
-    else if (typeName == "object" || typeName == "closure" || interfaces.count(typeName))
+    else if (typeName == "object" || typeName == "closure" ||
+             typeName.rfind("closure(", 0) == 0 ||
+             interfaces.count(typeName) || classes.count(typeName))
     {
-        // Native objects, closures, and interface-typed values are opaque pointers
+        // Objects, closures, interface- and class-typed values are opaque pointers
         return llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
     }
     else if (typeName.find('<') != std::string::npos || typeName.length() == 1)
@@ -219,12 +221,18 @@ void CodeGen::visit(ProgramNode *node)
     arrowCaptures.clear();
     arrowCounter = 0;
 
-    // Pass 0: Register all interfaces so they are usable as types everywhere
+    classes.clear();
+
+    // Pass 0: Register all interfaces and classes so they are usable everywhere
     for (const auto &stmt : node->statements)
     {
         if (auto *interfaceNode = dynamic_cast<InterfaceDeclarationNode *>(stmt.get()))
         {
             interfaces[interfaceNode->interfaceName] = interfaceNode;
+        }
+        else if (auto *classNode = dynamic_cast<ClassDeclarationNode *>(stmt.get()))
+        {
+            classes[classNode->className] = classNode;
         }
     }
 
@@ -242,7 +250,8 @@ void CodeGen::visit(ProgramNode *node)
     for (const auto &stmt : node->statements)
     {
         if (!dynamic_cast<FunctionDeclarationNode *>(stmt.get()) &&
-            !dynamic_cast<InterfaceDeclarationNode *>(stmt.get()))
+            !dynamic_cast<InterfaceDeclarationNode *>(stmt.get()) &&
+            !dynamic_cast<ClassDeclarationNode *>(stmt.get()))
         {
             mainStatements.push_back(stmt.get());
         }
@@ -345,6 +354,10 @@ void CodeGen::visit(StatementNode *node)
     {
         visit(interfaceNode);
     }
+    else if (auto *classNode = dynamic_cast<ClassDeclarationNode *>(node))
+    {
+        visit(classNode);
+    }
     else if (auto *propAssignNode = dynamic_cast<ObjectPropertyAssignmentNode *>(node))
     {
         visit(propAssignNode);
@@ -377,6 +390,14 @@ void CodeGen::visit(VariableDeclarationNode *node)
         }
     }
 
+    // An explicit array annotation drives the literal's element type
+    // (e.g. let a: f64[] = [1, 2] pushes doubles, not i32s)
+    if (node->typeName.length() > 2 && node->typeName.substr(node->typeName.length() - 2) == "[]") {
+        if (auto *arrLit = dynamic_cast<ArrayLiteralNode*>(node->initializer.get())) {
+            arrLit->elementType = node->typeName.substr(0, node->typeName.length() - 2);
+        }
+    }
+
     // Generate the initializer first so its value can drive type inference
     llvm::Value *initVal = nullptr;
     if (node->initializer) {
@@ -397,6 +418,13 @@ void CodeGen::visit(VariableDeclarationNode *node)
         // Closure: track the arrow node so calls through this variable bind statically
         typeToStore = "closure";
         variableToArrow[node->variableName] = arrowLit;
+    } else if (dynamic_cast<NewExpressionNode*>(node->initializer.get()) &&
+               classes.count(static_cast<NewExpressionNode*>(node->initializer.get())->className)) {
+        // Class instance: track the class template's object layout
+        auto *newExpr = static_cast<NewExpressionNode*>(node->initializer.get());
+        typeToStore = "object";
+        variableToObjectKey[node->variableName] = "opt_obj_" +
+            std::to_string(reinterpret_cast<uintptr_t>(classes[newExpr->className]->objectTemplate.get()));
     } else if (auto *arrLit = dynamic_cast<ArrayLiteralNode*>(node->initializer.get())) {
         if (node->typeName == "auto") typeToStore = arrLit->elementType + "[]";
         arraySizes[node->variableName] = arrLit->elements.size();
@@ -1067,6 +1095,14 @@ void CodeGen::visit(ArrayAssignmentStatementNode *node)
             llvm::Type::getInt32Ty(m_context),
             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
         m_builder.CreateCall(setFunc, {arrayValue, indexValue, valueToAssign});
+    } else if (elemType == "f64") {
+        llvm::FunctionCallee setFunc = m_module->getOrInsertFunction("array_set_f64",
+            llvm::Type::getVoidTy(m_context),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context),
+            llvm::Type::getDoubleTy(m_context));
+        m_builder.CreateCall(setFunc, {arrayValue, indexValue,
+            coerceValue(valueToAssign, llvm::Type::getDoubleTy(m_context))});
     } else {
         llvm::FunctionCallee setFunc = m_module->getOrInsertFunction("array_set_i32",
             llvm::Type::getVoidTy(m_context),
@@ -1191,7 +1227,13 @@ void CodeGen::visit(ForOfStatementNode *node)
 
     // Load current element from dynamic array
     llvm::Value *element;
-    if (elemType == "string" || elemType.length() == 1 || elemType.find('<') != std::string::npos) {
+    if (elemType == "f64") {
+        llvm::FunctionCallee getFunc = m_module->getOrInsertFunction("array_get_f64",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+        element = m_builder.CreateCall(getFunc, {arrPtr, currentIndex}, "iter_element");
+    } else if (elemType == "string" || elemType.length() == 1 || elemType.find('<') != std::string::npos) {
         llvm::FunctionCallee getFunc = m_module->getOrInsertFunction("array_get_string",
             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
@@ -1372,6 +1414,56 @@ llvm::Value *CodeGen::visit(FunctionCallNode *node)
             return nullptr;
         }
         return m_builder.CreateCall(fn, args, node->functionName + "_result");
+    }
+
+    // Closure call through a closure-typed variable/parameter, e.g.
+    //   function apply(f: (i32) => i32, x: i32): i32 { return f(x); }
+    // The call is indirect via the closure's stored function pointer.
+    auto varTypeIt = variableTypes.find(node->functionName);
+    if (varTypeIt != variableTypes.end() && varTypeIt->second.rfind("closure(", 0) == 0 &&
+        namedValues.count(node->functionName)) {
+        std::vector<std::string> argTypeNames;
+        std::string retTypeName;
+        if (!parseClosureSignature(varTypeIt->second, argTypeNames, retTypeName)) {
+            throw std::runtime_error("Codegen Error: Malformed function type '" + varTypeIt->second + "'");
+        }
+
+        llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+        std::vector<llvm::Type*> paramTypes;
+        paramTypes.push_back(charPtr); // env
+        for (const auto &typeName : argTypeNames) paramTypes.push_back(getLLVMType(typeName));
+        llvm::FunctionType *fnType = llvm::FunctionType::get(getLLVMType(retTypeName), paramTypes, false);
+
+        llvm::Value *closureVal = m_builder.CreateLoad(charPtr, namedValues[node->functionName],
+                                                       node->functionName + "_closure");
+        llvm::StructType *closTy = getClosureType();
+        llvm::Value *closPtr = m_builder.CreateBitCast(closureVal,
+            llvm::PointerType::get(closTy, 0), "closure_ptr");
+        llvm::Value *fnPtr = m_builder.CreateLoad(charPtr,
+            m_builder.CreateStructGEP(closTy, closPtr, 0), "closure_fn");
+        llvm::Value *envPtr = m_builder.CreateLoad(charPtr,
+            m_builder.CreateStructGEP(closTy, closPtr, 1), "closure_env");
+
+        std::vector<llvm::Value*> args;
+        args.push_back(envPtr);
+        size_t argIndex = 1;
+        for (const auto &arg : node->arguments) {
+            llvm::Value *argValue = visit(arg.get());
+            if (!argValue) {
+                throw std::runtime_error("Codegen Error: Failed to generate closure argument");
+            }
+            if (argIndex < paramTypes.size()) {
+                argValue = coerceValue(argValue, paramTypes[argIndex]);
+            }
+            args.push_back(argValue);
+            argIndex++;
+        }
+
+        if (fnType->getReturnType()->isVoidTy()) {
+            m_builder.CreateCall(fnType, fnPtr, args);
+            return nullptr;
+        }
+        return m_builder.CreateCall(fnType, fnPtr, args, node->functionName + "_result");
     }
 
     if (node->functionName == "JSON.parse") {
@@ -1738,41 +1830,42 @@ llvm::Value *CodeGen::visit(ArrayLiteralNode *node)
     // Determine element type based on first element or explicit type
     std::string elemType = node->elementType;
     
+    llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
     llvm::FunctionCallee createFunc;
     if (elemType == "string") {
-        createFunc = m_module->getOrInsertFunction("array_create_string",
-            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+        createFunc = m_module->getOrInsertFunction("array_create_string", charPtr);
+    } else if (elemType == "f64") {
+        createFunc = m_module->getOrInsertFunction("array_create_f64", charPtr);
     } else {
         // Default to i32
-        createFunc = m_module->getOrInsertFunction("array_create_i32",
-            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+        createFunc = m_module->getOrInsertFunction("array_create_i32", charPtr);
     }
-    
+
     // Create the dynamic array
     llvm::Value* arrPtr = m_builder.CreateCall(createFunc, {}, "array_ptr");
-    
+
     // Initialize array elements
     for (size_t i = 0; i < node->elements.size(); ++i) {
         llvm::Value *elementValue = visit(node->elements[i].get());
         if (!elementValue) {
             throw std::runtime_error("Codegen Error: Failed to generate array element " + std::to_string(i));
         }
-        
-        if (elemType == "string" || elementValue->getType()->isPointerTy()) {
+
+        if (elemType == "f64") {
+            llvm::FunctionCallee pushFunc = m_module->getOrInsertFunction("array_push_f64",
+                llvm::Type::getVoidTy(m_context), charPtr, llvm::Type::getDoubleTy(m_context));
+            m_builder.CreateCall(pushFunc, {arrPtr, coerceValue(elementValue, llvm::Type::getDoubleTy(m_context))});
+        } else if (elemType == "string" || elementValue->getType()->isPointerTy()) {
             llvm::FunctionCallee pushFunc = m_module->getOrInsertFunction("array_push_string",
-                llvm::Type::getVoidTy(m_context),
-                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
-                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+                llvm::Type::getVoidTy(m_context), charPtr, charPtr);
             m_builder.CreateCall(pushFunc, {arrPtr, elementValue});
         } else {
             llvm::FunctionCallee pushFunc = m_module->getOrInsertFunction("array_push_i32",
-                llvm::Type::getVoidTy(m_context),
-                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
-                llvm::Type::getInt32Ty(m_context));
-            m_builder.CreateCall(pushFunc, {arrPtr, elementValue});
+                llvm::Type::getVoidTy(m_context), charPtr, llvm::Type::getInt32Ty(m_context));
+            m_builder.CreateCall(pushFunc, {arrPtr, coerceValue(elementValue, llvm::Type::getInt32Ty(m_context))});
         }
     }
-    
+
     return arrPtr;
 }
 
@@ -1815,6 +1908,12 @@ llvm::Value *CodeGen::visit(ArrayAccessNode *node)
     if (elemType == "string") {
         llvm::FunctionCallee getFunc = m_module->getOrInsertFunction("array_get_string",
             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+            llvm::Type::getInt32Ty(m_context));
+        return m_builder.CreateCall(getFunc, {arrayValue, indexValue}, "array_element");
+    } else if (elemType == "f64") {
+        llvm::FunctionCallee getFunc = m_module->getOrInsertFunction("array_get_f64",
+            llvm::Type::getDoubleTy(m_context),
             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
             llvm::Type::getInt32Ty(m_context));
         return m_builder.CreateCall(getFunc, {arrayValue, indexValue}, "array_element");
@@ -2319,8 +2418,15 @@ llvm::Value *CodeGen::visit(MethodCallNode *node)
         if (node->methodName == "push") {
             if (node->arguments.size() != 1) throw std::runtime_error("push() expects 1 argument");
             llvm::Value *argValue = visit(node->arguments[0].get());
-            
-            if (elemType == "string" || argValue->getType()->isPointerTy()) {
+
+            if (elemType == "f64") {
+                llvm::FunctionCallee pushFunc = m_module->getOrInsertFunction("array_push_f64",
+                    llvm::Type::getVoidTy(m_context),
+                    llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                    llvm::Type::getDoubleTy(m_context));
+                return m_builder.CreateCall(pushFunc,
+                    {objectValue, coerceValue(argValue, llvm::Type::getDoubleTy(m_context))});
+            } else if (elemType == "string" || argValue->getType()->isPointerTy()) {
                 llvm::FunctionCallee pushFunc = m_module->getOrInsertFunction("array_push_string",
                     llvm::Type::getVoidTy(m_context),
                     llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
@@ -2337,7 +2443,12 @@ llvm::Value *CodeGen::visit(MethodCallNode *node)
             if (node->arguments.size() != 0) throw std::runtime_error("shift/pop expects 0 arguments");
 
             std::string runtimeName = (node->methodName == "pop") ? "array_pop" : "array_shift";
-            if (elemType == "string" || elemType.length() == 1 || elemType.find('<') != std::string::npos) {
+            if (elemType == "f64") {
+                llvm::FunctionCallee popFunc = m_module->getOrInsertFunction(runtimeName + "_f64",
+                    llvm::Type::getDoubleTy(m_context),
+                    llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+                return m_builder.CreateCall(popFunc, {objectValue}, "removed_val");
+            } else if (elemType == "string" || elemType.length() == 1 || elemType.find('<') != std::string::npos) {
                 llvm::FunctionCallee popFunc = m_module->getOrInsertFunction(runtimeName + "_string",
                     llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
                     llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
@@ -2417,6 +2528,38 @@ llvm::Value *CodeGen::visit(MethodCallNode *node)
 
 llvm::Value *CodeGen::visit(NewExpressionNode *node)
 {
+    // User-defined class: instantiate the object template, then run the constructor
+    auto classIt = classes.find(node->className);
+    if (classIt != classes.end()) {
+        ClassDeclarationNode *cls = classIt->second;
+        llvm::Value *objectPtr = visit(cls->objectTemplate.get());
+        llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+        llvm::Value *rawPtr = m_builder.CreateBitCast(objectPtr, charPtr, node->className + "_instance");
+
+        if (cls->hasConstructor) {
+            std::string objectKey = "opt_obj_" +
+                std::to_string(reinterpret_cast<uintptr_t>(cls->objectTemplate.get()));
+            llvm::Function *ctor = getOrCreateMethodFunction(objectKey, "constructor");
+
+            std::vector<llvm::Value*> args;
+            args.push_back(rawPtr); // `this`
+            size_t argIndex = 1;
+            for (const auto &arg : node->arguments) {
+                llvm::Value *argValue = visit(arg.get());
+                if (!argValue) {
+                    throw std::runtime_error("Codegen Error: Failed to generate constructor argument for " + node->className);
+                }
+                if (argIndex < ctor->arg_size()) {
+                    argValue = coerceValue(argValue, ctor->getFunctionType()->getParamType(argIndex));
+                }
+                args.push_back(argValue);
+                argIndex++;
+            }
+            m_builder.CreateCall(ctor, args);
+        }
+        return rawPtr;
+    }
+
     if (node->className == "Set") {
         std::string elemType = !node->genericTypes.empty() ? node->genericTypes[0] : "string";
         
@@ -3042,6 +3185,36 @@ void CodeGen::visit(InterfaceDeclarationNode *node)
     interfaces[node->interfaceName] = node;
 }
 
+void CodeGen::visit(ClassDeclarationNode *node)
+{
+    // Classes are registered in pass 0; instantiation happens at `new` sites
+    classes[node->className] = node;
+}
+
+bool CodeGen::parseClosureSignature(const std::string &signature,
+                                    std::vector<std::string> &argTypes, std::string &returnType)
+{
+    if (signature.rfind("closure(", 0) != 0) return false;
+    size_t i = 8; // past "closure("
+    int depth = 0;
+    std::string current;
+    for (; i < signature.size(); ++i) {
+        char c = signature[i];
+        if (c == '(' ) { depth++; current += c; }
+        else if (c == '<') { depth++; current += c; }
+        else if (c == '>' && i > 0 && signature[i - 1] == '=') { current += c; } // "=>" in nested types
+        else if (c == '>') { depth--; current += c; }
+        else if (c == ')' && depth == 0) { i++; break; }
+        else if (c == ')') { depth--; current += c; }
+        else if (c == ',' && depth == 0) { argTypes.push_back(current); current.clear(); }
+        else current += c;
+    }
+    if (!current.empty()) argTypes.push_back(current);
+    if (signature.compare(i, 2, "=>") != 0) return false;
+    returnType = signature.substr(i + 2);
+    return true;
+}
+
 void CodeGen::collectInterfaceMembers(const std::string& interfaceName,
                                       std::vector<InterfaceDeclarationNode::Member>& out)
 {
@@ -3594,26 +3767,36 @@ std::string CodeGen::inferMethodCallTypeName(MethodCallNode *node)
     if (varType.length() < 3 || varType.substr(varType.length() - 2) != "[]") return "";
     std::string elemType = varType.substr(0, varType.length() - 2);
 
-    auto arrowReturnsPointer = [&](ExpressionNode *cb) {
+    // Type name produced by the callback's return type: "string" / "f64" / "i32"
+    auto arrowReturnTypeName = [&](ExpressionNode *cb) -> std::string {
         ArrowFunctionNode *arrowNode = resolveArrowArgument(cb);
-        if (!arrowNode) return false;
+        if (!arrowNode) return "i32";
+        llvm::Type *retType = nullptr;
         auto fnIt = arrowFunctions.find(arrowNode);
-        if (fnIt != arrowFunctions.end()) return fnIt->second->getReturnType()->isPointerTy();
-        if (arrowNode->returnType != "auto") return getLLVMType(arrowNode->returnType)->isPointerTy();
-        std::map<std::string, std::string> paramTypeNames;
-        for (const auto &p : arrowNode->parameters) paramTypeNames[p.name] = p.type;
-        return inferArrowReturnType(arrowNode, paramTypeNames)->isPointerTy();
+        if (fnIt != arrowFunctions.end()) {
+            retType = fnIt->second->getReturnType();
+        } else if (arrowNode->returnType != "auto") {
+            retType = getLLVMType(arrowNode->returnType);
+        } else {
+            std::map<std::string, std::string> paramTypeNames;
+            for (const auto &p : arrowNode->parameters) paramTypeNames[p.name] = p.type;
+            retType = inferArrowReturnType(arrowNode, paramTypeNames);
+        }
+        if (retType->isPointerTy()) return "string";
+        if (retType->isDoubleTy()) return "f64";
+        return "i32";
     };
 
     if (node->methodName == "map" && !node->arguments.empty()) {
-        return arrowReturnsPointer(node->arguments[0].get()) ? "string[]" : "i32[]";
+        return arrowReturnTypeName(node->arguments[0].get()) + "[]";
     }
     if (node->methodName == "filter") return varType;
     if (node->methodName == "find" || node->methodName == "shift" || node->methodName == "pop") {
-        return (elemType == "string") ? "string" : "i32";
+        if (elemType == "string" || elemType == "f64") return elemType;
+        return "i32";
     }
     if (node->methodName == "reduce" && !node->arguments.empty()) {
-        return arrowReturnsPointer(node->arguments[0].get()) ? "string" : "i32";
+        return arrowReturnTypeName(node->arguments[0].get());
     }
     return "";
 }
@@ -3631,11 +3814,32 @@ llvm::Value *CodeGen::generateArrayCallbackMethod(MethodCallNode *node, llvm::Va
 
     auto [callback, envPtr] = materializeCallback(node->arguments[0].get());
 
+    llvm::Type *f64Ty = llvm::Type::getDoubleTy(m_context);
     bool stringElems = (elemType == "string");
+    bool f64Elems = (elemType == "f64");
+    llvm::Type *elemLLVMType = stringElems ? charPtr : (f64Elems ? f64Ty : i32Ty);
+
     llvm::FunctionCallee getFn = stringElems
         ? m_module->getOrInsertFunction("array_get_string", charPtr, charPtr, i32Ty)
-        : m_module->getOrInsertFunction("array_get_i32", i32Ty, charPtr, i32Ty);
+        : (f64Elems
+            ? m_module->getOrInsertFunction("array_get_f64", f64Ty, charPtr, i32Ty)
+            : m_module->getOrInsertFunction("array_get_i32", i32Ty, charPtr, i32Ty));
     llvm::FunctionCallee lenFn = m_module->getOrInsertFunction("array_length", i32Ty, charPtr);
+
+    // Selects create/push functions for a given element LLVM type
+    auto createFnFor = [&](llvm::Type *t) {
+        if (t->isPointerTy()) return m_module->getOrInsertFunction("array_create_string", charPtr);
+        if (t->isDoubleTy()) return m_module->getOrInsertFunction("array_create_f64", charPtr);
+        return m_module->getOrInsertFunction("array_create_i32", charPtr);
+    };
+    auto pushFnFor = [&](llvm::Type *t) {
+        if (t->isPointerTy()) return m_module->getOrInsertFunction("array_push_string",
+            llvm::Type::getVoidTy(m_context), charPtr, charPtr);
+        if (t->isDoubleTy()) return m_module->getOrInsertFunction("array_push_f64",
+            llvm::Type::getVoidTy(m_context), charPtr, f64Ty);
+        return m_module->getOrInsertFunction("array_push_i32",
+            llvm::Type::getVoidTy(m_context), charPtr, i32Ty);
+    };
 
     llvm::Value *length = m_builder.CreateCall(lenFn, {arrayPtr}, "cb_len");
     llvm::Function *fn = m_builder.GetInsertBlock()->getParent();
@@ -3655,15 +3859,9 @@ llvm::Value *CodeGen::generateArrayCallbackMethod(MethodCallNode *node, llvm::Va
     llvm::Type *cbRetType = callback->getReturnType();
 
     if (method == "map") {
-        llvm::FunctionCallee createFn = cbRetType->isPointerTy()
-            ? m_module->getOrInsertFunction("array_create_string", charPtr)
-            : m_module->getOrInsertFunction("array_create_i32", charPtr);
-        resultArray = m_builder.CreateCall(createFn, {}, "map_result");
+        resultArray = m_builder.CreateCall(createFnFor(cbRetType), {}, "map_result");
     } else if (method == "filter") {
-        llvm::FunctionCallee createFn = stringElems
-            ? m_module->getOrInsertFunction("array_create_string", charPtr)
-            : m_module->getOrInsertFunction("array_create_i32", charPtr);
-        resultArray = m_builder.CreateCall(createFn, {}, "filter_result");
+        resultArray = m_builder.CreateCall(createFnFor(elemLLVMType), {}, "filter_result");
     } else if (method == "reduce") {
         if (node->arguments.size() < 2) {
             throw std::runtime_error("Codegen Error: .reduce() requires (callback, initialValue)");
@@ -3673,11 +3871,12 @@ llvm::Value *CodeGen::generateArrayCallbackMethod(MethodCallNode *node, llvm::Va
         accAlloca = m_builder.CreateAlloca(cbRetType, nullptr, "reduce_acc");
         m_builder.CreateStore(initial, accAlloca);
     } else if (method == "find") {
-        llvm::Type *elemLLVM = stringElems ? charPtr : i32Ty;
-        foundAlloca = m_builder.CreateAlloca(elemLLVM, nullptr, "find_result");
-        m_builder.CreateStore(stringElems
-            ? (llvm::Value*)llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(charPtr))
-            : (llvm::Value*)llvm::ConstantInt::get(i32Ty, 0), foundAlloca);
+        foundAlloca = m_builder.CreateAlloca(elemLLVMType, nullptr, "find_result");
+        llvm::Value *zero;
+        if (stringElems) zero = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(charPtr));
+        else if (f64Elems) zero = llvm::ConstantFP::get(f64Ty, 0.0);
+        else zero = llvm::ConstantInt::get(i32Ty, 0);
+        m_builder.CreateStore(zero, foundAlloca);
     } else if (method != "forEach") {
         throw std::runtime_error("Codegen Error: Unsupported callback method '" + method + "'");
     }
@@ -3705,10 +3904,7 @@ llvm::Value *CodeGen::generateArrayCallbackMethod(MethodCallNode *node, llvm::Va
 
     if (method == "map") {
         llvm::Value *mapped = m_builder.CreateCall(callback, {envPtr, coerceElem(1)}, "mapped");
-        llvm::FunctionCallee pushFn = cbRetType->isPointerTy()
-            ? m_module->getOrInsertFunction("array_push_string", llvm::Type::getVoidTy(m_context), charPtr, charPtr)
-            : m_module->getOrInsertFunction("array_push_i32", llvm::Type::getVoidTy(m_context), charPtr, i32Ty);
-        m_builder.CreateCall(pushFn, {resultArray, cbRetType->isPointerTy() ? mapped : coerceValue(mapped, i32Ty)});
+        m_builder.CreateCall(pushFnFor(cbRetType), {resultArray, mapped});
         nextIteration();
     } else if (method == "filter") {
         llvm::Value *keep = ensureI1(m_builder.CreateCall(callback, {envPtr, coerceElem(1)}, "keep"));
@@ -3716,10 +3912,7 @@ llvm::Value *CodeGen::generateArrayCallbackMethod(MethodCallNode *node, llvm::Va
         llvm::BasicBlock *skipBlock = llvm::BasicBlock::Create(m_context, "filter_skip", fn);
         m_builder.CreateCondBr(keep, pushBlock, skipBlock);
         m_builder.SetInsertPoint(pushBlock);
-        llvm::FunctionCallee pushFn = stringElems
-            ? m_module->getOrInsertFunction("array_push_string", llvm::Type::getVoidTy(m_context), charPtr, charPtr)
-            : m_module->getOrInsertFunction("array_push_i32", llvm::Type::getVoidTy(m_context), charPtr, i32Ty);
-        m_builder.CreateCall(pushFn, {resultArray, element});
+        m_builder.CreateCall(pushFnFor(elemLLVMType), {resultArray, element});
         m_builder.CreateBr(skipBlock);
         m_builder.SetInsertPoint(skipBlock);
         nextIteration();

@@ -118,6 +118,7 @@ Token Lexer::makeIdentifier() {
         {"catch", TOK_CATCH},
         {"finally", TOK_FINALLY},
         {"throw", TOK_THROW},
+        {"class", TOK_CLASS},
         {"number", TOK_TYPE_NUMBER},
         {"string", TOK_TYPE_STRING},
         {"boolean", TOK_TYPE_BOOLEAN},

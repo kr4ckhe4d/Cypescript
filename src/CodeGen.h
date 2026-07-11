@@ -96,6 +96,14 @@ private:
     // Interface registry for structural type checking (nodes owned by the AST)
     std::map<std::string, const InterfaceDeclarationNode*> interfaces;
 
+    // Class registry: `new ClassName(...)` instantiates the class's object
+    // template and calls its constructor (nodes owned by the AST)
+    std::map<std::string, ClassDeclarationNode*> classes;
+
+    // Parses "closure(a,b)=>r" type strings used for closure-typed parameters
+    bool parseClosureSignature(const std::string &signature,
+                               std::vector<std::string> &argTypes, std::string &returnType);
+
     // Object methods: objectKey -> methodName -> declaration (owned by the AST)
     std::map<std::string, std::map<std::string, FunctionDeclarationNode*>> objectMethods;
     // Cache of generated method functions, keyed by "objectKey::method"
@@ -178,6 +186,7 @@ private:
     void visit(ContinueStatementNode *node);   // For continue
     void visit(SwitchStatementNode *node);     // For switch/case
     void visit(InterfaceDeclarationNode *node); // For interface declarations
+    void visit(ClassDeclarationNode *node);     // For class declarations
     void visit(ObjectPropertyAssignmentNode *node); // For obj.prop = value
     void visit(DestructuringDeclarationNode *node); // For let { a, b } = obj
     void visit(TryCatchStatementNode *node);   // For try/catch/finally

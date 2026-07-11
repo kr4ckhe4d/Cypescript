@@ -46,6 +46,9 @@ inline void printIndent(llvm::raw_ostream &os, int indent)
 class ASTNode
 {
 public:
+    int line = 0;   // 1-based source position; 0 = unknown
+    int column = 0;
+
     virtual ~ASTNode() = default;
     // Pure virtual function for printing the node
     virtual void printNode(llvm::raw_ostream &os, int indent = 0) const = 0;
@@ -1008,6 +1011,27 @@ public:
         }
         printIndent(os, indent);
         os << ")\n";
+    }
+};
+
+// Class declaration. At parse time the fields and methods are synthesized
+// into an ObjectLiteralNode template; `new ClassName(args)` instantiates the
+// template and then invokes the constructor method (if any) on it.
+class ClassDeclarationNode : public StatementNode
+{
+public:
+    std::string className;
+    std::unique_ptr<ObjectLiteralNode> objectTemplate; // fields (with defaults) + methods
+    bool hasConstructor = false;
+
+    explicit ClassDeclarationNode(std::string name)
+        : className(std::move(name)), objectTemplate(std::make_unique<ObjectLiteralNode>()) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "ClassDeclarationNode: " << className << "\n";
+        if (objectTemplate) objectTemplate->printNode(os, indent + 1);
     }
 };
 

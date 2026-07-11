@@ -81,6 +81,18 @@ std::unique_ptr<ProgramNode> Parser::parseProgram()
 
 std::unique_ptr<StatementNode> Parser::parseStatement()
 {
+    int line = peek().line;
+    int column = peek().column;
+    auto stmt = parseStatementInner();
+    if (stmt && stmt->line == 0) {
+        stmt->line = line;
+        stmt->column = column;
+    }
+    return stmt;
+}
+
+std::unique_ptr<StatementNode> Parser::parseStatementInner()
+{
     if (peek().type == TOK_LET || peek().type == TOK_CONST)
     {
         if (peek(1).type == TOK_LBRACE)
@@ -111,6 +123,10 @@ std::unique_ptr<StatementNode> Parser::parseStatement()
     else if (peek().type == TOK_INTERFACE)
     {
         return parseInterfaceDeclaration();
+    }
+    else if (peek().type == TOK_CLASS)
+    {
+        return parseClassDeclaration();
     }
     else if (peek().type == TOK_RETURN)
     {
@@ -322,6 +338,46 @@ std::unique_ptr<StatementNode> Parser::parseInterfaceDeclaration()
     }
     consume(TOK_RBRACE, "Expected '}' after interface body");
     return interfaceNode;
+}
+
+std::unique_ptr<StatementNode> Parser::parseClassDeclaration()
+{
+    consume(TOK_CLASS, "Expected 'class'");
+    const Token &nameToken = consume(TOK_IDENTIFIER, "Expected class name");
+    auto classNode = std::make_unique<ClassDeclarationNode>(nameToken.value);
+    consume(TOK_LBRACE, "Expected '{' after class name");
+
+    while (peek().type != TOK_RBRACE && !isAtEnd()) {
+        std::string memberName;
+        if (peek().type == TOK_IDENTIFIER) memberName = advance().value;
+        else throw std::runtime_error("Parse Error: Expected class member name" );
+
+        if (peek().type == TOK_LPAREN) {
+            // Method (or constructor): name(params): ret { body }
+            auto method = parseFunctionRest(memberName);
+            if (memberName == "constructor") classNode->hasConstructor = true;
+            classNode->objectTemplate->properties.emplace_back(memberName, std::move(method));
+        } else {
+            // Field: name: type;  or  name: type = default;
+            consume(TOK_COLON, "Expected ':' after class field name");
+            std::string fieldType = parseType();
+            std::unique_ptr<ExpressionNode> defaultValue;
+            if (peek().type == TOK_EQUAL) {
+                advance();
+                defaultValue = parseExpression();
+            } else {
+                // Zero-value defaults by declared type
+                if (fieldType == "string") defaultValue = std::make_unique<StringLiteralNode>("");
+                else if (fieldType == "f64") defaultValue = std::make_unique<FloatLiteralNode>(0.0);
+                else if (fieldType == "boolean") defaultValue = std::make_unique<BooleanLiteralNode>(false);
+                else defaultValue = std::make_unique<IntegerLiteralNode>(0);
+            }
+            consume(TOK_SEMICOLON, "Expected ';' after class field");
+            classNode->objectTemplate->properties.emplace_back(memberName, std::move(defaultValue));
+        }
+    }
+    consume(TOK_RBRACE, "Expected '}' after class body");
+    return classNode;
 }
 
 std::unique_ptr<StatementNode> Parser::parseTryStatement()
@@ -889,6 +945,8 @@ std::unique_ptr<ExpressionNode> Parser::parseVariableExpression()
     }
     if (peek().type == TOK_LPAREN) {
         auto callNode = std::make_unique<FunctionCallNode>(varToken.value);
+        callNode->line = varToken.line;
+        callNode->column = varToken.column;
         consume(TOK_LPAREN, "Expected '('");
         while (peek().type != TOK_RPAREN && !isAtEnd()) {
             callNode->arguments.push_back(parseExpression());
@@ -899,11 +957,38 @@ std::unique_ptr<ExpressionNode> Parser::parseVariableExpression()
         return callNode;
     }
  else {
-        return parseArrayOrObjectAccess(std::make_unique<VariableExpressionNode>(varToken.value));
+        auto varNode = std::make_unique<VariableExpressionNode>(varToken.value);
+        varNode->line = varToken.line;
+        varNode->column = varToken.column;
+        return parseArrayOrObjectAccess(std::move(varNode));
     }
 }
 
 std::string Parser::parseType() {
+    // Function type: (i32, string) => i32  (parameter names allowed and ignored)
+    // Canonical form: "closure(i32,string)=>i32"
+    if (peek().type == TOK_LPAREN) {
+        advance();
+        std::vector<std::string> argTypes;
+        while (peek().type != TOK_RPAREN && !isAtEnd()) {
+            if (peek().type == TOK_IDENTIFIER && peek(1).type == TOK_COLON) {
+                advance(); advance(); // skip "name:"
+            }
+            argTypes.push_back(parseType());
+            if (peek().type == TOK_COMMA) advance();
+            else break;
+        }
+        consume(TOK_RPAREN, "Expected ')' in function type");
+        consume(TOK_ARROW, "Expected '=>' in function type");
+        std::string retType = parseType();
+        std::string typeName = "closure(";
+        for (size_t i = 0; i < argTypes.size(); ++i) {
+            if (i > 0) typeName += ",";
+            typeName += argTypes[i];
+        }
+        return typeName + ")=>" + retType;
+    }
+
     std::string typeName = advance().value;
     if (peek().type == TOK_LESS) {
         advance(); typeName += "<";
@@ -950,6 +1035,7 @@ std::unique_ptr<ArrayLiteralNode> Parser::parseArrayLiteral()
     auto firstElement = parseExpression();
     std::string elementType = "i32";
     if (dynamic_cast<StringLiteralNode*>(firstElement.get())) elementType = "string";
+    else if (dynamic_cast<FloatLiteralNode*>(firstElement.get())) elementType = "f64";
     auto arrayNode = std::make_unique<ArrayLiteralNode>(elementType);
     arrayNode->elements.push_back(std::move(firstElement));
     while (peek().type == TOK_COMMA) { advance(); if (peek().type == TOK_RBRACKET) break; arrayNode->elements.push_back(parseExpression()); }

@@ -26,7 +26,8 @@ private:
     // Parsing methods corresponding to grammar rules
     // These return unique_ptr to the created AST node
     std::unique_ptr<ProgramNode> parseProgram();
-    std::unique_ptr<StatementNode> parseStatement();
+    std::unique_ptr<StatementNode> parseStatement();      // stamps source positions
+    std::unique_ptr<StatementNode> parseStatementInner(); // actual dispatch
     std::unique_ptr<FunctionCallNode> parseFunctionCallStatement(); // Specific for print(...)
     std::unique_ptr<FunctionDeclarationNode> parseFunctionDeclaration(); // For function definitions
     std::unique_ptr<TypeAliasNode> parseTypeAliasStatement();       // For type aliases
@@ -39,6 +40,7 @@ private:
     std::unique_ptr<StatementNode> parseArrayAssignmentStatement(); // For array element assignments
     std::unique_ptr<StatementNode> parseSwitchStatement();          // For switch/case
     std::unique_ptr<StatementNode> parseInterfaceDeclaration();     // For interface declarations
+    std::unique_ptr<StatementNode> parseClassDeclaration();         // For class declarations
     std::unique_ptr<StatementNode> parseTryStatement();             // For try/catch/finally
     std::unique_ptr<StatementNode> parseThrowStatement();           // For throw
     std::unique_ptr<StatementNode> parseDestructuringDeclaration(); // For let { a, b } = obj
