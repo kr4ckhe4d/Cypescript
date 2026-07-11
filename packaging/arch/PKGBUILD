@@ -1,0 +1,35 @@
+# Maintainer: Nipuna H Herath <hash.crackhead@gmail.com>
+# Build & install:  makepkg -si
+# Publish to AUR:   makepkg --printsrcinfo > .SRCINFO, push to the AUR repo
+pkgname=cypescript
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="TypeScript-style language that compiles to native code via LLVM"
+arch=('x86_64' 'aarch64')
+url="https://github.com/kr4ckhe4d/Cypescript"
+license=('MIT')
+# clang is needed at runtime: cscript invokes clang++ to link executables
+depends=('clang' 'llvm-libs')
+makedepends=('cmake' 'llvm')
+source=("$pkgname-$pkgver.tar.gz::https://github.com/kr4ckhe4d/Cypescript/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('d4279bbd9abf39c413e62bfbff660765603c6683e14eeedc94eaab9697f4fa6d')
+
+build() {
+    cd "Cypescript-$pkgver"
+    cmake -B build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr
+    cmake --build build
+}
+
+check() {
+    cd "Cypescript-$pkgver"
+    bash tests/run_tests.sh
+}
+
+package() {
+    cd "Cypescript-$pkgver"
+    DESTDIR="$pkgdir" cmake --install build
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}

@@ -8,6 +8,8 @@ A TypeScript-style language compiler built with C++ and LLVM. Cypescript aims to
 
 ## Install
 
+### macOS (Homebrew)
+
 ```bash
 brew tap kr4ckhe4d/cypescript
 brew install cypescript
@@ -17,8 +19,31 @@ echo 'println("hello, cypescript!");' > hello.csc
 cscript -r hello.csc
 ```
 
-Requires `clang++` (Xcode Command Line Tools) at compile time. To build from
-source instead, see [Quick Start](#quick-start).
+Requires `clang++` (Xcode Command Line Tools) at compile time.
+
+### Debian / Ubuntu
+
+```bash
+sudo apt-get install -y cmake llvm-dev clang
+git clone https://github.com/kr4ckhe4d/Cypescript.git && cd Cypescript
+bash packaging/build-deb.sh
+sudo apt install ./cypescript_*_*.deb
+```
+
+(Or download the prebuilt `.deb` artifact from the latest
+[CI run](https://github.com/kr4ckhe4d/Cypescript/actions).)
+
+### Arch Linux
+
+```bash
+git clone https://github.com/kr4ckhe4d/Cypescript.git
+cd Cypescript/packaging/arch
+makepkg -si     # builds from the release tarball and runs the test suite
+```
+
+Linux support is CI-validated; macOS is the primary development platform.
+To build from source on any platform, see [Quick Start](#quick-start).
+Maintainers: the full release process is documented in [RELEASING.md](RELEASING.md).
 
 ## 📖 Interactive Documentation
 

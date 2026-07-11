@@ -46,3 +46,50 @@ jobs:
           path: |
             build/cscript
             build/libcypescript.a
+
+  build-and-test-linux:
+    runs-on: ubuntu-latest
+    # Linux support is CI-validated only (primary dev platform is macOS);
+    # keep failures visible but non-blocking until it has a track record.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LLVM and clang
+        run: sudo apt-get update && sudo apt-get install -y cmake llvm-dev clang zlib1g-dev libzstd-dev
+
+      - name: Build compiler
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+
+      - name: Version check
+        run: ./build/cscript --version
+
+      - name: Run test suite
+        run: bash tests/run_tests.sh
+
+      - name: Compile all examples
+        run: |
+          for f in example/*.csc example/14_modules/main.csc; do
+            case "$f" in *math_utils*) continue;; esac
+            echo "=== $f ==="
+            ./build/cscript -r "$f"
+          done
+          rm -f demo_output.txt
+
+      - name: Build .deb package
+        run: bash packaging/build-deb.sh
+
+      - name: Install and smoke-test the .deb
+        run: |
+          sudo apt install -y ./cypescript_*_*.deb
+          cd /tmp
+          echo 'println("hello from the deb");' > hi.csc
+          cscript -r hi.csc
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypescript-deb-${{ runner.arch }}
+          path: cypescript_*.deb

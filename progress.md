@@ -167,6 +167,22 @@ and the README "Planned Features" list. **Status: DONE.** All 18 tests pass
 - **Release prep**: Homebrew formula URLs point at kr4ckhe4d/Cypescript; v1.0.0 tag
   (see below); suite now 22 tests, examples 01-20.
 
+## Session 8 additions — release docs + Linux packaging (2026-07-08)
+- **RELEASING.md**: full release runbook — version bump (CMake is source of truth),
+  test gauntlet, tag discipline (never re-tag), tarball sha256 generation, GitHub
+  release, Homebrew tap update, .deb/PKGBUILD updates, vsce packaging, post-release
+  checklist, v1.0.0 reference values.
+- **Linux packaging**: `packaging/arch/PKGBUILD` (builds from tag tarball, runs test
+  suite in check(), depends clang/llvm-libs) and `packaging/build-deb.sh` (binary
+  .deb via dpkg-deb: /usr/bin/cscript + /usr/lib/libcypescript.a, Depends: clang).
+- **Linux CI job** (ubuntu-latest, continue-on-error while it builds a track
+  record): apt LLVM build, full test suite, all examples, builds AND installs the
+  .deb, smoke-tests the installed compiler, uploads the .deb as an artifact.
+- README Install section now covers macOS/Debian/Arch.
+- NOTE: Linux is CI-validated only — never run on a local Linux box. Watch the
+  first ubuntu-latest run; likely risks: apt LLVM version differences (18 vs 22),
+  _setjmp/_longjmp symbol availability (glibc has them), static LLVM lib linking.
+
 ## How to resume
 ```bash
 ./build.sh          # or: cmake --build build
