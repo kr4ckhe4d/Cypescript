@@ -198,5 +198,128 @@
       "println(\"=== Complete ===\");"
     ],
     "description": "C++ integration program template"
+  },
+  "Switch Statement": {
+    "prefix": "switch",
+    "body": [
+      "switch (${1:value}) {",
+      "\tcase ${2:option}:",
+      "\t\t${3:// code}",
+      "\t\tbreak;",
+      "\tdefault:",
+      "\t\t${4:// code}",
+      "}"
+    ],
+    "description": "Switch statement with case and default"
+  },
+  "Interface": {
+    "prefix": "interface",
+    "body": [
+      "interface ${1:Name} {",
+      "\t${2:property}: ${3|string,i32,f64,boolean|};",
+      "}"
+    ],
+    "description": "Interface declaration"
+  },
+  "Class": {
+    "prefix": "class",
+    "body": [
+      "class ${1:Name} {",
+      "\t${2:field}: ${3|string,i32,f64,boolean|};",
+      "",
+      "\tconstructor(${4:params}) {",
+      "\t\tthis.$2 = ${5:value};",
+      "\t}",
+      "",
+      "\t${6:method}(): ${7:void} {",
+      "\t\t${8:// code}",
+      "\t}",
+      "}"
+    ],
+    "description": "Class with constructor and method"
+  },
+  "Try-Catch": {
+    "prefix": "try",
+    "body": [
+      "try {",
+      "\t${1:// code}",
+      "} catch (${2:e}) {",
+      "\t${3:println(\"error: \" + $2);}",
+      "}"
+    ],
+    "description": "Try/catch block"
+  },
+  "Try-Catch-Finally": {
+    "prefix": "tryf",
+    "body": [
+      "try {",
+      "\t${1:// code}",
+      "} catch (${2:e}) {",
+      "\t${3:// handle}",
+      "} finally {",
+      "\t${4:// cleanup}",
+      "}"
+    ],
+    "description": "Try/catch/finally block"
+  },
+  "Arrow Function": {
+    "prefix": "arrow",
+    "body": [
+      "let ${1:name} = (${2:x}: ${3|i32,f64,string,boolean|}): ${4|i32,f64,string,boolean,void|} => ${5:$2};"
+    ],
+    "description": "Arrow function assigned to a variable"
+  },
+  "Import": {
+    "prefix": "import",
+    "body": [
+      "import { ${1:name} } from \"./${2:module}\";"
+    ],
+    "description": "Import from a local module"
+  },
+  "Export Function": {
+    "prefix": "export",
+    "body": [
+      "export function ${1:name}(${2:params}): ${3:void} {",
+      "\t${4:// code}",
+      "}"
+    ],
+    "description": "Exported function"
+  },
+  "For-Of Loop": {
+    "prefix": "forof",
+    "body": [
+      "for (const ${1:item} of ${2:items}) {",
+      "\t${3:// code}",
+      "}"
+    ],
+    "description": "For-of loop over an array"
+  },
+  "Template Literal": {
+    "prefix": "tpl",
+    "body": [
+      "println(`${1:text} ${${2:expr}}`);"
+    ],
+    "description": "Template literal with interpolation"
+  },
+  "Array Map": {
+    "prefix": "map",
+    "body": [
+      "let ${1:result} = ${2:items}.map(${3:x} => ${4:$3});"
+    ],
+    "description": "Array map with arrow callback"
+  },
+  "Array Filter": {
+    "prefix": "filter",
+    "body": [
+      "let ${1:result} = ${2:items}.filter(${3:x} => ${4:condition});"
+    ],
+    "description": "Array filter with arrow callback"
+  },
+  "Array Reduce": {
+    "prefix": "reduce",
+    "body": [
+      "let ${1:result} = ${2:items}.reduce((${3:acc}, ${4:x}) => ${5:$3 + $4}, ${6:0});"
+    ],
+    "description": "Array reduce with arrow callback"
   }
 }

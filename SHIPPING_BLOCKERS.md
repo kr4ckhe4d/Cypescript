@@ -5,7 +5,7 @@ Ordered roughly by recommended attack order.
 
 ## 🔴 Blockers — must fix before anyone outside this repo can use it
 
-### 1. No LICENSE file — ⏳ OWNER: user
+### 1. No LICENSE file — ✅ FIXED (MIT LICENSE added 2026-07-08)
 README claims MIT but there is no `LICENSE` file in the repo. Nobody can legally
 use or redistribute the compiler without it. **Fix:** add the MIT license text.
 
@@ -68,12 +68,12 @@ files and diff stdout, so wrong-output regressions are caught.
 
 ## 🟡 Polish — shortly after v1.0
 
-### 10. VSCode extension is stale — 🔶 GRAMMAR UPDATED (new keywords + template literals; snippets/completions + .vsix repackage still pending)
+### 10. VSCode extension is stale — ✅ FIXED (grammar + 13 new snippets, repackaged as cypescript-1.1.0.vsix)
 Grammar/snippets predate: `switch/case`, `interface`, `try/catch/throw`,
 `import/export`, template literals, `break/continue`, compound assignment,
 `console.log`. Update `vscode-extension/` and repackage the `.vsix`.
 
-### 11. Web docs playground interpreter is stale
+### 11. Web docs playground interpreter is stale — ✅ DECIDED (playground labeled core-subset-only; modern features direct users to cscript -r)
 `docs/cypescript-interpreter.js` is a hand-written JS interpreter implementing the
 *old* language subset; new-feature examples cannot run in the browser. Options:
 extend it (double maintenance) or drop the in-browser execution in favor of
@@ -82,9 +82,10 @@ extend it (double maintenance) or drop the in-browser execution in favor of
 ### 12. Define the supported TypeScript subset — 🔶 SHRINKING
 "Runs TS with minute changes" should be a precise claim.
 ✅ Now supported: arrow functions & closures (by-value captures), callback array
-methods (`.map/.filter/.reduce/.find/.forEach`).
-Still not supported: `class`, union types, npm imports, `x++` as an expression,
-by-reference closure captures, f64 arrays.
+methods (`.map/.filter/.reduce/.find/.forEach`), classes (fields/constructors/
+methods, no inheritance), function-type parameters, f64 arrays.
+Still not supported: `class extends`, union types, npm imports, `x++` as an
+expression, by-reference closure captures.
 Publish the compatibility table (now in README) as part of the docs.
 
 ## Suggested attack order (updated 2026-07-08)
@@ -94,14 +95,15 @@ line/column parser errors, CI workflow, output-assertion tests, `--version`,
 Homebrew formula template, VSCode grammar refresh, try/return fix.
 
 **Remaining, in order:**
-1. **LICENSE** (owner: user) — blocks any distribution (5 min)
-2. **Tag `v1.0.0` + GitHub release**, then publish the Homebrew tap
-   (fill url/sha256 in `packaging/cypescript.rb`) (half day)
-3. **Repackage the VSCode `.vsix`** — grammar is updated but snippets/completions
-   still predate the new features; needs `vsce package` (half day)
-4. **Codegen-stage error positions + a semantic type-checker pass** — parser
-   errors have line/col now; codegen errors don't (1–2 days)
-5. **Memory model** — document script-lifetime memory for v1.0; arena or
+1. **Create the GitHub release for tag `v1.0.0`** — tag is pushed; draft the
+   release on GitHub (attach CI artifacts if desired), then create the
+   `homebrew-cypescript` tap repo with `packaging/cypescript.rb` as
+   `Formula/cypescript.rb` (sha256 already filled in)
+2. **Memory model** — document script-lifetime memory for v1.0; arena or
    refcounted heap objects afterwards (ongoing)
-6. **Docs playground decision** — extend the in-browser interpreter to the new
-   language, or drop it in favor of `cscript -r` instructions (half day–ongoing)
+3. **Full type checker** — the semantic pass covers scoping/arity/const; property
+   and type mismatches still surface at codegen without positions
+
+**Done 2026-07-08:** LICENSE (MIT), semantic analysis pass, VSCode extension
+1.1.0 (grammar + snippets, packaged), playground labeled core-subset-only,
+plus new language features: classes, function-type parameters, f64 arrays.

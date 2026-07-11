@@ -34,7 +34,11 @@ The web documentation includes:
 - **Exception handling**: `try`/`catch`/`finally` and `throw`
 - **User-defined functions** with parameters, return values, and local scoping
 - **Arrow functions & closures** (`(x: i32) => x * 2`, capture-by-value snapshots)
+- **Function-type parameters** (`function apply(f: (i32) => i32, x: i32)`) — pass closures to functions
+- **Classes** with fields, defaults, constructors, and methods (`new Point(3, 4)`)
 - **Callback array methods**: `.map()`, `.filter()`, `.reduce()`, `.find()`, `.forEach()`
+- **Semantic analysis pass**: undefined variables, const reassignment, `break`/`continue`
+  placement, and function arity — all reported with line/column positions
 - **Generic functions and type aliases** (`function bfs<T>(...)`, `type Graph<T> = Map<T, T[]>`)
 - **Interfaces** with `extends` and compile-time structural type checking
 - **Native TypeScript-style objects** with property access, property assignment, nested objects, and object printing
@@ -698,11 +702,14 @@ minute changes. The following TypeScript constructs work **as-is**:
 
 Typical minute changes when porting a `.ts` file:
 
+- Classes with fields, constructors, and methods (`class Point { ... }`, `new Point(3, 4)`)
+- Function-type parameters (`function apply(f: (i32) => i32, x: i32)`)
+
 | TypeScript | Cypescript |
 |---|---|
 | `x++` as an *expression* (`arr[i++]`) | statement-level `x++` only |
 | closures mutating captured primitives | capture an object instead (by-value snapshots) |
-| `class` | object literals with methods |
+| `class A extends B` | flat classes only (no inheritance yet) |
 | `import` from npm packages | only local `./file.csc` module imports |
 | `number` for integer loops (slow) | use `i32` for integer math (fast) |
 
@@ -1421,15 +1428,19 @@ println("JSON: " + json_prettify(user));
 - [x] Interactive web documentation with runnable examples
 
 - [x] Arrow functions and closures (`(x: i32) => x * 2`; captures are by-value snapshots)
+- [x] Function-type parameters (`f: (i32) => i32`) — closures passed to regular functions
+- [x] Classes: fields with defaults, constructors, methods, `new`, class-name type annotations
 - [x] Callback array methods: `.map()`, `.filter()`, `.reduce()`, `.find()`, `.forEach()`
+- [x] `f64[]` arrays (literals, indexing, push/pop/shift, for...of, callback methods)
 - [x] Line/column numbers in lexer/parser error messages
+- [x] Semantic analysis pass (undefined vars, const reassignment, break/continue placement,
+      function arity) with line/column positions
 
 ### 🚧 Planned Features
-- [ ] Classes (`class` keyword — object literals with methods work today)
+- [ ] Class inheritance (`extends` between classes) and `instanceof`
 - [ ] Union types (`string | i32`) and type guards
 - [ ] By-reference closure captures (currently by-value; capture an object for shared state)
-- [ ] `f64[]` arrays
-- [ ] Line/column numbers in codegen-stage errors + a semantic type-checker pass
+- [ ] Full type checker (property/type mismatches currently surface at codegen without positions)
 - [ ] Reference-counted heap objects (escape-safe object returns)
 - [ ] JIT compilation and profile-guided runtime optimization (see OPTIMIZATION_ROADMAP.md)
 

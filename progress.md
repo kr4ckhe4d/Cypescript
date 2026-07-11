@@ -137,6 +137,32 @@ and the README "Planned Features" list. **Status: DONE.** All 18 tests pass
   to user-defined `function`s (only stored in vars / passed to array methods);
   un-annotated return types use a heuristic — annotate for exotic cases.
 
+## Session 7 additions — v1.0 ship batch (2026-07-08)
+- **LICENSE** — MIT, copyright Nipuna H Herath.
+- **Classes** (`class` keyword): fields with zero-value or explicit defaults,
+  `constructor`, methods with `this`, `new ClassName(args)`, class names as type
+  annotations. Implementation: parser synthesizes an ObjectLiteralNode template per
+  class; `new` instantiates it and calls the constructor method. No inheritance yet.
+- **Function-type parameters**: `function apply(f: (i32) => i32, x: i32)` — parseType
+  canonicalizes to "closure(i32)=>i32"; calls through such params are indirect via the
+  closure's fn pointer (parseClosureSignature builds the LLVM FunctionType).
+  Inline arrows and captured closures both work as arguments.
+- **f64[] arrays**: stdlib f64 vector + create/push/get/set/shift/pop; codegen paths
+  for literals (annotation drives element type, int elements coerce), indexing,
+  assignment, for...of, push/pop/shift, and all callback methods (map can produce
+  f64[]/i32[]/string[] based on callback return type).
+- **Semantic analysis pass** (`src/Semantic.{h,cpp}`, runs post-parse): undefined
+  variables, assignment to undefined/const, break/continue placement, user-function
+  arity — all with line/column (ASTNode now carries positions; parser stamps
+  statements + variable refs + calls). Function bodies correctly isolated from
+  enclosing locals; arrows analyzed inside enclosing scope (captures).
+- **VSCode extension 1.1.0**: grammar now includes `class`; 13 new snippets (switch,
+  interface, class, try, arrow, import/export, for-of, template literal,
+  map/filter/reduce); packaged cypescript-1.1.0.vsix (old 1.0.0 removed).
+- **Playground** labeled core-subset-only with pointer to `cscript -r`.
+- **Release prep**: Homebrew formula URLs point at kr4ckhe4d/Cypescript; v1.0.0 tag
+  (see below); suite now 22 tests, examples 01-20.
+
 ## How to resume
 ```bash
 ./build.sh          # or: cmake --build build

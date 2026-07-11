@@ -3,13 +3,13 @@
 # To publish:
 #   1. Create a GitHub release with a source tarball (git tag v1.0.0 && push)
 #   2. Fill in `url` and `sha256` below (shasum -a 256 <tarball>)
-#   3. Put this file in a tap repo: github.com/<you>/homebrew-cypescript
+#   3. Put this file in a tap repo: github.com/kr4ckhe4d/homebrew-cypescript
 #      as Formula/cypescript.rb
-#   4. Users install with:  brew tap <you>/cypescript && brew install cypescript
+#   4. Users install with:  brew tap kr4ckhe4d/cypescript && brew install cypescript
 class Cypescript < Formula
   desc "TypeScript-style language that compiles to native code via LLVM"
-  homepage "https://github.com/your-org/cypescript"
-  url "https://github.com/your-org/cypescript/archive/refs/tags/v1.0.0.tar.gz"
+  homepage "https://github.com/kr4ckhe4d/Cypescript"
+  url "https://github.com/kr4ckhe4d/Cypescript/archive/refs/tags/v1.0.0.tar.gz"
   sha256 "REPLACE_WITH_TARBALL_SHA256"
   license "MIT"
 
