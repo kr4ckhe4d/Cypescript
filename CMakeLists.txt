@@ -82,6 +82,7 @@ add_executable(cscript
     src/CodeGen.cpp
     src/ObjectOptimizer.cpp  # Phase 1 optimization: direct struct property access
     src/Optimizer.cpp        # Phase 3 optimization: AST constant folding + dead branches
+    src/Semantic.cpp         # Semantic analysis: scoped checks with source positions
 )
 
 # Set target properties

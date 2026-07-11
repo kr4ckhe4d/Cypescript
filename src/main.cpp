@@ -20,6 +20,7 @@
 #include "AST.h"
 #include "CodeGen.h"
 #include "Optimizer.h"
+#include "Semantic.h"
 
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
@@ -370,6 +371,19 @@ int main(int argc, char** argv) {
         }
         
         printSuccess("Syntax analysis complete (" + std::to_string(parseTimer.elapsed()) + "ms)", opts.verbose);
+
+        // Semantic Analysis (undefined variables, const reassignment, break/continue
+        // placement, function arity) — errors carry line/column positions
+        printStageHeader("Semantic Analysis", opts.verbose);
+        Timer semanticTimer;
+        try {
+            SemanticAnalyzer analyzer;
+            analyzer.analyze(astRoot.get());
+        } catch (const std::runtime_error& e) {
+            printError(e.what());
+            return 1;
+        }
+        printSuccess("Semantic analysis complete (" + std::to_string(semanticTimer.elapsed()) + "ms)", opts.verbose);
 
         // AST Optimization (constant folding + dead-branch elimination)
         if (!opts.noFold) {
