@@ -1,1074 +1,895 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cypescript Language Documentation</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cypescript Docs</title>
+  <meta name="description" content="Cypescript documentation — a TypeScript-style language that compiles to native code via LLVM.">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container">
-        <!-- Sidebar Navigation -->
-        <nav class="sidebar">
-            <div class="logo">
-                <h1><i class="fas fa-code"></i> Cypescript</h1>
-                <p class="version">v1.0</p>
-            </div>
-            
-            <ul class="nav-menu">
-                <li><a href="#overview" class="nav-link active">Overview</a></li>
-                <li><a href="#getting-started" class="nav-link">Getting Started</a></li>
-                <li><a href="#data-types" class="nav-link">Data Types</a></li>
-                <li><a href="#variables" class="nav-link">Variables</a></li>
-                <li><a href="#operators" class="nav-link">Operators</a></li>
-                <li><a href="#control-flow" class="nav-link">Control Flow</a></li>
-                <li><a href="#loops" class="nav-link">Loops</a></li>
-                <li><a href="#functions" class="nav-link">Functions</a></li>
-                <li><a href="#objects" class="nav-link">Objects</a></li>
-                <li><a href="#modern-features" class="nav-link">Modern Features <span style="font-size:0.7em;color:#4ade80;">NEW</span></a></li>
-                <li><a href="#cpp-integration" class="nav-link">C++ Integration</a></li>
-                <li><a href="#performance" class="nav-link">Performance</a></li>
-                <li><a href="#architecture" class="nav-link">Architecture</a></li>
-                <li><a href="#examples" class="nav-link">Examples</a></li>
-                <li><a href="#playground" class="nav-link">Playground</a></li>
-            </ul>
-            
-            <div class="sidebar-footer">
-                <a href="https://github.com/your-org/cypescript" target="_blank">
-                    <i class="fab fa-github"></i> GitHub
-                </a>
-            </div>
-        </nav>
 
-        <!-- Main Content -->
-        <main class="main-content">
-            <!-- Overview Section -->
-            <section id="overview" class="content-section active">
-                <div class="section-header">
-                    <h1>Cypescript Language Reference</h1>
-                    <p class="subtitle">A TypeScript-inspired language that compiles to efficient native code</p>
-                </div>
+<header class="site-header">
+  <a class="site-logo" href="#landing">cype<span class="logo-accent">script</span> <span class="logo-docs">Docs</span></a>
+  <div class="header-search">
+    <input id="search-input" type="search" placeholder="Search the docs — press /" autocomplete="off">
+    <div id="search-results" class="search-results"></div>
+  </div>
+  <nav class="header-links">
+    <a href="https://github.com/kr4ckhe4d/Cypescript" target="_blank" rel="noopener">GitHub</a>
+  </nav>
+</header>
 
-                <div class="feature-grid">
-                    <div class="feature-card">
-                        <i class="fas fa-rocket"></i>
-                        <h3>High Performance</h3>
-                        <p>Compiles to native code via LLVM for optimal performance</p>
-                    </div>
-                    <div class="feature-card">
-                        <i class="fas fa-shield-alt"></i>
-                        <h3>Type Safety</h3>
-                        <p>Static typing with compile-time type checking</p>
-                    </div>
-                    <div class="feature-card">
-                        <i class="fas fa-code-branch"></i>
-                        <h3>Familiar Syntax</h3>
-                        <p>TypeScript-inspired syntax for easy adoption</p>
-                    </div>
-                    <div class="feature-card">
-                        <i class="fas fa-cogs"></i>
-                        <h3>Zero Runtime</h3>
-                        <p>No runtime dependencies, pure native executables</p>
-                    </div>
-                </div>
+<div class="page-grid">
 
-                <div class="quick-example">
-                    <h2>Quick Example</h2>
-                    <div class="code-example">
-                        <div class="code-header">
-                            <span class="filename">hello.csc</span>
-                            <button class="run-btn" onclick="runExample('hello-example')">
-                                <i class="fas fa-play"></i> Run
-                            </button>
-                        </div>
-                        <pre><code class="language-typescript" id="hello-example">let message: string = "Hello, Cypescript!";
-println(message);
+<nav class="sidebar">
+  <h3>Guides</h3>
+  <ul>
+    <li><a href="#guide-getting-started">Getting started</a></li>
+    <li><a href="#guide-typescript">TypeScript compatibility</a></li>
+    <li><a href="#guide-cpp">C++ integration</a></li>
+    <li><a href="#guide-performance">Performance</a></li>
+  </ul>
+  <h3>Reference · Statements</h3>
+  <ul>
+    <li><a href="#ref-declarations"><code>let</code> &amp; <code>const</code></a></li>
+    <li><a href="#ref-if-else"><code>if...else</code></a></li>
+    <li><a href="#ref-switch"><code>switch</code></a></li>
+    <li><a href="#ref-loops">Loops &amp; iteration</a></li>
+    <li><a href="#ref-break-continue"><code>break</code> &amp; <code>continue</code></a></li>
+    <li><a href="#ref-functions"><code>function</code></a></li>
+    <li><a href="#ref-classes"><code>class</code></a></li>
+    <li><a href="#ref-interfaces"><code>interface</code> &amp; <code>type</code></a></li>
+    <li><a href="#ref-try-catch"><code>try...catch</code> &amp; <code>throw</code></a></li>
+    <li><a href="#ref-modules"><code>import</code> &amp; <code>export</code></a></li>
+  </ul>
+  <h3>Reference · Expressions</h3>
+  <ul>
+    <li><a href="#ref-operators">Operators</a></li>
+    <li><a href="#ref-arrow-functions">Arrow functions</a></li>
+    <li><a href="#ref-template-literals">Template literals</a></li>
+  </ul>
+  <h3>Reference · Types &amp; data</h3>
+  <ul>
+    <li><a href="#ref-types">Data types</a></li>
+    <li><a href="#ref-arrays">Arrays</a></li>
+    <li><a href="#ref-objects">Objects</a></li>
+  </ul>
+  <h3>Reference · Built-ins</h3>
+  <ul>
+    <li><a href="#ref-print"><code>println</code> &amp; <code>console</code></a></li>
+    <li><a href="#ref-builtins"><code>Math</code>, <code>JSON</code>, <code>Map</code>, <code>Set</code></a></li>
+  </ul>
+  <h3>Tools</h3>
+  <ul>
+    <li><a href="#playground">Playground</a></li>
+  </ul>
+</nav>
 
-let answer: i32 = 42;
-print("The answer is: ");
-println(answer);</code></pre>
-                        <div class="output" id="hello-example-output"></div>
-                    </div>
-                </div>
-            </section>
+<main class="article-container">
+  <div id="breadcrumbs" class="breadcrumbs"></div>
 
-            <!-- Getting Started Section -->
-            <section id="getting-started" class="content-section">
-                <h1>Getting Started</h1>
-                
-                <div class="installation-steps">
-                    <h2>Installation</h2>
-                    <div class="step">
-                        <div class="step-number">1</div>
-                        <div class="step-content">
-                            <h3>Clone Repository</h3>
-                            <pre><code class="language-bash">git clone https://github.com/your-org/cypescript.git
-cd cypescript</code></pre>
-                        </div>
-                    </div>
-                    
-                    <div class="step">
-                        <div class="step-number">2</div>
-                        <div class="step-content">
-                            <h3>Setup Dependencies (macOS)</h3>
-                            <pre><code class="language-bash">./setup-macos.sh</code></pre>
-                        </div>
-                    </div>
-                    
-                    <div class="step">
-                        <div class="step-number">3</div>
-                        <div class="step-content">
-                            <h3>Build Compiler</h3>
-                            <pre><code class="language-bash">./build.sh</code></pre>
-                        </div>
-                    </div>
+  <!-- ===================== Landing ===================== -->
+  <article id="landing" class="doc-article" data-title="Cypescript Docs" data-crumbs="">
+    <h1>Cypescript documentation</h1>
+    <p class="article-summary">
+      <strong>Cypescript</strong> is a TypeScript-style language that compiles to
+      native machine code through LLVM. Programs read like TypeScript and run at
+      native speed — within ~2% of Rust on compute benchmarks.
+    </p>
 
-                    <div class="step">
-                        <div class="step-number">4</div>
-                        <div class="step-content">
-                            <h3>Compile &amp; Run</h3>
-                            <p>Run <code>cscript</code> from the repository root — it produces a native executable directly (and links the C++ stdlib automatically):</p>
-                            <pre><code class="language-bash"># Compile and run in one step
-./build/cscript -r example/01_hello.csc
+    <div class="code-example">
+      <div class="example-header"><span>hello.csc</span></div>
+      <pre><code>let name: string = "world";
+println(`Hello, ${name}!`);</code></pre>
+    </div>
+    <div class="code-example">
+      <div class="example-header"><span>Shell</span></div>
+      <pre><code>$ cscript -r hello.csc
+Hello, world!</code></pre>
+    </div>
 
-# Or compile to a named executable
-./build/cscript -o my_program example/01_hello.csc
-./my_program
+    <h2 id="landing-explore">Explore the docs</h2>
+    <div class="card-grid">
+      <a class="doc-card" href="#guide-getting-started">
+        <h3>Getting started</h3>
+        <p>Install with Homebrew or apt, compile your first program, learn the CLI.</p>
+      </a>
+      <a class="doc-card" href="#guide-typescript">
+        <h3>TypeScript compatibility</h3>
+        <p>What runs as-is, and the minute changes real .ts files need.</p>
+      </a>
+      <a class="doc-card" href="#ref-declarations">
+        <h3>Language reference</h3>
+        <p>Every statement, operator, and type — with syntax and examples.</p>
+      </a>
+      <a class="doc-card" href="#ref-arrays">
+        <h3>Arrays &amp; objects</h3>
+        <p>Native structs, <code>.map()</code>/<code>.filter()</code>/<code>.reduce()</code>, destructuring.</p>
+      </a>
+      <a class="doc-card" href="#guide-performance">
+        <h3>Performance</h3>
+        <p>Benchmarks against Rust, Node.js, and Python — and why it's fast.</p>
+      </a>
+      <a class="doc-card" href="#playground">
+        <h3>Playground</h3>
+        <p>Try the core language in your browser.</p>
+      </a>
+    </div>
 
-# Emit LLVM IR only
-./build/cscript -o out.ll example/01_hello.csc</code></pre>
-                        </div>
-                    </div>
-                </div>
+    <h2 id="landing-glance">At a glance</h2>
+    <ul>
+      <li><strong>Familiar:</strong> classes, interfaces, generics, arrow functions, closures, exceptions, modules, template literals</li>
+      <li><strong>Fast:</strong> compiles through LLVM <code>-O2</code>; objects are structs, property access is one instruction</li>
+      <li><strong>Installable:</strong> <code>brew tap kr4ckhe4d/cypescript &amp;&amp; brew install cypescript</code></li>
+      <li><strong>Open:</strong> MIT-licensed, CI-tested on macOS and Linux</li>
+    </ul>
+  </article>
 
-                <div class="first-program">
-                    <h2>Your First Program</h2>
-                    <p>Create a file named <code>hello.csc</code> and try this example:</p>
-                    
-                    <div class="code-example">
-                        <div class="code-header">
-                            <span class="filename">hello.csc</span>
-                            <button class="run-btn" onclick="runExample('first-program')">
-                                <i class="fas fa-play"></i> Run
-                            </button>
-                        </div>
-                        <pre><code class="language-typescript" id="first-program">// Your first Cypescript program
-let greeting: string = "Welcome to Cypescript!";
+  <!-- ===================== Guides ===================== -->
+  <article id="guide-getting-started" class="doc-article" data-keywords="install installation setup brew homebrew apt cli compile" data-title="Getting started" data-crumbs="Guides">
+    <h1>Getting started</h1>
+    <p class="article-summary">
+      This guide installs the Cypescript compiler, walks through your first
+      program, and introduces the <code>cscript</code> command-line interface.
+    </p>
+
+    <h2 id="gs-install">Installation</h2>
+    <h3>macOS (Homebrew)</h3>
+    <div class="code-example">
+      <div class="example-header"><span>Shell</span></div>
+      <pre><code>brew tap kr4ckhe4d/cypescript
+brew install cypescript
+cscript --version</code></pre>
+    </div>
+    <h3>Debian / Ubuntu</h3>
+    <div class="code-example">
+      <div class="example-header"><span>Shell</span></div>
+      <pre><code>sudo apt-get install -y cmake llvm-dev clang
+git clone https://github.com/kr4ckhe4d/Cypescript.git &amp;&amp; cd Cypescript
+bash packaging/build-deb.sh
+sudo apt install ./cypescript_*_*.deb</code></pre>
+    </div>
+    <h3>Arch Linux</h3>
+    <div class="code-example">
+      <div class="example-header"><span>Shell</span></div>
+      <pre><code>git clone https://github.com/kr4ckhe4d/Cypescript.git
+cd Cypescript/packaging/arch
+makepkg -si</code></pre>
+    </div>
+    <div class="notecard note">
+      <p><strong>Note:</strong> <code>clang++</code> must be on your <code>PATH</code>
+      at compile time — <code>cscript</code> uses it to link executables. On macOS
+      it ships with the Xcode Command Line Tools.</p>
+    </div>
+
+    <h2 id="gs-first">Your first program</h2>
+    <div class="code-example">
+      <div class="example-header"><span>hello.csc</span></div>
+      <pre><code>// Types are TypeScript-style annotations
+let greeting: string = "Hello, Cypescript!";
 println(greeting);
 
-let version: i32 = 1;
-print("Version: ");
-println(version);</code></pre>
-                        <div class="output" id="first-program-output"></div>
-                    </div>
-                </div>
-            </section>
+let year: i32 = 2026;
+println(`The year is ${year}`);</code></pre>
+    </div>
+    <div class="code-example">
+      <div class="example-header"><span>Shell</span></div>
+      <pre><code>$ cscript -r hello.csc
+Hello, Cypescript!
+The year is 2026</code></pre>
+    </div>
+    <p>
+      <code>-r</code> compiles <em>and</em> runs in one step. Without it,
+      <code>cscript hello.csc</code> produces a native executable named
+      <code>hello</code> in the current directory.
+    </p>
 
-            <!-- Data Types Section -->
-            <section id="data-types" class="content-section">
-                <h1>Data Types</h1>
-                
-                <div class="type-grid">
-                    <div class="type-card">
-                        <h3><code>i32</code></h3>
-                        <p>32-bit signed integer</p>
-                        <span class="range">-2,147,483,648 to 2,147,483,647</span>
-                    </div>
-                    <div class="type-card">
-                        <h3><code>f64</code></h3>
-                        <p>64-bit floating point</p>
-                        <span class="range">Double precision</span>
-                    </div>
-                    <div class="type-card">
-                        <h3><code>string</code></h3>
-                        <p>UTF-8 text string</p>
-                        <span class="range">Variable length</span>
-                    </div>
-                    <div class="type-card">
-                        <h3><code>boolean</code></h3>
-                        <p>True or false value</p>
-                        <span class="range">true, false</span>
-                    </div>
-                </div>
+    <h2 id="gs-cli">The command-line interface</h2>
+    <table>
+      <thead><tr><th>Command</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td><code>cscript file.csc</code></td><td>Compile to a native executable named after the file</td></tr>
+        <tr><td><code>cscript -r file.csc</code></td><td>Compile and run immediately</td></tr>
+        <tr><td><code>cscript -o name file.csc</code></td><td>Choose the executable name</td></tr>
+        <tr><td><code>cscript -o out.ll file.csc</code></td><td>Emit LLVM IR only (a <code>.ll</code> extension switches modes)</td></tr>
+        <tr><td><code>cscript --no-fold file.csc</code></td><td>Disable the AST optimizer (constant folding, dead branches)</td></tr>
+        <tr><td><code>cscript -v file.csc</code></td><td>Verbose output: every compiler stage with timings</td></tr>
+        <tr><td><code>cscript --version</code></td><td>Print the compiler version</td></tr>
+      </tbody>
+    </table>
 
-                <div class="interactive-example">
-                    <h2>Try Different Types</h2>
-                    <div class="code-example">
-                        <div class="code-header">
-                            <span class="filename">types.csc</span>
-                            <button class="run-btn" onclick="runExample('types-example')">
-                                <i class="fas fa-play"></i> Run
-                            </button>
-                        </div>
-                        <pre><code class="language-typescript" id="types-example">// Integer type
-let age: i32 = 25;
-print("Age: ");
-println(age);
+    <h2 id="gs-how">How compilation works</h2>
+    <p>
+      <code>cscript</code> runs the full pipeline for you: module resolution
+      (inlining <a href="#ref-modules">imports</a>) → lexing → parsing →
+      semantic analysis → AST optimization → LLVM IR → <code>clang++ -O2</code>
+      linked against the precompiled runtime (<code>libcypescript.a</code>).
+      The compiler locates its runtime relative to its own binary, so it works
+      from any directory; set <code>CYPESCRIPT_HOME</code> to override.
+    </p>
 
-// String type
-let name: string = "Alice";
-print("Name: ");
-println(name);
+    <h2 id="gs-next">Next steps</h2>
+    <ul>
+      <li>Work through the <a href="https://github.com/kr4ckhe4d/Cypescript/tree/main/example">guided examples 01–20</a> in the repository</li>
+      <li>Porting a <code>.ts</code> file? Read <a href="#guide-typescript">TypeScript compatibility</a></li>
+      <li>Browse the reference, starting with <a href="#ref-declarations"><code>let</code> &amp; <code>const</code></a></li>
+    </ul>
+  </article>
 
-// Boolean type
-let isActive: boolean = true;
-print("Active: ");
-println(isActive);
+  <article id="guide-typescript" class="doc-article" data-title="TypeScript compatibility" data-crumbs="Guides">
+    <h1>TypeScript compatibility</h1>
+    <p class="article-summary">
+      Cypescript's goal is to run TypeScript scripts natively with minute
+      changes. This guide lists what works unchanged, what needs adjusting,
+      and the semantic differences to know about.
+    </p>
 
-// Boolean from comparison
-let isAdult: boolean = age >= 18;
-print("Is adult: ");
-println(isAdult);
+    <h2 id="ts-asis">Works as-is</h2>
+    <ul>
+      <li><code>console.log(...)</code> / <code>console.error(...)</code>, including multiple arguments</li>
+      <li><code>===</code> and <code>!==</code> (treated as <code>==</code> / <code>!=</code>)</li>
+      <li><code>Math.sqrt</code>, <code>Math.pow</code>, <code>Math.abs</code>, <code>Math.floor</code>, <code>Math.sin</code>, <code>Math.cos</code>, <code>Math.log</code>, <code>Math.exp</code></li>
+      <li><code>let</code>/<code>const</code>, type annotations, <code>number</code> (compiles to <code>f64</code>)</li>
+      <li>Interfaces, generics, type aliases, template literals, destructuring</li>
+      <li>Classes with fields, constructors, and methods</li>
+      <li>Arrow functions and closures; <code>.map/.filter/.reduce/.find/.forEach</code></li>
+      <li><code>Map</code> / <code>Set</code>, arrays with <code>.push/.pop/.shift/.length</code>, <code>for...of</code></li>
+      <li><code>try/catch/finally/throw</code>, <code>switch</code>, <code>break</code>/<code>continue</code></li>
+    </ul>
 
-// Arithmetic with integers
-let result: i32 = age * 2;
-print("Double age: ");
-println(result);</code></pre>
-                        <div class="output" id="types-example-output"></div>
-                    </div>
-                </div>
-            </section>
+    <h2 id="ts-changes">Typical minute changes</h2>
+    <table>
+      <thead><tr><th>TypeScript</th><th>Cypescript</th></tr></thead>
+      <tbody>
+        <tr><td><code>x++</code> as an <em>expression</em> (<code>arr[i++]</code>)</td><td>statement-level <code>x++</code> only</td></tr>
+        <tr><td>closures mutating captured primitives</td><td>capture an object instead (captures are by-value snapshots)</td></tr>
+        <tr><td><code>class A extends B</code></td><td>flat classes only (no inheritance yet)</td></tr>
+        <tr><td><code>import</code> from npm packages</td><td>local <code>./file.csc</code> module imports only</td></tr>
+        <tr><td><code>number</code> for hot integer loops</td><td>use <code>i32</code> for integer math (much faster)</td></tr>
+      </tbody>
+    </table>
 
-            <!-- Variables Section -->
-            <section id="variables" class="content-section">
-                <h1>Variables and Assignment</h1>
-                
-                <div class="concept-explanation">
-                    <h2>Variable Declaration</h2>
-                    <p>Variables are declared using the <code>let</code> keyword with explicit type annotations:</p>
-                    
-                    <div class="syntax-box">
-                        <code>let variableName: type = initialValue;</code>
-                    </div>
-                </div>
+    <h2 id="ts-semantics">Semantic differences</h2>
+    <dl>
+      <dt>Closure captures are by-value</dt>
+      <dd>A closure snapshots captured variables when it is created. Mutating a
+      captured primitive inside the closure does not affect the outer variable.
+      Capture an object to share mutable state — the pointer is snapshotted, so
+      mutations through it are visible everywhere. See
+      <a href="#ref-arrow-functions">Arrow functions</a>.</dd>
+      <dt>Booleans print as <code>1</code> / <code>0</code></dt>
+      <dd>Booleans are native integers; <code>println(true)</code> prints <code>1</code>.</dd>
+      <dt>Integer division</dt>
+      <dd><code>i32 / i32</code> truncates like C. Use <code>f64</code> operands for fractional results.</dd>
+    </dl>
 
-                <div class="interactive-example">
-                    <h2>Variable Examples</h2>
-                    <div class="code-example">
-                        <div class="code-header">
-                            <span class="filename">variables.csc</span>
-                            <button class="run-btn" onclick="runExample('variables-example')">
-                                <i class="fas fa-play"></i> Run
-                            </button>
-                        </div>
-                        <pre><code class="language-typescript" id="variables-example">// Variable declaration and initialization
-let counter: i32 = 0;
-print("Initial counter: ");
-println(counter);
+    <h2 id="ts-example">Worked example</h2>
+    <p>
+      The repository ships the same breadth-first-search algorithm as both
+      <code>example/18_bfs_graph.ts</code> and <code>example/18_bfs_graph.csc</code>.
+      The two files differ only in <code>number</code>→<code>i32</code> annotations
+      and produce byte-identical output.
+    </p>
 
-// Variable assignment
-counter = 10;
-print("Updated counter: ");
-println(counter);
+    <h2 id="ts-see">See also</h2>
+    <ul>
+      <li><a href="#guide-performance">Performance</a> — what those minute changes buy you</li>
+      <li><a href="#ref-print"><code>println</code> &amp; <code>console</code></a></li>
+    </ul>
+  </article>
 
-// Using variables in expressions
-counter = counter + 5;
-print("After increment: ");
-println(counter);
+  <article id="guide-cpp" class="doc-article" data-title="C++ integration" data-crumbs="Guides">
+    <h1>C++ integration</h1>
+    <p class="article-summary">
+      Cypescript programs link against a C++ runtime library, and you can extend
+      the language with your own C++ functions in minutes.
+    </p>
 
-// Multiple variables
-let firstName: string = "John";
-let lastName: string = "Doe";
-print("First name: ");
-println(firstName);
-print("Last name: ");
-println(lastName);</code></pre>
-                        <div class="output" id="variables-example-output"></div>
-                    </div>
-                </div>
-            </section>
+    <h2 id="cpp-stdlib">The standard library</h2>
+    <p>
+      Every executable links <code>libcypescript.a</code>, compiled from
+      <code>src/cypescript_stdlib.cpp</code>. It implements dynamic arrays,
+      <code>Map</code>/<code>Set</code>, string helpers, JSON, file I/O, random
+      numbers, and the exception runtime. These functions are callable directly:
+    </p>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let text: string = "Hello World";
+println(string_reverse(text));   // dlroW olleH
+println(string_upper(text));     // HELLO WORLD
 
-            <!-- Operators Section -->
-            <section id="operators" class="content-section">
-                <h1>Operators</h1>
-                
-                <div class="operator-tables">
-                    <div class="operator-category">
-                        <h2>Arithmetic Operators</h2>
-                        <table class="operator-table">
-                            <thead>
-                                <tr>
-                                    <th>Operator</th>
-                                    <th>Description</th>
-                                    <th>Example</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr><td><code>+</code></td><td>Addition</td><td><code>5 + 3</code></td></tr>
-                                <tr><td><code>-</code></td><td>Subtraction</td><td><code>5 - 3</code></td></tr>
-                                <tr><td><code>*</code></td><td>Multiplication</td><td><code>5 * 3</code></td></tr>
-                                <tr><td><code>/</code></td><td>Division</td><td><code>10 / 3</code></td></tr>
-                                <tr><td><code>%</code></td><td>Modulo</td><td><code>10 % 3</code></td></tr>
-                            </tbody>
-                        </table>
-                    </div>
+file_write("data.txt", "saved from Cypescript");
+println(file_read("data.txt"));
 
-                    <div class="operator-category">
-                        <h2>Comparison Operators</h2>
-                        <table class="operator-table">
-                            <thead>
-                                <tr>
-                                    <th>Operator</th>
-                                    <th>Description</th>
-                                    <th>Example</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr><td><code>==</code></td><td>Equal to</td><td><code>a == b</code></td></tr>
-                                <tr><td><code>!=</code></td><td>Not equal to</td><td><code>a != b</code></td></tr>
-                                <tr><td><code>&lt;</code></td><td>Less than</td><td><code>a &lt; b</code></td></tr>
-                                <tr><td><code>&lt;=</code></td><td>Less than or equal</td><td><code>a &lt;= b</code></td></tr>
-                                <tr><td><code>&gt;</code></td><td>Greater than</td><td><code>a &gt; b</code></td></tr>
-                                <tr><td><code>&gt;=</code></td><td>Greater than or equal</td><td><code>a &gt;= b</code></td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+random_seed(42);
+println(random_int(1, 100));</code></pre>
+    </div>
 
-                <div class="interactive-example">
-                    <h2>Operator Examples</h2>
-                    <div class="code-example">
-                        <div class="code-header">
-                            <span class="filename">operators.csc</span>
-                            <button class="run-btn" onclick="runExample('operators-example')">
-                                <i class="fas fa-play"></i> Run
-                            </button>
-                        </div>
-                        <pre><code class="language-typescript" id="operators-example">let a: i32 = 10;
-let b: i32 = 3;
+    <h2 id="cpp-functions">Available functions</h2>
+    <dl>
+      <dt>Strings</dt>
+      <dd><code>string_reverse</code>, <code>string_upper</code>, <code>string_lower</code>,
+      <code>string_length</code>, <code>string_substring(s, start, len)</code>,
+      <code>string_find(s, sub)</code>, <code>string_concat(a, b)</code></dd>
+      <dt>Files</dt>
+      <dd><code>file_read(path)</code>, <code>file_write(path, content)</code>, <code>file_exists(path)</code></dd>
+      <dt>Random</dt>
+      <dd><code>random_seed(n)</code>, <code>random_int(min, max)</code>, <code>random_double()</code></dd>
+      <dt>Math</dt>
+      <dd><code>math_sqrt</code>, <code>math_pow</code>, <code>math_abs_i32</code>, <code>math_abs_f64</code>,
+      <code>math_floor</code>, <code>math_sin</code>, <code>math_cos</code>, <code>math_log</code>, <code>math_exp</code>
+      — also reachable as <a href="#ref-builtins"><code>Math.*</code></a></dd>
+      <dt>JSON (string-based)</dt>
+      <dd><code>json_create_object</code>, <code>json_add_string/int/boolean</code>,
+      <code>json_get_string/int/boolean</code>, <code>json_prettify</code>, <code>json_minify</code>, <code>json_is_valid</code></dd>
+    </dl>
 
-// Arithmetic operations
-println("Arithmetic Operations:");
-print("a + b = ");
-println(a + b);
-print("a - b = ");
-println(a - b);
-print("a * b = ");
-println(a * b);
-print("a / b = ");
-println(a / b);
-print("a % b = ");
-println(a % b);
-
-// Comparison operations
-println("Comparison Operations:");
-if (a > b) {
-    println("a is greater than b");
-}
-if (a != b) {
-    println("a is not equal to b");
-}</code></pre>
-                        <div class="output" id="operators-example-output"></div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Control Flow Section -->
-            <section id="control-flow" class="content-section">
-                <h1>Control Flow</h1>
-                
-                <div class="concept-explanation">
-                    <h2>If Statements</h2>
-                    <p>Execute code conditionally based on boolean expressions.</p>
-                </div>
-
-                <div class="interactive-example">
-                    <h2>If-Else Examples</h2>
-                    <div class="code-example">
-                        <div class="code-header">
-                            <span class="filename">control-flow.csc</span>
-                            <button class="run-btn" onclick="runExample('control-flow-example')">
-                                <i class="fas fa-play"></i> Run
-                            </button>
-                        </div>
-                        <pre><code class="language-typescript" id="control-flow-example">let score: i32 = 85;
-
-print("Score: ");
-println(score);
-
-// Simple if-else
-if (score >= 90) {
-    println("Grade: A - Excellent!");
-} else {
-    if (score >= 80) {
-        println("Grade: B - Good work!");
-    } else {
-        if (score >= 70) {
-            println("Grade: C - Satisfactory");
-        } else {
-            println("Grade: D or F - Needs improvement");
-        }
+    <h2 id="cpp-custom">Adding your own functions</h2>
+    <p>Write a C++ function with C linkage, then compile it in:</p>
+    <div class="code-example">
+      <div class="example-header"><span>my_math_lib.cpp</span></div>
+      <pre><code>extern "C" {
+    int math_gcd(int a, int b) {
+        while (b != 0) { int t = b; b = a % b; a = t; }
+        return a;
     }
-}
-
-// Complex conditions
-let bonus: i32 = 5;
-let finalScore: i32 = score + bonus;
-
-if (finalScore > score) {
-    print("Bonus applied! Final score: ");
-    println(finalScore);
 }</code></pre>
-                        <div class="output" id="control-flow-example-output"></div>
-                    </div>
-                </div>
-            </section>
+    </div>
+    <div class="code-example">
+      <div class="example-header"><span>Shell</span></div>
+      <pre><code>./compile-with-custom-cpp.sh my_program.csc output src/my_math_lib.cpp</code></pre>
+    </div>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let g: i32 = math_gcd(48, 18);   // 6</code></pre>
+    </div>
+    <div class="notecard warning">
+      <p><strong>Warning:</strong> <code>extern "C"</code> is required — without it,
+      C++ name mangling prevents the compiled program from finding your function
+      at link time.</p>
+    </div>
 
-            <!-- Loops Section -->
-            <section id="loops" class="content-section">
-                <h1>Loop Statements</h1>
-                
-                <div class="loop-types">
-                    <div class="loop-type">
-                        <h2><i class="fas fa-sync"></i> While Loop</h2>
-                        <p>Execute statements while a condition remains true.</p>
-                        <div class="syntax-box">
-                            <code>while (condition) { /* statements */ }</code>
-                        </div>
-                    </div>
+    <h2 id="cpp-memory">Memory model</h2>
+    <div class="notecard note">
+      <p><strong>Note:</strong> runtime allocations (strings, arrays, closure
+      environments) live for the lifetime of the process — Cypescript currently
+      uses <em>script-lifetime memory</em> with no garbage collector. This is by
+      design for short-lived programs; long-running services should be mindful of
+      allocation in hot loops.</p>
+    </div>
+  </article>
 
-                    <div class="loop-type">
-                        <h2><i class="fas fa-repeat"></i> For Loop</h2>
-                        <p>Traditional C-style for loops with initialization, condition, and increment.</p>
-                        <div class="syntax-box">
-                            <code>for (init; condition; increment) { /* statements */ }</code>
-                        </div>
-                    </div>
+  <article id="guide-performance" class="doc-article" data-keywords="benchmark benchmarks speed fast rust node python" data-title="Performance" data-crumbs="Guides">
+    <h1>Performance</h1>
+    <p class="article-summary">
+      Cypescript compiles through LLVM <code>-O2</code> and keeps type
+      information all the way down, which puts it in the same performance class
+      as Rust on compute-bound workloads.
+    </p>
 
-                    <div class="loop-type">
-                        <h2><i class="fas fa-redo"></i> Do-While Loop</h2>
-                        <p>Execute statements at least once, then continue while condition is true.</p>
-                        <div class="syntax-box">
-                            <code>do { /* statements */ } while (condition);</code>
-                        </div>
-                    </div>
-                </div>
+    <h2 id="perf-cross">Cross-language benchmark</h2>
+    <p>
+      The exact same algorithm, implemented idiomatically in four languages
+      (<code>benchmarks/cross/</code>), verified to produce identical output,
+      best of 3 wall-clock runs on Apple Silicon (Node v26, Python 3.14, rustc 1.89):
+    </p>
+    <table>
+      <thead><tr><th>Benchmark</th><th>Cypescript</th><th>Node (TS)</th><th>Python</th><th>Rust</th></tr></thead>
+      <tbody>
+        <tr><td>Primes &lt; 1M (trial division)</td><td><strong>0.051s</strong></td><td>0.146s</td><td>1.777s</td><td>0.050s</td></tr>
+        <tr><td>Fibonacci fib(35), recursive</td><td><strong>0.025s</strong></td><td>0.125s</td><td>0.621s</td><td>0.026s</td></tr>
+      </tbody>
+    </table>
+    <div class="code-example">
+      <div class="example-header"><span>Reproduce it</span></div>
+      <pre><code>bash benchmarks/cross/run_cross_benchmarks.sh</code></pre>
+    </div>
 
-                <div class="interactive-example">
-                    <h2>Loop Examples</h2>
-                    <div class="code-example">
-                        <div class="code-header">
-                            <span class="filename">loops.csc</span>
-                            <button class="run-btn" onclick="runExample('loops-example')">
-                                <i class="fas fa-play"></i> Run
-                            </button>
-                        </div>
-                        <pre><code class="language-typescript" id="loops-example">println("=== Loop Examples ===");
+    <h2 id="perf-why">Why it's fast</h2>
+    <dl>
+      <dt>Objects are structs</dt>
+      <dd>Property layouts are computed at compile time; <code>user.age</code> is a
+      single indexed load — no hash lookups. This change alone measured 2.1×
+      on a 2.5M-property-access benchmark.</dd>
+      <dt>Direct calls everywhere</dt>
+      <dd>Methods and statically-bound closures compile to direct (inlinable)
+      calls — no vtables, no dynamic dispatch.</dd>
+      <dt>Inline callback loops</dt>
+      <dd><code>.map()</code>/<code>.filter()</code>/<code>.reduce()</code> compile to
+      plain loops calling the arrow function directly.</dd>
+      <dt>LLVM <code>-O2</code></dt>
+      <dd>The same optimizer Rust and Clang use — inlining, vectorization,
+      constant propagation — runs on every program.</dd>
+    </dl>
 
-// While loop
-println("While loop (countdown):");
-let countdown: i32 = 3;
-while (countdown > 0) {
-    print("T-minus ");
-    println(countdown);
-    countdown = countdown - 1;
-}
-println("Liftoff!");
+    <h2 id="perf-tips">Performance tips</h2>
+    <ul>
+      <li>Use <code>i32</code> for integer loops; <code>number</code> is <code>f64</code> and pays float costs</li>
+      <li>Annotate arrow return types in hot paths to avoid conservative inference</li>
+      <li>Avoid string concatenation inside hot loops (each <code>+</code> allocates)</li>
+    </ul>
+  </article>
 
-// For loop
-println("For loop (counting up):");
-for (let i: i32 = 1; i <= 3; i = i + 1) {
-    print("Count: ");
-    println(i);
-}
+  <!-- ===================== Reference · Statements ===================== -->
+  <article id="ref-declarations" class="doc-article" data-keywords="variable variables declaration assignment" data-title="let &amp; const" data-crumbs="Reference &gt; Statements">
+    <h1><code>let</code> &amp; <code>const</code></h1>
+    <p class="article-summary">
+      The <strong><code>let</code></strong> declaration creates a mutable
+      variable; <strong><code>const</code></strong> creates an immutable
+      binding. Type annotations are optional — the compiler infers types from
+      the initializer.
+    </p>
 
-// Do-while loop
-println("Do-while loop:");
-let attempts: i32 = 0;
-do {
-    attempts = attempts + 1;
-    print("Attempt: ");
-    println(attempts);
-} while (attempts < 2);</code></pre>
-                        <div class="output" id="loops-example-output"></div>
-                    </div>
-                </div>
-            </section>
+    <h2 id="decl-syntax">Syntax</h2>
+    <pre class="syntaxbox"><code>let name = expression;
+let name: type = expression;
+const name: type = expression;</code></pre>
+    <dl>
+      <dt><code>name</code></dt>
+      <dd>The variable's identifier.</dd>
+      <dt><code>type</code> <em>(optional)</em></dt>
+      <dd>A <a href="#ref-types">type annotation</a> such as <code>string</code>,
+      <code>i32</code>, <code>f64</code>, <code>boolean</code>, an array type
+      (<code>i32[]</code>), an <a href="#ref-interfaces">interface</a>, or a
+      <a href="#ref-classes">class</a> name. If omitted, the type is inferred.</dd>
+      <dt><code>expression</code></dt>
+      <dd>The initializer. Required — declarations without initializers are not supported.</dd>
+    </dl>
 
-            <!-- Functions Section -->
-            <section id="functions" class="content-section">
-                <h1>Functions</h1>
-                
-                <div class="function-reference">
-                    <h2>Built-in Functions</h2>
-                    
-                    <div class="function-card">
-                        <h3><code>print()</code></h3>
-                        <p>Outputs values to the console without adding a newline.</p>
-                        <div class="function-signature">
-                            <code>print(expression: string | i32 | f64 | boolean)</code>
-                        </div>
-                    </div>
-                    
-                    <div class="function-card">
-                        <h3><code>println()</code></h3>
-                        <p>Outputs values to the console and adds a newline at the end.</p>
-                        <div class="function-signature">
-                            <code>println(expression: string | i32 | f64 | boolean)</code>
-                        </div>
-                    </div>
-                </div>
+    <h2 id="decl-desc">Description</h2>
+    <p>
+      Reassigning a <code>const</code> binding is a compile-time error, caught by
+      the semantic analyzer with the offending position. Note that
+      <code>const</code> freezes the <em>binding</em>, not the value: properties
+      of a <code>const</code> object and elements of a <code>const</code> array
+      may still be mutated, matching TypeScript.
+    </p>
 
-                <div class="interactive-example">
-                    <h2>Arrays</h2>
-                    <p>Arrays store multiple values of the same type. Access elements using square bracket notation.</p>
-                    
-                    <div class="code-example">
-                        <div class="code-header">
-                            <span class="filename">arrays.csc</span>
-                            <button class="run-btn" onclick="runExample('arrays-example')">
-                                <i class="fas fa-play"></i> Run
-                            </button>
-                        </div>
-                        <pre><code class="language-typescript" id="arrays-example">// Array declaration and initialization
-let numbers: i32[] = [1, 2, 3, 4, 5];
-println("Array: ");
-println(numbers);
+    <h2 id="decl-examples">Examples</h2>
+    <h3>Inference</h3>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let count = 42;          // inferred i32
+let pi = 3.14159;        // inferred f64
+let name = "Ada";        // inferred string
+const LIMIT: i32 = 100;</code></pre>
+    </div>
+    <h3>Const violations are compile errors</h3>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>const MAX: i32 = 10;
+MAX = 20;</code></pre>
+    </div>
+    <div class="output-block"><span class="output-label">Compiler output</span>
+      <pre>Semantic Error: Cannot reassign const variable 'MAX' at line 2, column 1</pre>
+    </div>
 
-// Array access
-print("First element: ");
-println(numbers[0]);
-print("Last element: ");
-println(numbers[4]);
+    <h2 id="decl-see">See also</h2>
+    <ul>
+      <li><a href="#ref-types">Data types</a></li>
+      <li><a href="#ref-operators">Operators</a> — compound assignment</li>
+    </ul>
+  </article>
 
-// String array
-let names: string[] = ["Alice", "Bob", "Charlie"];
-println("Names: ");
-println(names);
+  <article id="ref-if-else" class="doc-article" data-title="if...else" data-crumbs="Reference &gt; Statements">
+    <h1><code>if...else</code></h1>
+    <p class="article-summary">
+      The <strong><code>if...else</code></strong> statement executes a block if
+      a condition is truthy, with optional <code>else if</code> chains and a
+      final <code>else</code> block.
+    </p>
 
-// Mixed operations
-let scores: i32[] = [85, 92, 78, 96];
-print("Second score: ");
-println(scores[1]);
-print("Third score: ");
-println(scores[2]);</code></pre>
-                        <div class="output" id="arrays-example-output"></div>
-                    </div>
-                </div>
-
-                <div class="interactive-example">
-                    <h2>Objects</h2>
-                    <p>Objects store key-value pairs. Access properties using dot notation.</p>
-                    
-                    <div class="code-example">
-                        <div class="code-header">
-                            <span class="filename">objects.csc</span>
-                            <button class="run-btn" onclick="runExample('objects-example')">
-                                <i class="fas fa-play"></i> Run
-                            </button>
-                        </div>
-                        <pre><code class="language-typescript" id="objects-example">// Object declaration
-let person = { 
-    name: "Alice", 
-    age: 25, 
-    isActive: true 
-};
-println("Person object:");
-println(person);
-
-// Property access
-print("Name: ");
-println(person.name);
-print("Age: ");
-println(person.age);
-print("Active: ");
-println(person.isActive);
-
-// Nested objects and arrays
-let student = {
-    name: "Bob",
-    grades: [85, 92, 78],
-    info: { year: 2024, major: "CS" }
-};
-
-println("Student:");
-println(student);
-print("First grade: ");
-println(student.grades[0]);
-print("Major: ");
-println(student.info.major);</code></pre>
-                        <div class="output" id="objects-example-output"></div>
-                    </div>
-                </div>
-
-                <div class="interactive-example">
-                    <h2>Complex Data Structures</h2>
-                    <p>Advanced examples combining arrays and objects for real-world scenarios like company management systems.</p>
-                    
-                    <div class="code-example">
-                        <div class="code-header">
-                            <span class="filename">company_system.csc</span>
-                            <button class="run-btn" onclick="runExample('complex-data-example')">
-                                <i class="fas fa-play"></i> Run
-                            </button>
-                        </div>
-                        <pre><code class="language-typescript" id="complex-data-example">// Complex Company Management System
-println("=== Company Management System ===");
-
-// Define company structure with departments and employees
-let company = {
-    name: "TechCorp Industries",
-    founded: 2020,
-    departments: [
-        {
-            name: "Engineering",
-            budget: 500000,
-            employees: [
-                { 
-                    name: "Alice Johnson", 
-                    role: "Senior Developer", 
-                    salary: 95000,
-                    skills: ["JavaScript", "Python", "React"],
-                    projects: ["WebApp", "API Gateway"]
-                },
-                { 
-                    name: "Bob Smith", 
-                    role: "DevOps Engineer", 
-                    salary: 85000,
-                    skills: ["Docker", "Kubernetes", "AWS"],
-                    projects: ["Infrastructure", "CI/CD"]
-                }
-            ]
-        },
-        {
-            name: "Marketing",
-            budget: 200000,
-            employees: [
-                { 
-                    name: "Carol Davis", 
-                    role: "Marketing Manager", 
-                    salary: 75000,
-                    skills: ["SEO", "Content Marketing", "Analytics"],
-                    projects: ["Brand Campaign", "Social Media"]
-                }
-            ]
-        }
-    ]
-};
-
-// Display company information
-print("Company: ");
-println(company.name);
-print("Founded: ");
-println(company.founded);
-
-println("");
-println("=== Department Analysis ===");
-
-// Analyze each department
-let totalBudget: i32 = 0;
-let totalEmployees: i32 = 0;
-
-// Engineering Department
-let engineering = company.departments[0];
-print("Department: ");
-println(engineering.name);
-print("Budget: $");
-println(engineering.budget);
-print("Team Size: ");
-println(engineering.employees.length);
-
-totalBudget = totalBudget + engineering.budget;
-totalEmployees = totalEmployees + engineering.employees.length;
-
-println("Engineering Team:");
-print("  Lead Developer: ");
-println(engineering.employees[0].name);
-print("  Role: ");
-println(engineering.employees[0].role);
-print("  Primary Skill: ");
-println(engineering.employees[0].skills[0]);
-print("  Main Project: ");
-println(engineering.employees[0].projects[0]);
-
-print("  DevOps Engineer: ");
-println(engineering.employees[1].name);
-print("  Specialization: ");
-println(engineering.employees[1].skills[1]);
-
-// Marketing Department
-let marketing = company.departments[1];
-print("Department: ");
-println(marketing.name);
-print("Budget: $");
-println(marketing.budget);
-print("Team Size: ");
-println(marketing.employees.length);
-
-totalBudget = totalBudget + marketing.budget;
-totalEmployees = totalEmployees + marketing.employees.length;
-
-println("Marketing Team:");
-print("  Manager: ");
-println(marketing.employees[0].name);
-print("  Expertise: ");
-println(marketing.employees[0].skills[0]);
-
-println("");
-println("=== Company Statistics ===");
-print("Total Departments: ");
-println(company.departments.length);
-print("Total Budget: $");
-println(totalBudget);
-print("Total Employees: ");
-println(totalEmployees);
-
-// Project tracking across departments
-println("");
-println("=== Active Projects ===");
-let allProjects: string[] = [];
-
-// Collect all projects from engineering
-let engProjects = engineering.employees[0].projects;
-allProjects = [engProjects[0], engProjects[1]];
-
-let devopsProjects = engineering.employees[1].projects;
-allProjects = [allProjects[0], allProjects[1], devopsProjects[0], devopsProjects[1]];
-
-let marketingProjects = marketing.employees[0].projects;
-allProjects = [allProjects[0], allProjects[1], allProjects[2], allProjects[3], marketingProjects[0], marketingProjects[1]];
-
-print("Total Active Projects: ");
-println(allProjects.length);
-println("Project List:");
-print("1. ");
-println(allProjects[0]);
-print("2. ");
-println(allProjects[1]);
-print("3. ");
-println(allProjects[2]);
-print("4. ");
-println(allProjects[3]);
-print("5. ");
-println(allProjects[4]);
-print("6. ");
-println(allProjects[5]);
-
-println("");
-println("=== Skill Matrix ===");
-// Analyze skills across the company
-print("JavaScript Developers: ");
-if (engineering.employees[0].skills[0] == "JavaScript") {
-    println("Alice Johnson");
-}
-
-print("Cloud Infrastructure: ");
-if (engineering.employees[1].skills[2] == "AWS") {
-    println("Bob Smith (AWS Certified)");
-}
-
-print("Marketing Analytics: ");
-if (marketing.employees[0].skills[2] == "Analytics") {
-    println("Carol Davis");
-}
-
-println("");
-println("=== System Complete ===");</code></pre>
-                        <div class="output" id="complex-data-example-output"></div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Objects Section -->
-            <section id="objects" class="content-section">
-                <h1>Native TypeScript-Style Objects</h1>
-                <p>Cypescript provides native TypeScript-style object support with property access, just like TypeScript!</p>
-                
-                <div class="feature-grid">
-                    <div class="feature-card">
-                        <h3><i class="fas fa-plus-circle"></i> Object Creation</h3>
-                        <p>Create objects with mixed types using familiar syntax</p>
-                    </div>
-                    <div class="feature-card">
-                        <h3><i class="fas fa-search"></i> Property Access</h3>
-                        <p>Access properties with dot notation: obj.property</p>
-                    </div>
-                    <div class="feature-card">
-                        <h3><i class="fas fa-code"></i> Type Safety</h3>
-                        <p>Type-safe property access with compile-time checking</p>
-                    </div>
-                    <div class="feature-card">
-                        <h3><i class="fas fa-rocket"></i> Native Performance</h3>
-                        <p>Compiled to efficient native code via LLVM</p>
-                    </div>
-                </div>
-
-                <div class="interactive-example">
-                    <h2>Object Creation</h2>
-                    <p>Create objects with mixed types using TypeScript-style syntax.</p>
-                    
-                    <div class="code-example">
-                        <div class="code-header">
-                            <span class="filename">object-creation.csc</span>
-                            <button class="run-btn" onclick="runExample('object-creation-example')">
-                                <i class="fas fa-play"></i> Run
-                            </button>
-                        </div>
-                        <pre><code class="language-typescript" id="object-creation-example">// Create objects with mixed types
-let user = {
-    name: "Alice Johnson",
-    age: 28,
-    role: "Developer",
-    active: true
-};
-
-let config = {
-    appName: "Cypescript IDE",
-    version: "1.0.0",
-    port: 8080,
-    debug: false
-};
-
-println("✅ Objects created successfully!");
-println("🎯 TypeScript-style syntax working!");</code></pre>
-                        <div class="output" id="object-creation-example-output"></div>
-                    </div>
-                </div>
-
-                <div class="interactive-example">
-                    <h2>Property Access</h2>
-                    <p>Access object properties using dot notation.</p>
-                    
-                    <div class="code-example">
-                        <div class="code-header">
-                            <span class="filename">property-access.csc</span>
-                            <button class="run-btn" onclick="runExample('property-access-example')">
-                                <i class="fas fa-play"></i> Run
-                            </button>
-                        </div>
-                        <pre><code class="language-typescript" id="property-access-example">// Create a user object
-let user = {
-    name: "Alice Johnson",
-    age: 28,
-    role: "Developer",
-    active: true
-};
-
-// Access properties
-println("User Information:");
-println(user.name);     // "Alice Johnson"
-println(user.age);      // 28
-println(user.role);     // "Developer"
-println(user.active);   // 1 (true)
-
-// Create configuration object
-let config = {
-    appName: "Cypescript IDE",
-    port: 8080,
-    debug: false
-};
-
-println("Configuration:");
-println(config.appName);  // "Cypescript IDE"
-println(config.port);     // 8080
-println(config.debug);    // 0 (false)</code></pre>
-                        <div class="output" id="property-access-example-output"></div>
-                    </div>
-                </div>
-
-                <div class="interactive-example">
-                    <h2>Real-World Example</h2>
-                    <p>Employee management system using native objects.</p>
-                    
-                    <div class="code-example">
-                        <div class="code-header">
-                            <span class="filename">employee-system.csc</span>
-                            <button class="run-btn" onclick="runExample('employee-system-example')">
-                                <i class="fas fa-play"></i> Run
-                            </button>
-                        </div>
-                        <pre><code class="language-typescript" id="employee-system-example">// Employee management system
-let employee = {
-    firstName: "Alice",
-    lastName: "Johnson",
-    employeeId: 12345,
-    department: "Engineering",
-    salary: 95000,
-    isActive: true,
-    isRemote: false
-};
-
-// Process employee data
-print("Employee: ");
-print(employee.firstName);
-print(" ");
-println(employee.lastName);
-
-print("ID: ");
-println(employee.employeeId);
-
-print("Department: ");
-println(employee.department);
-
-print("Status: ");
-if (employee.isActive == 1) {
-    println("Active");
+    <h2 id="if-syntax">Syntax</h2>
+    <pre class="syntaxbox"><code>if (condition) {
+  statements
+} else if (condition2) {
+  statements
 } else {
-    println("Inactive");
-}
-
-print("Work Mode: ");
-if (employee.isRemote == 1) {
-    println("Remote");
-} else {
-    println("On-site");
+  statements
 }</code></pre>
-                        <div class="output" id="employee-system-example-output"></div>
-                    </div>
-                </div>
+    <dl>
+      <dt><code>condition</code></dt>
+      <dd>Any expression. Non-zero numbers and non-null pointers (strings,
+      objects, arrays) are truthy; <code>0</code>, <code>0.0</code>,
+      <code>false</code>, and null pointers are falsy.</dd>
+    </dl>
 
-                <div class="feature-reference">
-                    <h2>Object Features</h2>
-                    <p>Complete reference of native object capabilities.</p>
-                    
-                    <div class="function-grid">
-                        <div class="function-card">
-                            <h4>✅ Currently Available</h4>
-                            <ul>
-                                <li>Object creation: <code>{ key: value }</code></li>
-                                <li>Property access: <code>obj.property</code></li>
-                                <li>Mixed types: strings, integers, booleans</li>
-                                <li>Multiple objects in same program</li>
-                                <li>Type-safe property access</li>
-                            </ul>
-                        </div>
-                        
-                        <div class="function-card">
-                            <h4>🚧 Coming Soon</h4>
-                            <ul>
-                                <li>Object printing: <code>println(obj)</code></li>
-                                <li>JSON conversion: <code>JSON.stringify(obj)</code></li>
-                                <li>JSON parsing: <code>JSON.parse(jsonString)</code></li>
-                                <li>Nested objects: <code>obj.nested.property</code></li>
-                                <li>Object methods and <code>this</code> keyword</li>
-                            </ul>
-                        </div>
-                        
-                        <div class="function-card">
-                            <h4>Supported Types</h4>
-                            <ul>
-                                <li><strong>Strings:</strong> <code>"Alice Johnson"</code></li>
-                                <li><strong>Integers:</strong> <code>28</code>, <code>8080</code></li>
-                                <li><strong>Booleans:</strong> <code>true</code>, <code>false</code></li>
-                                <li><strong>Mixed:</strong> All types in same object</li>
-                            </ul>
-                        </div>
-                        
-                        <div class="function-card">
-                            <h4>Compilation</h4>
-                            <ul>
-                                <li>Native LLVM compilation</li>
-                                <li>Type-safe property access</li>
-                                <li>Efficient memory layout</li>
-                                <li>Zero-cost abstractions</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </section>
+    <h2 id="if-desc">Description</h2>
+    <p>
+      Braces are required around each branch. <code>else if</code> chains may be
+      arbitrarily long; each condition is evaluated only if all previous
+      conditions were falsy.
+    </p>
 
-            <!-- Modern Features Section -->
-            <section id="modern-features" class="content-section">
-                <h1><i class="fas fa-bolt"></i> Modern Language Features</h1>
-                <p class="section-intro">
-                    Cypescript now supports the full set of modern TypeScript constructs below.
-                    <strong>These examples run with the native compiler</strong> (<code>./build/cscript -r file.csc</code>) —
-                    the in-browser playground only supports the core language subset.
-                </p>
+    <h2 id="if-examples">Examples</h2>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let score: i32 = 85;
 
-                <h2>Control Flow: else-if, switch, break/continue</h2>
-                <div class="code-example">
-                    <div class="code-header">
-                        <span class="filename">control.csc</span>
-                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
-                    </div>
-                    <pre><code class="language-typescript">let score: i32 = 85;
-if (score >= 90) {
-    println("A");
-} else if (score >= 80) {
-    println("B");
+if (score &gt;= 90) {
+    println("Grade: A");
+} else if (score &gt;= 80) {
+    println("Grade: B");
 } else {
-    println("C");
-}
+    println("Grade: C or below");
+}</code></pre>
+    </div>
+    <div class="output-block"><span class="output-label">Output</span><pre>Grade: B</pre></div>
 
-let day: i32 = 6;
+    <h2 id="if-see">See also</h2>
+    <ul>
+      <li><a href="#ref-switch"><code>switch</code></a></li>
+      <li><a href="#ref-operators">Operators</a> — comparison and logical operators</li>
+    </ul>
+  </article>
+
+  <article id="ref-switch" class="doc-article" data-title="switch" data-crumbs="Reference &gt; Statements">
+    <h1><code>switch</code></h1>
+    <p class="article-summary">
+      The <strong><code>switch</code></strong> statement compares an expression
+      against a series of <code>case</code> clauses and executes the first
+      match, with C/JavaScript-style fallthrough.
+    </p>
+
+    <h2 id="switch-syntax">Syntax</h2>
+    <pre class="syntaxbox"><code>switch (expression) {
+  case value1:
+    statements
+    break;
+  case value2:
+  case value3:        // stacked cases share a body
+    statements
+    break;
+  default:
+    statements
+}</code></pre>
+    <dl>
+      <dt><code>expression</code></dt>
+      <dd>An <code>i32</code>, <code>f64</code>, or <code>string</code> expression.
+      String cases are compared by content.</dd>
+      <dt><code>default</code> <em>(optional)</em></dt>
+      <dd>Runs when no case matches. At most one <code>default</code> is allowed.</dd>
+    </dl>
+
+    <h2 id="switch-desc">Description</h2>
+    <p>
+      A case body without a terminating <code>break</code> <strong>falls
+      through</strong> into the next body, exactly as in JavaScript. Use
+      <code>break</code> to exit the switch.
+    </p>
+
+    <h2 id="switch-examples">Examples</h2>
+    <h3>Switching on strings</h3>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let command: string = "stop";
+
+switch (command) {
+    case "start":
+        println("starting...");
+        break;
+    case "stop":
+        println("stopping...");
+        break;
+    default:
+        println("unknown command");
+}</code></pre>
+    </div>
+    <div class="output-block"><span class="output-label">Output</span><pre>stopping...</pre></div>
+    <h3>Fallthrough</h3>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let day: i32 = 6;
 switch (day) {
     case 6:
     case 7:
-        println("Weekend");   // fallthrough works
+        println("Weekend!");
         break;
     default:
         println("Weekday");
-}
+}</code></pre>
+    </div>
+    <div class="output-block"><span class="output-label">Output</span><pre>Weekend!</pre></div>
 
-let total: i32 = 0;
-for (let i: i32 = 0; i < 10; i++) {
-    if (i == 3) { continue; }
-    if (i == 7) { break; }
+    <h2 id="switch-see">See also</h2>
+    <ul>
+      <li><a href="#ref-if-else"><code>if...else</code></a></li>
+      <li><a href="#ref-break-continue"><code>break</code> &amp; <code>continue</code></a></li>
+    </ul>
+  </article>
+
+  <article id="ref-loops" class="doc-article" data-keywords="for while do iterate iteration" data-title="Loops &amp; iteration" data-crumbs="Reference &gt; Statements">
+    <h1>Loops &amp; iteration</h1>
+    <p class="article-summary">
+      Cypescript provides four loop statements: <code>while</code>,
+      <code>do...while</code>, the classic three-part <code>for</code>, and
+      <code>for...of</code> for iterating arrays.
+    </p>
+
+    <h2 id="loop-while"><code>while</code></h2>
+    <pre class="syntaxbox"><code>while (condition) { statements }</code></pre>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let countdown: i32 = 3;
+while (countdown &gt; 0) {
+    println(countdown);
+    countdown--;
+}</code></pre>
+    </div>
+
+    <h2 id="loop-do"><code>do...while</code></h2>
+    <pre class="syntaxbox"><code>do { statements } while (condition);</code></pre>
+    <p>The body always runs at least once; the condition is checked afterwards.</p>
+
+    <h2 id="loop-for"><code>for</code></h2>
+    <pre class="syntaxbox"><code>for (initialization; condition; increment) { statements }</code></pre>
+    <p>
+      The increment accepts any assignment form: <code>i = i + 1</code>,
+      <code>i++</code>, <code>i += 2</code>, even array or property assignments.
+    </p>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let sum: i32 = 0;
+for (let i: i32 = 1; i &lt;= 10; i++) {
+    sum += i;
+}
+println(sum);   // 55</code></pre>
+    </div>
+
+    <h2 id="loop-forof"><code>for...of</code></h2>
+    <pre class="syntaxbox"><code>for (const element of iterable) { statements }</code></pre>
+    <dl>
+      <dt><code>element</code></dt>
+      <dd>A fresh binding for each element; <code>let</code> or <code>const</code>.</dd>
+      <dt><code>iterable</code></dt>
+      <dd>An <a href="#ref-arrays">array</a> (<code>i32[]</code>, <code>f64[]</code>, or <code>string[]</code>).</dd>
+    </dl>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let fruits: string[] = ["apple", "banana", "cherry"];
+for (const fruit of fruits) {
+    println(fruit);
+}</code></pre>
+    </div>
+
+    <h2 id="loop-see">See also</h2>
+    <ul>
+      <li><a href="#ref-break-continue"><code>break</code> &amp; <code>continue</code></a></li>
+      <li><a href="#ref-arrays">Arrays</a> — <code>.forEach()</code> as an alternative</li>
+    </ul>
+  </article>
+
+  <article id="ref-break-continue" class="doc-article" data-title="break &amp; continue" data-crumbs="Reference &gt; Statements">
+    <h1><code>break</code> &amp; <code>continue</code></h1>
+    <p class="article-summary">
+      <strong><code>break</code></strong> exits the nearest enclosing loop or
+      <code>switch</code>; <strong><code>continue</code></strong> skips to the
+      next iteration of the nearest enclosing loop.
+    </p>
+
+    <h2 id="bc-syntax">Syntax</h2>
+    <pre class="syntaxbox"><code>break;
+continue;</code></pre>
+
+    <h2 id="bc-desc">Description</h2>
+    <p>
+      Both statements are validated at compile time: using them outside a valid
+      context is a semantic error with a source position. Inside a
+      <code>switch</code> that is itself inside a loop, <code>continue</code>
+      applies to the loop while <code>break</code> exits the switch.
+    </p>
+    <p>
+      When a <code>break</code>, <code>continue</code>, or <code>return</code>
+      jumps out of a <a href="#ref-try-catch"><code>try</code></a> block, the
+      exception recovery point is correctly released.
+    </p>
+
+    <h2 id="bc-examples">Examples</h2>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let total: i32 = 0;
+for (let i: i32 = 0; i &lt; 10; i++) {
+    if (i == 3) { continue; }   // skip 3
+    if (i == 7) { break; }      // stop at 7
     total += i;
 }
-println(total); // 18</code></pre>
-                </div>
+println(total);</code></pre>
+    </div>
+    <div class="output-block"><span class="output-label">Output</span><pre>18</pre></div>
 
-                <h2>Floating-Point Arithmetic (f64)</h2>
-                <div class="code-example">
-                    <div class="code-header">
-                        <span class="filename">floats.csc</span>
-                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
-                    </div>
-                    <pre><code class="language-typescript">let pi: f64 = 3.14159;
-let r: f64 = 2.0;
-println(pi * r * r);      // 12.5664
-let mixed: f64 = 2 * pi;  // i32 promotes to f64 automatically
+    <h2 id="bc-see">See also</h2>
+    <ul>
+      <li><a href="#ref-loops">Loops &amp; iteration</a></li>
+      <li><a href="#ref-switch"><code>switch</code></a></li>
+    </ul>
+  </article>
 
-function circleArea(radius: f64): f64 {
-    return 3.14159 * radius * radius;
+  <article id="ref-functions" class="doc-article" data-title="function" data-crumbs="Reference &gt; Statements">
+    <h1><code>function</code></h1>
+    <p class="article-summary">
+      The <strong><code>function</code></strong> declaration defines a named
+      function with typed parameters and an optional return type. Functions
+      support recursion, generics, and closure-typed parameters.
+    </p>
+
+    <h2 id="fn-syntax">Syntax</h2>
+    <pre class="syntaxbox"><code>function name(param1: type1, param2: type2): returnType {
+  statements
 }
-println(circleArea(3.0)); // 28.2743</code></pre>
-                </div>
 
-                <h2>Template Literals &amp; String Concatenation</h2>
-                <div class="code-example">
-                    <div class="code-header">
-                        <span class="filename">strings.csc</span>
-                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
-                    </div>
-                    <pre><code class="language-typescript">let name: string = "Alice";
-let age: i32 = 28;
+function name&lt;T&gt;(param: T): T { ... }          // generic
+function name(f: (i32) =&gt; i32, x: i32): i32 { ... }  // closure parameter</code></pre>
+    <dl>
+      <dt><code>returnType</code> <em>(optional)</em></dt>
+      <dd>Defaults to <code>void</code> when omitted. Non-void functions return a
+      value with <a href="#ref-functions"><code>return expression;</code></a>.</dd>
+      <dt>Closure-typed parameters</dt>
+      <dd>A parameter annotated with a function type — <code>(i32) =&gt; i32</code> —
+      accepts any <a href="#ref-arrow-functions">arrow function</a> with a
+      matching shape, including inline arrows at the call site.</dd>
+    </dl>
 
-// + concatenation works with strings, numbers, and booleans
-println("Name: " + name + ", age: " + age);
+    <h2 id="fn-desc">Description</h2>
+    <p>
+      Functions may be declared in any order; the compiler processes
+      declarations before the main program, so forward references work.
+      Argument counts are validated at compile time with positioned errors.
+      Arguments are coerced to declared parameter types where safe
+      (<code>i32</code> → <code>f64</code>, boolean widening).
+    </p>
 
-// Backtick template literals with ${expression} interpolation
-println(`Hello ${name}, next year you are ${age + 1}!`);</code></pre>
-                </div>
+    <h2 id="fn-examples">Examples</h2>
+    <h3>Recursion</h3>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>function fib(n: i32): i32 {
+    if (n &lt; 2) { return n; }
+    return fib(n - 1) + fib(n - 2);
+}
+println(fib(10));   // 55</code></pre>
+    </div>
+    <h3>Generic functions</h3>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>function identity&lt;T&gt;(value: T): T {
+    return value;
+}
+println(identity&lt;string&gt;("generics work"));</code></pre>
+    </div>
+    <h3>Higher-order functions</h3>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>function twice(f: (x: i32) =&gt; i32, x: i32): i32 {
+    return f(f(x));
+}
+println(twice(n =&gt; n + 1, 40));   // 42</code></pre>
+    </div>
 
-                <h2>Compound Assignment &amp; Increment</h2>
-                <div class="code-example">
-                    <div class="code-header">
-                        <span class="filename">compound.csc</span>
-                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
-                    </div>
-                    <pre><code class="language-typescript">let x: i32 = 10;
-x += 5;   // 15
-x *= 2;   // 30
-x++;      // 31
-x--;      // 30
+    <h2 id="fn-see">See also</h2>
+    <ul>
+      <li><a href="#ref-arrow-functions">Arrow functions</a></li>
+      <li><a href="#ref-classes"><code>class</code></a> — methods</li>
+    </ul>
+  </article>
 
-// Works on object properties too
-counter.value += 10;</code></pre>
-                </div>
+  <article id="ref-classes" class="doc-article" data-keywords="constructor method new instance oop" data-title="class" data-crumbs="Reference &gt; Statements">
+    <h1><code>class</code></h1>
+    <p class="article-summary">
+      The <strong><code>class</code></strong> declaration defines a blueprint
+      with typed fields, an optional constructor, and methods.
+      <code>new ClassName(args)</code> creates an instance. Instances compile to
+      the same fast native structs as <a href="#ref-objects">object literals</a>.
+    </p>
 
-                <h2>Interfaces (Structural Typing)</h2>
-                <div class="code-example">
-                    <div class="code-header">
-                        <span class="filename">interfaces.csc</span>
-                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
-                    </div>
-                    <pre><code class="language-typescript">interface User {
+    <h2 id="class-syntax">Syntax</h2>
+    <pre class="syntaxbox"><code>class Name {
+  field1: type;                 // zero-value default
+  field2: type = expression;    // explicit default
+
+  constructor(param: type) {
+    this.field1 = param;
+  }
+
+  method(param: type): returnType {
+    statements
+  }
+}
+
+let instance = new Name(args);
+let typed: Name = new Name(args);   // class names are type annotations</code></pre>
+    <dl>
+      <dt>Fields</dt>
+      <dd>Without an explicit default, fields initialize to their zero value:
+      <code>0</code>, <code>0.0</code>, <code>""</code>, or <code>false</code>.</dd>
+      <dt><code>constructor</code> <em>(optional)</em></dt>
+      <dd>Runs after field defaults are applied. Assign fields through
+      <code>this</code>.</dd>
+      <dt>Methods</dt>
+      <dd>Use <code>this</code> to read and write fields. Calls are direct
+      (no dynamic dispatch) and inlinable.</dd>
+    </dl>
+
+    <h2 id="class-examples">Examples</h2>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>class BankAccount {
+    owner: string;
+    balance: i32;
+
+    constructor(owner: string, opening: i32) {
+        this.owner = owner;
+        this.balance = opening;
+    }
+
+    deposit(amount: i32): i32 {
+        this.balance += amount;
+        return this.balance;
+    }
+
+    withdraw(amount: i32): i32 {
+        if (amount &gt; this.balance) {
+            throw "insufficient funds for " + this.owner;
+        }
+        this.balance -= amount;
+        return this.balance;
+    }
+}
+
+let account = new BankAccount("Alice", 100);
+println(account.deposit(50));    // 150
+println(account.withdraw(30));   // 120
+account.balance = 1000;          // direct field assignment works too</code></pre>
+    </div>
+
+    <div class="notecard note">
+      <p><strong>Note:</strong> class inheritance (<code>extends</code>) is not
+      yet supported — classes are flat. Interfaces support
+      <a href="#ref-interfaces"><code>extends</code></a> for type composition.</p>
+    </div>
+
+    <h2 id="class-see">See also</h2>
+    <ul>
+      <li><a href="#ref-objects">Objects</a> — literals with methods, the underlying machinery</li>
+      <li><a href="#ref-interfaces"><code>interface</code></a></li>
+    </ul>
+  </article>
+
+  <article id="ref-interfaces" class="doc-article" data-title="interface &amp; type" data-crumbs="Reference &gt; Statements">
+    <h1><code>interface</code> &amp; <code>type</code></h1>
+    <p class="article-summary">
+      The <strong><code>interface</code></strong> declaration defines a
+      structural type checked at compile time — with zero runtime cost.
+      <strong><code>type</code></strong> creates a (possibly generic) type alias.
+    </p>
+
+    <h2 id="iface-syntax">Syntax</h2>
+    <pre class="syntaxbox"><code>interface Name {
+  property: type;
+  method(): returnType;      // recorded, presence-checked
+}
+
+interface Child extends Parent { ... }
+
+type Alias&lt;T&gt; = Map&lt;T, T[]&gt;;</code></pre>
+
+    <h2 id="iface-desc">Description</h2>
+    <p>
+      When an object literal is assigned to an interface-typed variable, the
+      compiler verifies <em>structurally</em> that every member exists with a
+      compatible type — a missing or mistyped property is a compile error with
+      a clear message. Extra properties beyond the interface are allowed.
+      <code>extends</code> merges the parent's members transitively.
+    </p>
+    <p>
+      Interfaces have no runtime representation: no tags, no metadata, nothing
+      in the binary. They are promises checked while compiling.
+    </p>
+
+    <h2 id="iface-examples">Examples</h2>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>interface User {
     name: string;
     age: i32;
 }
@@ -1077,951 +898,709 @@ interface Admin extends User {
     level: i32;
 }
 
-// Checked at compile time: a missing or mistyped property is a compile error
-let user: User = { name: "Alice", age: 28 };
-let admin: Admin = { name: "Bob", age: 35, level: 9 };</code></pre>
-                </div>
+let user: User = { name: "Alice", age: 28 };          // ✓ checked
+let admin: Admin = { name: "Bob", age: 35, level: 9 }; // ✓ checked</code></pre>
+    </div>
+    <h3>Violations are compile errors</h3>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let bad: User = { name: "Dave" };</code></pre>
+    </div>
+    <div class="output-block"><span class="output-label">Compiler output</span>
+      <pre>Type Error: Object assigned to 'bad' does not satisfy interface 'User':
+missing property 'age'</pre>
+    </div>
+    <h3>Generic type aliases</h3>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>type Graph&lt;T&gt; = Map&lt;T, T[]&gt;;
 
-                <h2>Object Methods &amp; <code>this</code></h2>
-                <div class="code-example">
-                    <div class="code-header">
-                        <span class="filename">methods.csc</span>
-                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
-                    </div>
-                    <pre><code class="language-typescript">let calculator = {
-    value: 0,
-    add: function(x: i32): i32 {
-        this.value = this.value + x;
-        return this.value;
-    },
-    reset(): void {          // shorthand method syntax
-        this.value = 0;
-    }
-};
+function bfs&lt;T&gt;(graph: Graph&lt;T&gt;, start: T): T[] { /* ... */ }</code></pre>
+    </div>
 
-calculator.add(5);           // 5
-calculator.value = 42;       // direct property assignment</code></pre>
-                </div>
+    <h2 id="iface-see">See also</h2>
+    <ul>
+      <li><a href="#ref-objects">Objects</a></li>
+      <li><a href="#ref-types">Data types</a></li>
+    </ul>
+  </article>
 
-                <h2>Object Destructuring</h2>
-                <div class="code-example">
-                    <div class="code-header">
-                        <span class="filename">destructure.csc</span>
-                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
-                    </div>
-                    <pre><code class="language-typescript">let user = { name: "Alice", age: 28 };
-let { name, age } = user;
-println(`${name} is ${age}`); // Alice is 28</code></pre>
-                </div>
+  <article id="ref-try-catch" class="doc-article" data-keywords="exception exceptions error errors finally" data-title="try...catch &amp; throw" data-crumbs="Reference &gt; Statements">
+    <h1><code>try...catch</code> &amp; <code>throw</code></h1>
+    <p class="article-summary">
+      The <strong><code>try...catch</code></strong> statement handles exceptions
+      raised by <strong><code>throw</code></strong>, including throws that
+      unwind through function and method calls. An optional
+      <code>finally</code> block runs on both paths.
+    </p>
 
-                <h2>Exception Handling</h2>
-                <div class="code-example">
-                    <div class="code-header">
-                        <span class="filename">exceptions.csc</span>
-                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
-                    </div>
-                    <pre><code class="language-typescript">function risky(n: i32): i32 {
-    if (n < 0) {
+    <h2 id="try-syntax">Syntax</h2>
+    <pre class="syntaxbox"><code>try {
+  statements
+} catch (e) {
+  statements      // e is bound to the thrown message (string)
+} finally {
+  statements      // optional
+}
+
+throw expression;</code></pre>
+    <dl>
+      <dt><code>e</code></dt>
+      <dd>A <code>const</code> string binding holding the thrown value, scoped to
+      the catch block. Non-string thrown values are converted to strings.</dd>
+      <dt><code>throw expression</code></dt>
+      <dd>Raises an exception. Control transfers to the innermost active
+      <code>catch</code>, unwinding any function calls in between. An uncaught
+      throw prints <code>Uncaught exception: ...</code> and exits with code 1.</dd>
+    </dl>
+
+    <h2 id="try-desc">Description</h2>
+    <p>
+      Exceptions are implemented with a lightweight
+      <code>setjmp</code>/<code>longjmp</code> runtime — no unwind tables, no
+      overhead when nothing throws. Nested <code>try</code> blocks form a stack;
+      rethrowing from a <code>catch</code> propagates outward.
+      <code>return</code>, <code>break</code>, and <code>continue</code> that exit
+      a try block release its recovery point correctly.
+    </p>
+    <div class="notecard warning">
+      <p><strong>Warning:</strong> try nesting is limited to 64 active levels at
+      runtime.</p>
+    </div>
+
+    <h2 id="try-examples">Examples</h2>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>function risky(n: i32): i32 {
+    if (n &lt; 0) {
         throw "negative input: " + n;
     }
     return n * 2;
 }
 
 try {
-    println(risky(-1));
+    println(risky(21));    // 42
+    println(risky(-1));    // throws — next line never runs
 } catch (e) {
     println("caught: " + e);
 } finally {
     println("cleanup always runs");
 }</code></pre>
-                </div>
-
-                <h2>Modules (import / export)</h2>
-                <div class="code-example">
-                    <div class="code-header">
-                        <span class="filename">main.csc</span>
-                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
-                    </div>
-                    <pre><code class="language-typescript">// math_utils.csc
-export function square(x: i32): i32 { return x * x; }
-
-// main.csc — modules are inlined at compile time
-import { square } from "./math_utils";
-println(square(7)); // 49</code></pre>
-                </div>
-
-                <h2>Arrow Functions &amp; Closures</h2>
-                <p>
-                    Arrows are first-class expressions. Captures are <strong>by-value snapshots</strong> —
-                    capture an object to share mutable state through its pointer.
-                </p>
-                <div class="code-example">
-                    <div class="code-header">
-                        <span class="filename">arrows.csc</span>
-                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
-                    </div>
-                    <pre><code class="language-typescript">let double = (x: i32): i32 => x * 2;
-let add = (a: i32, b: i32) => a + b;      // return type inferred
-println(double(21));                       // 42
-
-// Callback array methods
-let numbers: i32[] = [1, 2, 3, 4, 5, 6];
-let doubled = numbers.map(x => x * 2);
-let evens = numbers.filter(x => x % 2 == 0);
-let sum = numbers.reduce((acc, x) => acc + x, 0);   // 21
-let firstBig = numbers.find(x => x > 4);            // 5
-numbers.forEach(x => { println(x); });
-
-// Shared mutable state: capture an object
-let counter = { count: 0 };
-let increment = (): i32 => {
-    counter.count += 1;
-    return counter.count;
-};</code></pre>
-                </div>
-
-                <h2>TypeScript Compatibility Layer</h2>
-                <p>These TypeScript idioms work as-is, so many <code>.ts</code> scripts compile with minute changes:</p>
-                <div class="code-example">
-                    <div class="code-header">
-                        <span class="filename">ts_compat.csc</span>
-                        <span class="native-badge"><i class="fas fa-terminal"></i> native only</span>
-                    </div>
-                    <pre><code class="language-typescript">console.log("multiple", "args", 42);   // maps to println, space-joined
-if (x === 5 && y !== 3) { ... }        // strict equality operators
-console.log(Math.sqrt(16), Math.pow(2, 10), Math.floor(3.7));
-const n: number = 1.5;                  // number compiles to f64</code></pre>
-                </div>
-
-                <h2>Compile-Time Optimizer</h2>
-                <p>
-                    The compiler folds constant expressions and removes dead branches
-                    (<code>if (false) {...}</code>, <code>while (false) {...}</code>) before LLVM codegen,
-                    then applies LLVM <code>-O2</code>. Disable the AST pass with
-                    <code>--no-fold</code> for debugging.
-                </p>
-            </section>
-
-            <!-- C++ Integration Section -->
-            <section id="cpp-integration" class="content-section">
-                <h1>C++ Integration (Advanced)</h1>
-                <p>For programs that need additional functionality beyond native TypeScript features, Cypescript provides seamless C++ integration with 30+ standard library functions.</p>
-                
-                <div class="feature-grid">
-                    <div class="feature-card">
-                        <h3><i class="fas fa-code"></i> String Functions</h3>
-                        <p>Advanced string manipulation and processing</p>
-                    </div>
-                    <div class="feature-card">
-                        <h3><i class="fas fa-list"></i> Array Functions</h3>
-                        <p>Mathematical operations on arrays</p>
-                    </div>
-                    <div class="feature-card">
-                        <h3><i class="fas fa-file"></i> File I/O</h3>
-                        <p>Read and write files from your programs</p>
-                    </div>
-                    <div class="feature-card">
-                        <h3><i class="fas fa-database"></i> JSON Functions</h3>
-                        <p>Create and manipulate JSON data</p>
-                    </div>
-                </div>
-
-                <div class="interactive-example">
-                    <h2>String Functions</h2>
-                    <p>Advanced string manipulation with C++ integration.</p>
-                    
-                    <div class="code-example">
-                        <div class="code-header">
-                            <span class="filename">string-functions.csc</span>
-                            <button class="run-btn" onclick="runExample('string-functions-example')">
-                                <i class="fas fa-play"></i> Run
-                            </button>
-                        </div>
-                        <pre><code class="language-typescript" id="string-functions-example">// String processing with C++ functions
-let text: string = "Hello World";
-
-// String manipulation
-let reversed: string = string_reverse(text);
-let upper: string = string_upper(text);
-let lower: string = string_lower(text);
-let length: i32 = string_length(text);
-
-println("Original: " + text);
-println("Reversed: " + reversed);
-println("Uppercase: " + upper);
-println("Lowercase: " + lower);
-println("Length: " + length);
-
-// String searching
-let pos: i32 = string_find(text, "World");
-println("Position of 'World': " + pos);
-
-// Substring extraction
-let substr: string = string_substring(text, 0, 5);
-println("First 5 characters: " + substr);</code></pre>
-                        <div class="output" id="string-functions-example-output"></div>
-                    </div>
-                </div>
-
-                <div class="interactive-example">
-                    <h2>JSON Functions</h2>
-                    <p>Create and manipulate JSON data with C++ integration.</p>
-                    
-                    <div class="code-example">
-                        <div class="code-header">
-                            <span class="filename">json-functions.csc</span>
-                            <button class="run-btn" onclick="runExample('json-functions-example')">
-                                <i class="fas fa-play"></i> Run
-                            </button>
-                        </div>
-                        <pre><code class="language-typescript" id="json-functions-example">// JSON manipulation with C++ functions
-let user: string = json_create_object();
-
-// Add properties
-user = json_add_string(user, "name", "Alice Johnson");
-user = json_add_string(user, "role", "Developer");
-user = json_add_int(user, "age", 28);
-user = json_add_boolean(user, "active", 1);
-
-println("User JSON:");
-println(json_prettify(user));
-
-// Retrieve values
-let name: string = json_get_string(user, "name");
-let age: i32 = json_get_int(user, "age");
-let active: i32 = json_get_boolean(user, "active");
-
-println("Retrieved values:");
-println("Name: " + name);
-println("Age: " + age);
-println("Active: " + active);</code></pre>
-                        <div class="output" id="json-functions-example-output"></div>
-                    </div>
-                </div>
-
-                <div class="interactive-example">
-                    <h2>File I/O Functions</h2>
-                    <p>Read and write files with C++ integration.</p>
-                    
-                    <div class="code-example">
-                        <div class="code-header">
-                            <span class="filename">file-io.csc</span>
-                            <button class="run-btn" onclick="runExample('file-io-example')">
-                                <i class="fas fa-play"></i> Run
-                            </button>
-                        </div>
-                        <pre><code class="language-typescript" id="file-io-example">// File I/O with C++ functions
-let filename: string = "test.txt";
-let content: string = "Hello from Cypescript!";
-
-// Write to file
-let writeResult: i32 = file_write(filename, content);
-if (writeResult == 1) {
-    println("✅ File written successfully");
-} else {
-    println("❌ Failed to write file");
-}
-
-// Check if file exists
-let exists: i32 = file_exists(filename);
-if (exists == 1) {
-    println("✅ File exists");
-    
-    // Read from file
-    let readContent: string = file_read(filename);
-    println("File content: " + readContent);
-} else {
-    println("❌ File does not exist");
-}</code></pre>
-                        <div class="output" id="file-io-example-output"></div>
-                    </div>
-                </div>
-
-                <div class="function-reference">
-                    <h2>C++ Function Reference</h2>
-                    <p>Complete reference of available C++ integration functions.</p>
-                    
-                    <div class="function-grid">
-                        <div class="function-card">
-                            <h4>String Functions</h4>
-                            <ul>
-                                <li><code>string_reverse(str)</code> - Reverse string</li>
-                                <li><code>string_upper(str)</code> - Convert to uppercase</li>
-                                <li><code>string_lower(str)</code> - Convert to lowercase</li>
-                                <li><code>string_length(str)</code> - Get string length</li>
-                                <li><code>string_substring(str, start, len)</code> - Extract substring</li>
-                                <li><code>string_find(str, substr)</code> - Find substring position</li>
-                            </ul>
-                        </div>
-                        
-                        <div class="function-card">
-                            <h4>Array Functions</h4>
-                            <ul>
-                                <li><code>array_sum_i32(arr, size)</code> - Sum array elements</li>
-                                <li><code>array_max_i32(arr, size)</code> - Find maximum</li>
-                                <li><code>array_min_i32(arr, size)</code> - Find minimum</li>
-                            </ul>
-                        </div>
-                        
-                        <div class="function-card">
-                            <h4>File I/O Functions</h4>
-                            <ul>
-                                <li><code>file_read(filename)</code> - Read file contents</li>
-                                <li><code>file_write(filename, content)</code> - Write to file</li>
-                                <li><code>file_exists(filename)</code> - Check if file exists</li>
-                            </ul>
-                        </div>
-                        
-                        <div class="function-card">
-                            <h4>JSON Functions</h4>
-                            <ul>
-                                <li><code>json_create_object()</code> - Create empty object</li>
-                                <li><code>json_add_string(obj, key, value)</code> - Add string</li>
-                                <li><code>json_add_int(obj, key, value)</code> - Add integer</li>
-                                <li><code>json_get_string(obj, key)</code> - Get string value</li>
-                                <li><code>json_prettify(jsonString)</code> - Format JSON</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="compilation-note">
-                    <h3>📝 Compilation Note</h3>
-                    <p>C++ integration functions require special compilation. Use:</p>
-                    <pre><code>./compile-with-cpp.sh your_program.csc output_name</code></pre>
-                    <p>For native TypeScript-style development, use regular compilation:</p>
-                    <pre><code>./build/cscript your_program.csc</code></pre>
-                </div>
-            </section>
-
-            <!-- Performance Section -->
-            <section id="performance" class="content-section">
-                <h1><i class="fas fa-tachometer-alt"></i> Performance Benchmarks</h1>
-                <p class="section-intro">
-                    Comprehensive performance comparison between Cypescript native compilation and JavaScript/TypeScript.
-                </p>
-
-                <!-- Cross-language benchmark (2026) -->
-                <div class="benchmark-summary">
-                    <h2>🌍 Cross-Language: Cypescript vs TypeScript vs Python vs Rust</h2>
-                    <p>
-                        The <em>exact same algorithm</em> in four languages (<code>benchmarks/cross/</code>),
-                        best of 3 wall-clock runs on Apple Silicon — Node v26, Python 3.14, rustc 1.89:
-                    </p>
-                    <div style="overflow-x:auto;">
-                        <table style="width:100%; border-collapse:collapse; margin:1rem 0;">
-                            <thead>
-                                <tr style="border-bottom:2px solid rgba(128,128,128,0.4); text-align:left;">
-                                    <th style="padding:0.5rem;">Benchmark</th>
-                                    <th style="padding:0.5rem;">Cypescript</th>
-                                    <th style="padding:0.5rem;">Node (TS)</th>
-                                    <th style="padding:0.5rem;">Python</th>
-                                    <th style="padding:0.5rem;">Rust</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr style="border-bottom:1px solid rgba(128,128,128,0.2);">
-                                    <td style="padding:0.5rem;">Primes &lt; 1M (trial division)</td>
-                                    <td style="padding:0.5rem;"><strong>0.051s</strong> 🥇</td>
-                                    <td style="padding:0.5rem;">0.146s</td>
-                                    <td style="padding:0.5rem;">1.777s</td>
-                                    <td style="padding:0.5rem;">0.050s</td>
-                                </tr>
-                                <tr>
-                                    <td style="padding:0.5rem;">Fibonacci fib(35) recursive</td>
-                                    <td style="padding:0.5rem;"><strong>0.025s</strong> 🥇</td>
-                                    <td style="padding:0.5rem;">0.125s</td>
-                                    <td style="padding:0.5rem;">0.621s</td>
-                                    <td style="padding:0.5rem;">0.026s</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <p>
-                        <strong>Within ~2% of Rust</strong>, 2.9–5x faster than Node.js running the
-                        identical TypeScript source, and 25–35x faster than Python.
-                        Reproduce with <code>bash benchmarks/cross/run_cross_benchmarks.sh</code>.
-                    </p>
-                </div>
-
-                <!-- Performance Overview -->
-                <div class="performance-overview">
-                    <div class="benchmark-summary">
-                        <h2>🏆 Cypescript (-O2) vs Node.js v22</h2>
-                        
-                        <div class="chart-container">
-                            <canvas id="multiLanguageChart" width="400" height="250"></canvas>
-                        </div>
-                        
-                        <div class="results-grid">
-                            <div class="result-card winner">
-                                <h3>Simple Loop (100M iterations)</h3>
-                                <div class="performance-ranking">
-                                    <div class="rank-item gold">🥇 Cypescript: 17ms</div>
-                                    <div class="rank-item silver">🥈 Node.js: 142ms</div>
-                                </div>
-                                <p class="winner-text">🔥 <strong>8.3x faster</strong></p>
-                            </div>
-                            
-                            <div class="result-card winner">
-                                <h3>Fibonacci (10M function calls)</h3>
-                                <div class="performance-ranking">
-                                    <div class="rank-item gold">🥇 Cypescript: 63ms</div>
-                                    <div class="rank-item silver">🥈 Node.js: 189ms</div>
-                                </div>
-                                <p class="winner-text">🔥 <strong>3.0x faster</strong></p>
-                            </div>
-                            
-                            <div class="result-card winner">
-                                <h3>Matrix Multiply (300³ nested loops)</h3>
-                                <div class="performance-ranking">
-                                    <div class="rank-item gold">🥇 Cypescript: 6ms</div>
-                                    <div class="rank-item silver">🥈 Node.js: 101ms</div>
-                                </div>
-                                <p class="winner-text">🔥 <strong>16.8x faster</strong></p>
-                            </div>
-
-                            <div class="result-card winner">
-                                <h3>Prime Sieve (500K)</h3>
-                                <div class="performance-ranking">
-                                    <div class="rank-item gold">🥇 Cypescript: 13ms</div>
-                                    <div class="rank-item silver">🥈 Node.js: 87ms</div>
-                                </div>
-                                <p class="winner-text">🔥 <strong>6.6x faster</strong></p>
-                            </div>
-                        </div>
-                        
-                        <div class="performance-insights">
-                            <h3>📊 Why Cypescript Is Faster</h3>
-                            <div class="insight-grid">
-                                <div class="insight-item">
-                                    <h4>🔥 Ahead-of-Time Compilation</h4>
-                                    <p>LLVM compiles to optimized native machine code before execution — no JIT warmup needed</p>
-                                </div>
-                                <div class="insight-item">
-                                    <h4>⚡ -O2 Optimizations</h4>
-                                    <p>Function inlining, loop unrolling, vectorization, constant folding, dead code elimination</p>
-                                </div>
-                                <div class="insight-item">
-                                    <h4>🎯 Static Types</h4>
-                                    <p>i32 types compile to direct CPU integer instructions — no type checks at runtime</p>
-                                </div>
-                                <div class="insight-item">
-                                    <h4>🚀 Zero Overhead</h4>
-                                    <p>No garbage collector, no runtime, no interpreter — just raw machine code</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Speedup Visualization -->
-                <div class="speedup-visual">
-                    <h2>⚡ Speedup at a Glance</h2>
-                    <div class="speedup-bars">
-                        <div class="speedup-row">
-                            <span class="speedup-label">Simple Loop (100M)</span>
-                            <div class="speedup-track">
-                                <div class="speedup-bar-csc" style="width: 100%;">
-                                    <span>Cypescript 17ms</span>
-                                </div>
-                            </div>
-                            <div class="speedup-track">
-                                <div class="speedup-bar-node" style="width: 100%;">
-                                    <span>Node.js 142ms</span>
-                                </div>
-                            </div>
-                            <span class="speedup-badge">8.3x</span>
-                        </div>
-                        <div class="speedup-row">
-                            <span class="speedup-label">Fibonacci (10M calls)</span>
-                            <div class="speedup-track">
-                                <div class="speedup-bar-csc" style="width: 33%;">
-                                    <span>63ms</span>
-                                </div>
-                            </div>
-                            <div class="speedup-track">
-                                <div class="speedup-bar-node" style="width: 100%;">
-                                    <span>189ms</span>
-                                </div>
-                            </div>
-                            <span class="speedup-badge">3.0x</span>
-                        </div>
-                        <div class="speedup-row">
-                            <span class="speedup-label">Matrix Multiply (300³)</span>
-                            <div class="speedup-track">
-                                <div class="speedup-bar-csc" style="width: 6%;">
-                                    <span>6ms</span>
-                                </div>
-                            </div>
-                            <div class="speedup-track">
-                                <div class="speedup-bar-node" style="width: 100%;">
-                                    <span>101ms</span>
-                                </div>
-                            </div>
-                            <span class="speedup-badge fire">16.8x</span>
-                        </div>
-                        <div class="speedup-row">
-                            <span class="speedup-label">Prime Sieve (500K)</span>
-                            <div class="speedup-track">
-                                <div class="speedup-bar-csc" style="width: 15%;">
-                                    <span>13ms</span>
-                                </div>
-                            </div>
-                            <div class="speedup-track">
-                                <div class="speedup-bar-node" style="width: 100%;">
-                                    <span>87ms</span>
-                                </div>
-                            </div>
-                            <span class="speedup-badge">6.6x</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Benchmark Methodology -->
-                <div class="benchmark-details">
-                    <h2>📊 Benchmark Methodology</h2>
-                    <div class="methodology-grid">
-                        <div class="method-card">
-                            <h3>Environment</h3>
-                            <ul>
-                                <li><strong>Hardware:</strong> Apple Silicon (M-series)</li>
-                                <li><strong>Cypescript:</strong> LLVM -O2 native compilation</li>
-                                <li><strong>Node.js:</strong> v22 with V8 JIT</li>
-                                <li><strong>Metric:</strong> Best of 3 runs (user time)</li>
-                            </ul>
-                        </div>
-                        <div class="method-card">
-                            <h3>Benchmarks</h3>
-                            <ul>
-                                <li><strong>Simple Loop:</strong> 100M iterations with modulo</li>
-                                <li><strong>Fibonacci:</strong> 10M function calls, varying input</li>
-                                <li><strong>Matrix:</strong> 300³ nested loops with arithmetic</li>
-                                <li><strong>Primes:</strong> Trial division up to 500K</li>
-                            </ul>
-                        </div>
-                        <div class="method-card">
-                            <h3>Run It Yourself</h3>
-                            <div class="run-command">
-                                <code>./benchmarks/run_benchmarks.sh</code>
-                            </div>
-                            <p>All benchmark source code is in the <code>benchmarks/</code> directory with matching <code>.csc</code> and <code>.ts</code> files.</p>
-                        </div>
-                    </div>
-                </div>
-            </section>
-            <section id="architecture" class="content-section">
-                <h1><i class="fas fa-project-diagram"></i> Architecture: TypeScript vs Cypescript</h1>
-                <p class="section-intro">
-                    TypeScript and Cypescript share similar syntax, but their execution models are fundamentally different.
-                    Understanding this difference explains why Cypescript achieves 3–17x better performance.
-                </p>
-
-                <div class="arch-comparison">
-                    <!-- Side by side pipelines -->
-                    <div class="arch-pipelines">
-                        <!-- TypeScript Pipeline -->
-                        <div class="arch-pipeline ts-pipeline">
-                            <h2 class="arch-title ts-color">TypeScript / JavaScript</h2>
-                            <p class="arch-subtitle">Interpreted → JIT Compiled at Runtime</p>
-
-                            <div class="arch-flow">
-                                <div class="arch-step">
-                                    <div class="arch-icon">📝</div>
-                                    <div class="arch-label">Source Code</div>
-                                    <div class="arch-detail">.ts / .js files</div>
-                                </div>
-                                <div class="arch-arrow">▼</div>
-                                <div class="arch-step">
-                                    <div class="arch-icon">🔄</div>
-                                    <div class="arch-label">TSC Transpiler</div>
-                                    <div class="arch-detail">Types stripped → plain JS</div>
-                                </div>
-                                <div class="arch-arrow">▼</div>
-                                <div class="arch-step arch-runtime">
-                                    <div class="arch-runtime-label">⏱️ All of this happens at runtime</div>
-                                    <div class="arch-step-inner">
-                                        <div class="arch-icon">🔍</div>
-                                        <div class="arch-label">V8 Parser</div>
-                                        <div class="arch-detail">Parse → AST → Bytecode</div>
-                                    </div>
-                                    <div class="arch-arrow-inner">▼</div>
-                                    <div class="arch-step-inner">
-                                        <div class="arch-icon">🏃</div>
-                                        <div class="arch-label">Ignition Interpreter</div>
-                                        <div class="arch-detail">Execute bytecode (slow start)</div>
-                                    </div>
-                                    <div class="arch-arrow-inner">▼</div>
-                                    <div class="arch-step-inner">
-                                        <div class="arch-icon">🔥</div>
-                                        <div class="arch-label">TurboFan JIT</div>
-                                        <div class="arch-detail">Hot paths → machine code</div>
-                                    </div>
-                                    <div class="arch-arrow-inner">▼</div>
-                                    <div class="arch-step-inner highlight-bad">
-                                        <div class="arch-icon">🗑️</div>
-                                        <div class="arch-label">Garbage Collector</div>
-                                        <div class="arch-detail">Pauses execution to free memory</div>
-                                    </div>
-                                </div>
-                                <div class="arch-arrow">▼</div>
-                                <div class="arch-step">
-                                    <div class="arch-icon">📤</div>
-                                    <div class="arch-label">Output</div>
-                                    <div class="arch-detail">Result</div>
-                                </div>
-                            </div>
-
-                            <div class="arch-traits">
-                                <span class="trait trait-warn">Runtime type checks</span>
-                                <span class="trait trait-warn">GC pauses</span>
-                                <span class="trait trait-warn">JIT warmup cost</span>
-                                <span class="trait trait-ok">Dynamic & flexible</span>
-                            </div>
-                        </div>
-
-                        <!-- VS Divider -->
-                        <div class="arch-vs">VS</div>
-
-                        <!-- Cypescript Pipeline -->
-                        <div class="arch-pipeline csc-pipeline">
-                            <h2 class="arch-title csc-color">Cypescript</h2>
-                            <p class="arch-subtitle">Compiled Ahead-of-Time via LLVM</p>
-
-                            <div class="arch-flow">
-                                <div class="arch-step">
-                                    <div class="arch-icon">📝</div>
-                                    <div class="arch-label">Source Code</div>
-                                    <div class="arch-detail">.csc files</div>
-                                </div>
-                                <div class="arch-arrow">▼</div>
-                                <div class="arch-step arch-compile">
-                                    <div class="arch-compile-label">🔨 All of this happens at compile time</div>
-                                    <div class="arch-step-inner">
-                                        <div class="arch-icon">🔤</div>
-                                        <div class="arch-label">Lexer</div>
-                                        <div class="arch-detail">Source → Tokens</div>
-                                    </div>
-                                    <div class="arch-arrow-inner">▼</div>
-                                    <div class="arch-step-inner">
-                                        <div class="arch-icon">🌳</div>
-                                        <div class="arch-label">Parser</div>
-                                        <div class="arch-detail">Tokens → AST</div>
-                                    </div>
-                                    <div class="arch-arrow-inner">▼</div>
-                                    <div class="arch-step-inner">
-                                        <div class="arch-icon">⚙️</div>
-                                        <div class="arch-label">CodeGen</div>
-                                        <div class="arch-detail">AST → LLVM IR</div>
-                                    </div>
-                                    <div class="arch-arrow-inner">▼</div>
-                                    <div class="arch-step-inner highlight-good">
-                                        <div class="arch-icon">🚀</div>
-                                        <div class="arch-label">LLVM -O2</div>
-                                        <div class="arch-detail">Inlining, vectorization, unrolling</div>
-                                    </div>
-                                </div>
-                                <div class="arch-arrow">▼</div>
-                                <div class="arch-step highlight-good">
-                                    <div class="arch-icon">💻</div>
-                                    <div class="arch-label">Native Binary</div>
-                                    <div class="arch-detail">Direct CPU execution</div>
-                                </div>
-                                <div class="arch-arrow">▼</div>
-                                <div class="arch-step">
-                                    <div class="arch-icon">📤</div>
-                                    <div class="arch-label">Output</div>
-                                    <div class="arch-detail">Result</div>
-                                </div>
-                            </div>
-
-                            <div class="arch-traits">
-                                <span class="trait trait-good">Zero runtime overhead</span>
-                                <span class="trait trait-good">No GC pauses</span>
-                                <span class="trait trait-good">Static types → CPU ops</span>
-                                <span class="trait trait-good">LLVM optimizations</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Key Differences Table -->
-                    <div class="arch-diff-table">
-                        <h2>⚡ Key Architectural Differences</h2>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th></th>
-                                    <th class="ts-color">TypeScript (Node.js)</th>
-                                    <th class="csc-color">Cypescript</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td><strong>Compilation</strong></td>
-                                    <td>JIT — compiled during execution</td>
-                                    <td>AOT — compiled before execution</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Types at runtime</strong></td>
-                                    <td>Erased — all values are JS objects</td>
-                                    <td>Preserved — i32 maps to CPU int</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Memory</strong></td>
-                                    <td>GC-managed heap allocation</td>
-                                    <td>Stack allocation, no GC</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Startup</strong></td>
-                                    <td>~30ms (V8 init + parse + compile)</td>
-                                    <td>~0.1ms (just exec the binary)</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Peak speed</strong></td>
-                                    <td>Near-native after JIT warmup</td>
-                                    <td>Native from first instruction</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Backend</strong></td>
-                                    <td>V8 (Google Chrome engine)</td>
-                                    <td>LLVM (clang/rustc/swift backend)</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Output</strong></td>
-                                    <td>Runs inside Node.js / browser</td>
-                                    <td>Standalone native executable</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <!-- The "aha" diagram -->
-                    <div class="arch-insight-box">
-                        <h2>💡 The Core Insight</h2>
-                        <div class="arch-insight-content">
-                            <div class="arch-insight-left">
-                                <code class="arch-code ts-bg">let x: i32 = 5 + 3;</code>
-                                <div class="arch-insight-arrow">↓ TypeScript</div>
-                                <div class="arch-insight-steps">
-                                    <span>Parse</span> → <span>Bytecode</span> → <span>Interpret</span> → <span>Profile</span> → <span>JIT</span> → <span>Execute</span>
-                                </div>
-                            </div>
-                            <div class="arch-insight-divider"></div>
-                            <div class="arch-insight-right">
-                                <code class="arch-code csc-bg">let x: i32 = 5 + 3;</code>
-                                <div class="arch-insight-arrow">↓ Cypescript</div>
-                                <div class="arch-insight-steps">
-                                    <span class="arch-compile-step">Compile</span> → <code class="arch-asm">mov eax, 8</code>
-                                </div>
-                            </div>
-                        </div>
-                        <p class="arch-insight-caption">
-                            Cypescript resolves <code>5 + 3</code> to the constant <code>8</code> at compile time.
-                            TypeScript discovers this optimization only after running the code thousands of times.
-                        </p>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Examples Section -->
-            <section id="examples" class="content-section">
-                <h1>Complete Examples</h1>
-                
-                <div class="example-gallery">
-                    <div class="example-item">
-                        <h2>Factorial Calculator</h2>
-                        <div class="code-example">
-                            <div class="code-header">
-                                <span class="filename">factorial.csc</span>
-                                <button class="run-btn" onclick="runExample('factorial-example')">
-                                    <i class="fas fa-play"></i> Run
-                                </button>
-                            </div>
-                            <pre><code class="language-typescript" id="factorial-example">let n: i32 = 5;
-let factorial: i32 = 1;
-let counter: i32 = 1;
-
-print("Calculating factorial of ");
-println(n);
-
-while (counter <= n) {
-    factorial = factorial * counter;
-    print("Step ");
-    print(counter);
-    print(": ");
-    println(factorial);
-    counter = counter + 1;
-}
-
-print("Final result: ");
-print(n);
-print("! = ");
-println(factorial);</code></pre>
-                            <div class="output" id="factorial-example-output"></div>
-                        </div>
-                    </div>
-
-                    <div class="example-item">
-                        <h2>Prime Number Checker</h2>
-                        <div class="code-example">
-                            <div class="code-header">
-                                <span class="filename">prime.csc</span>
-                                <button class="run-btn" onclick="runExample('prime-example')">
-                                    <i class="fas fa-play"></i> Run
-                                </button>
-                            </div>
-                            <pre><code class="language-typescript" id="prime-example">let testNum: i32 = 17;
-let divisor: i32 = 2;
-let isPrime: i32 = 1; // 1 = true, 0 = false
-
-print("Testing if ");
-print(testNum);
-println(" is prime...");
-
-if (testNum <= 1) {
-    isPrime = 0;
-} else {
-    while (divisor * divisor <= testNum) {
-        let remainder: i32 = testNum % divisor;
-        if (remainder == 0) {
-            isPrime = 0;
-            print("Found divisor: ");
-            println(divisor);
-        }
-        divisor = divisor + 1;
-    }
-}
-
-if (isPrime == 1) {
-    print(testNum);
-    println(" is PRIME!");
-} else {
-    print(testNum);
-    println(" is NOT prime");
-}</code></pre>
-                            <div class="output" id="prime-example-output"></div>
-                        </div>
-                    </div>
-
-                    <div class="example-item">
-                        <h2>Fibonacci Sequence</h2>
-                        <div class="code-example">
-                            <div class="code-header">
-                                <span class="filename">data_structures.csc</span>
-                                <button class="run-btn" onclick="runExample('data-structures-example')">
-                                    <i class="fas fa-play"></i> Run
-                                </button>
-                            </div>
-                            <pre><code class="language-typescript" id="data-structures-example">// Comprehensive data structures example
-println("=== Data Structures Demo ===");
-
-// Array of numbers
-let fibonacci: i32[] = [0, 1, 1, 2, 3, 5, 8, 13];
-print("Fibonacci sequence: ");
-println(fibonacci);
-
-// Object representing a person
-let employee = {
-    name: "Sarah Connor",
-    id: 12345,
-    department: "Engineering",
-    skills: ["JavaScript", "Python", "Cypescript"],
-    active: true
-};
-
-println("Employee Information:");
-print("Name: ");
-println(employee.name);
-print("ID: ");
-println(employee.id);
-print("Department: ");
-println(employee.department);
-print("Skills: ");
-println(employee.skills);
-print("Active: ");
-println(employee.active);
-
-// Accessing nested data
-print("First skill: ");
-println(employee.skills[0]);
-print("Second skill: ");
-println(employee.skills[1]);
-
-// Array of objects
-let team = [
-    { name: "Alice", role: "Developer" },
-    { name: "Bob", role: "Designer" },
-    { name: "Charlie", role: "Manager" }
-];
-
-println("Team members:");
-println(team);
-
-print("Team leader: ");
-println(team[2].name);
-print("Developer: ");
-println(team[0].name);</code></pre>
-                            <div class="output" id="data-structures-example-output"></div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Playground Section -->
-            <section id="playground" class="content-section">
-                <h1>Interactive Playground</h1>
-                <p>Write and run your own Cypescript code:</p>
-                <p>
-                    <span class="native-badge"><i class="fas fa-info-circle"></i> core subset only</span>
-                    &nbsp;The in-browser interpreter supports the core language (variables,
-                    arithmetic, control flow, loops, functions, print). Modern features —
-                    classes, arrows, interfaces, exceptions, modules, switch, f64 — need the
-                    native compiler: <code>./build/cscript -r your_file.csc</code>.
-                </p>
-                
-                <div class="playground">
-                    <div class="playground-header">
-                        <span class="filename">playground.csc</span>
-                        <button class="run-btn" onclick="runPlayground()">
-                            <i class="fas fa-play"></i> Run Code
-                        </button>
-                        <button class="clear-btn" onclick="clearPlayground()">
-                            <i class="fas fa-trash"></i> Clear
-                        </button>
-                    </div>
-                    <textarea id="playground-code" class="playground-editor" placeholder="// Write your Cypescript code here...
-println(&quot;Hello from the playground!&quot;);
-
-let numbers: i32[] = [1, 2, 3];
-println(numbers);
-
-let person = { name: &quot;Alice&quot;, age: 25 };
-println(person.name);">// Write your Cypescript code here...
-println("Hello from the playground!");
-
-// Arrays
-let numbers: i32[] = [1, 2, 3, 4, 5];
-print("Array: ");
-println(numbers);
-print("First element: ");
-println(numbers[0]);
-
-// Objects
-let person = { name: "Alice", age: 25 };
-print("Name: ");
-println(person.name);
-print("Age: ");
-println(person.age);</textarea>
-                    <div class="output" id="playground-output"></div>
-                </div>
-            </section>
-        </main>
+    </div>
+    <div class="output-block"><span class="output-label">Output</span>
+      <pre>42
+caught: negative input: -1
+cleanup always runs</pre>
     </div>
 
-    <!-- Scripts -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
-    <script src="cypescript-interpreter.js"></script>
-    <script src="script.js"></script>
+    <h2 id="try-see">See also</h2>
+    <ul>
+      <li><a href="#ref-classes"><code>class</code></a> — throwing from methods</li>
+    </ul>
+  </article>
+
+  <article id="ref-modules" class="doc-article" data-keywords="module modules require" data-title="import &amp; export" data-crumbs="Reference &gt; Statements">
+    <h1><code>import</code> &amp; <code>export</code></h1>
+    <p class="article-summary">
+      The <strong><code>import</code></strong> declaration brings exported
+      members of a local module into scope. Modules are resolved at compile
+      time by inlining each file once.
+    </p>
+
+    <h2 id="mod-syntax">Syntax</h2>
+    <pre class="syntaxbox"><code>import { name1, name2 } from "./path/to/module";
+
+export function name(...) { ... }
+export const NAME: type = value;</code></pre>
+    <dl>
+      <dt><code>"./path/to/module"</code></dt>
+      <dd>A path relative to the importing file. The <code>.csc</code> extension
+      is optional.</dd>
+    </dl>
+
+    <h2 id="mod-desc">Description</h2>
+    <p>
+      Imports are resolved by the compiler driver before parsing: each module's
+      source is inlined exactly once, and import cycles are detected and broken
+      automatically. There is no runtime module loader and no load-order cost.
+      Package imports (npm-style bare specifiers) are not supported.
+    </p>
+
+    <h2 id="mod-examples">Examples</h2>
+    <div class="code-example">
+      <div class="example-header"><span>math_utils.csc</span></div>
+      <pre><code>export function square(x: i32): i32 {
+    return x * x;
+}
+export const GREETING: string = "hello from math_utils";</code></pre>
+    </div>
+    <div class="code-example">
+      <div class="example-header"><span>main.csc</span></div>
+      <pre><code>import { square, GREETING } from "./math_utils";
+
+println(GREETING);
+println(square(7));   // 49</code></pre>
+    </div>
+
+    <h2 id="mod-see">See also</h2>
+    <ul>
+      <li><a href="#guide-getting-started">Getting started</a> — the compilation pipeline</li>
+    </ul>
+  </article>
+
+  <!-- ===================== Reference · Expressions ===================== -->
+  <article id="ref-operators" class="doc-article" data-keywords="plus minus equality precedence increment decrement compound" data-title="Operators" data-crumbs="Reference &gt; Expressions">
+    <h1>Operators</h1>
+    <p class="article-summary">
+      Cypescript supports the full TypeScript operator set: arithmetic,
+      comparison (including <code>===</code>/<code>!==</code>), logical with
+      short-circuiting, and compound assignment.
+    </p>
+
+    <h2 id="op-arith">Arithmetic</h2>
+    <table>
+      <thead><tr><th>Operator</th><th>Meaning</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>+</code></td><td>addition / concatenation</td><td>if either operand is a string, both are converted and concatenated</td></tr>
+        <tr><td><code>-</code> <code>*</code></td><td>subtract, multiply</td><td>mixed <code>i32</code>/<code>f64</code> promotes to <code>f64</code></td></tr>
+        <tr><td><code>/</code></td><td>division</td><td><code>i32 / i32</code> truncates; use <code>f64</code> for fractions</td></tr>
+        <tr><td><code>%</code></td><td>remainder</td><td>works on <code>i32</code> and <code>f64</code></td></tr>
+        <tr><td><code>-x</code> <code>!x</code></td><td>negation, logical not</td><td></td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="op-compare">Comparison</h2>
+    <p>
+      <code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>&lt;=</code>,
+      <code>&gt;</code>, <code>&gt;=</code>. The strict forms <code>===</code> and
+      <code>!==</code> are accepted and behave as <code>==</code>/<code>!=</code>
+      (Cypescript is statically typed, so there is no type coercion to guard
+      against). String equality compares <em>content</em>, not identity.
+    </p>
+
+    <h2 id="op-logical">Logical</h2>
+    <p>
+      <code>&amp;&amp;</code> and <code>||</code> short-circuit and return one of
+      their operands, enabling the TypeScript default idiom:
+    </p>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>const neighbors: string[] = graph.get(node) || [];</code></pre>
+    </div>
+
+    <h2 id="op-assign">Assignment</h2>
+    <table>
+      <thead><tr><th>Form</th><th>Equivalent</th></tr></thead>
+      <tbody>
+        <tr><td><code>x += e</code>, <code>x -= e</code>, <code>x *= e</code>, <code>x /= e</code>, <code>x %= e</code></td><td><code>x = x op e</code></td></tr>
+        <tr><td><code>x++</code>, <code>x--</code></td><td><code>x = x + 1</code>, <code>x = x - 1</code></td></tr>
+      </tbody>
+    </table>
+    <p>
+      All forms work on variables, object properties (<code>obj.count += 1</code>),
+      and array elements (<code>arr[i] *= 2</code>).
+    </p>
+    <div class="notecard note">
+      <p><strong>Note:</strong> <code>x++</code> is a <em>statement</em>, not an
+      expression — <code>arr[i++]</code> is not supported.</p>
+    </div>
+
+    <h2 id="op-see">See also</h2>
+    <ul>
+      <li><a href="#ref-template-literals">Template literals</a> — an alternative to <code>+</code> concatenation</li>
+    </ul>
+  </article>
+
+  <article id="ref-arrow-functions" class="doc-article" data-keywords="closure closures capture captures lambda callback fat arrow" data-title="Arrow functions" data-crumbs="Reference &gt; Expressions">
+    <h1>Arrow functions</h1>
+    <p class="article-summary">
+      An <strong>arrow function</strong> is a function expression that can be
+      stored in variables, passed to functions, and used as a callback. Arrows
+      form <strong>closures</strong>: they capture variables from the enclosing
+      scope as by-value snapshots.
+    </p>
+
+    <h2 id="arrow-syntax">Syntax</h2>
+    <pre class="syntaxbox"><code>(param1: type, param2: type): returnType =&gt; expression
+(param1, param2) =&gt; expression        // types default to i32, return inferred
+param =&gt; expression                    // single parameter
+(param: type) =&gt; { statements }        // block body with explicit return</code></pre>
+    <dl>
+      <dt>Untyped parameters</dt>
+      <dd>Default to <code>i32</code>. Annotate parameters when working with
+      strings or <code>f64</code>.</dd>
+      <dt>Return type</dt>
+      <dd>Inferred from the body for common cases; annotate it in ambiguous or
+      hot code.</dd>
+    </dl>
+
+    <h2 id="arrow-desc">Description</h2>
+    <p>
+      When an arrow is created, the compiler determines which outer variables
+      the body uses (its <em>captures</em>) and snapshots their current values
+      into a heap environment. Calling the closure later — even from another
+      function — sees those snapshotted values.
+    </p>
+    <div class="notecard warning">
+      <p><strong>Warning:</strong> captures are <strong>by value</strong>, unlike
+      JavaScript. Mutating a captured primitive inside the closure does not
+      affect the outer variable. To share mutable state, capture an
+      <em>object</em> — the pointer is snapshotted, so mutations through it are
+      visible everywhere.</p>
+    </div>
+
+    <h2 id="arrow-examples">Examples</h2>
+    <h3>Basics and captures</h3>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let base: i32 = 10;
+let addBase = (x: i32): i32 =&gt; x + base;
+println(addBase(5));    // 15
+base = 999;
+println(addBase(5));    // still 15 — snapshot capture</code></pre>
+    </div>
+    <h3>Shared state via a captured object</h3>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let counter = { count: 0 };
+let increment = (): i32 =&gt; {
+    counter.count += 1;
+    return counter.count;
+};
+println(increment());     // 1
+println(increment());     // 2
+println(counter.count);   // 2 — mutation is shared</code></pre>
+    </div>
+    <h3>As callbacks and parameters</h3>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let numbers: i32[] = [1, 2, 3, 4, 5, 6];
+let evens = numbers.filter(x =&gt; x % 2 == 0);
+
+function apply(f: (i32) =&gt; i32, x: i32): i32 {
+    return f(x);
+}
+println(apply(n =&gt; n * 10, 5));   // 50</code></pre>
+    </div>
+
+    <h2 id="arrow-see">See also</h2>
+    <ul>
+      <li><a href="#ref-arrays">Arrays</a> — <code>.map()</code>, <code>.filter()</code>, <code>.reduce()</code></li>
+      <li><a href="#ref-functions"><code>function</code></a> — closure-typed parameters</li>
+    </ul>
+  </article>
+
+  <article id="ref-template-literals" class="doc-article" data-keywords="interpolation backtick string formatting" data-title="Template literals" data-crumbs="Reference &gt; Expressions">
+    <h1>Template literals</h1>
+    <p class="article-summary">
+      <strong>Template literals</strong> are strings delimited by backticks that
+      may embed expressions with <code>${expression}</code>.
+    </p>
+
+    <h2 id="tpl-syntax">Syntax</h2>
+    <pre class="syntaxbox"><code>`text ${expression} more text`</code></pre>
+
+    <h2 id="tpl-desc">Description</h2>
+    <p>
+      Each <code>${...}</code> is evaluated and converted to a string —
+      integers, floats, and booleans convert automatically. Escape a literal
+      backtick with <code>\`</code> and a literal dollar-brace with
+      <code>\${</code>. Standard escapes (<code>\n</code>, <code>\t</code>)
+      work as in ordinary strings.
+    </p>
+
+    <h2 id="tpl-examples">Examples</h2>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let name: string = "Alice";
+let age: i32 = 28;
+
+println(`Hello ${name}!`);
+println(`Next year: ${age + 1}`);
+println(`${name} is ${age} years old`);</code></pre>
+    </div>
+    <div class="output-block"><span class="output-label">Output</span>
+      <pre>Hello Alice!
+Next year: 29
+Alice is 28 years old</pre>
+    </div>
+
+    <h2 id="tpl-see">See also</h2>
+    <ul>
+      <li><a href="#ref-operators">Operators</a> — string concatenation with <code>+</code></li>
+      <li><a href="#ref-types">Data types</a> — <code>string</code></li>
+    </ul>
+  </article>
+
+  <!-- ===================== Reference · Types & data ===================== -->
+  <article id="ref-types" class="doc-article" data-keywords="int integer float double bool primitive inference" data-title="Data types" data-crumbs="Reference &gt; Types">
+    <h1>Data types</h1>
+    <p class="article-summary">
+      Cypescript is statically typed. Every value has a type known at compile
+      time, which is what lets programs compile to Rust-class native code.
+    </p>
+
+    <h2 id="types-primitives">Primitive types</h2>
+    <table>
+      <thead><tr><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td><code>i32</code></td><td>32-bit signed integer (−2,147,483,648 … 2,147,483,647)</td><td><code>let n: i32 = 42;</code></td></tr>
+        <tr><td><code>f64</code></td><td>64-bit floating point</td><td><code>let pi: f64 = 3.14159;</code></td></tr>
+        <tr><td><code>number</code></td><td>TypeScript-compatible alias for <code>f64</code></td><td><code>const r: number = 2.5;</code></td></tr>
+        <tr><td><code>string</code></td><td>immutable text</td><td><code>let s: string = "hi";</code></td></tr>
+        <tr><td><code>boolean</code></td><td><code>true</code> / <code>false</code>; prints as <code>1</code>/<code>0</code></td><td><code>let ok: boolean = true;</code></td></tr>
+        <tr><td><code>void</code></td><td>no value; function returns only</td><td><code>function log(): void</code></td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="types-numeric">Numeric behavior</h2>
+    <ul>
+      <li>Mixing <code>i32</code> and <code>f64</code> in arithmetic promotes to <code>f64</code>: <code>2 * 3.14</code> is <code>6.28</code></li>
+      <li><code>i32 / i32</code> is integer division: <code>7 / 2</code> is <code>3</code></li>
+      <li>Float literals: <code>3.14</code>, <code>0.5</code>, <code>1.0e-5</code>; integer literals also accept hex (<code>0xFF</code>) and binary (<code>0b1010</code>)</li>
+    </ul>
+    <div class="notecard note">
+      <p><strong>Note:</strong> prefer <code>i32</code> for loop counters and
+      integer math — <code>number</code>/<code>f64</code> is measurably slower in
+      hot loops.</p>
+    </div>
+
+    <h2 id="types-composite">Composite types</h2>
+    <ul>
+      <li><a href="#ref-arrays">Arrays</a>: <code>i32[]</code>, <code>f64[]</code>, <code>string[]</code></li>
+      <li><a href="#ref-objects">Objects</a> and <a href="#ref-classes">class</a> instances</li>
+      <li><a href="#ref-interfaces">Interfaces</a> and generic <a href="#ref-interfaces">type aliases</a></li>
+      <li>Function types: <code>(i32, string) =&gt; i32</code> for <a href="#ref-arrow-functions">closure</a> parameters</li>
+      <li><a href="#ref-builtins"><code>Map&lt;K, V&gt;</code> and <code>Set&lt;T&gt;</code></a></li>
+    </ul>
+
+    <h2 id="types-inference">Type inference</h2>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let count = 7;             // i32
+let ratio = 0.5;           // f64
+let title = "docs";        // string
+let squares = nums.map(x =&gt; x * x);   // i32[] — inferred from the callback</code></pre>
+    </div>
+  </article>
+
+  <article id="ref-arrays" class="doc-article" data-keywords="map filter reduce find foreach push pop shift length list" data-title="Arrays" data-crumbs="Reference &gt; Types">
+    <h1>Arrays</h1>
+    <p class="article-summary">
+      Arrays are dynamic, growable sequences of a single element type:
+      <code>i32[]</code>, <code>f64[]</code>, or <code>string[]</code>.
+    </p>
+
+    <h2 id="arr-syntax">Syntax</h2>
+    <pre class="syntaxbox"><code>let name: type[] = [element1, element2, ...];
+let empty: string[] = [];
+array[index]              // read (0-based)
+array[index] = value      // write</code></pre>
+
+    <h2 id="arr-props">Properties &amp; methods</h2>
+    <dl>
+      <dt><code>arr.length</code></dt>
+      <dd>Number of elements. Works on any array expression, including chained
+      results like <code>arr.filter(f).length</code>.</dd>
+      <dt><code>arr.push(value)</code></dt>
+      <dd>Appends to the end.</dd>
+      <dt><code>arr.pop()</code></dt>
+      <dd>Removes and returns the last element.</dd>
+      <dt><code>arr.shift()</code></dt>
+      <dd>Removes and returns the first element (queue-style).</dd>
+      <dt><code>arr.map(callback)</code></dt>
+      <dd>Returns a new array of <code>callback(element)</code> results. The
+      result's element type follows the callback's return type — mapping
+      <code>i32</code> to <code>string</code> yields a <code>string[]</code>.</dd>
+      <dt><code>arr.filter(callback)</code></dt>
+      <dd>Returns a new array of elements for which the callback is truthy.</dd>
+      <dt><code>arr.reduce(callback, initialValue)</code></dt>
+      <dd>Folds the array: <code>callback(accumulator, element)</code> per element.</dd>
+      <dt><code>arr.find(callback)</code></dt>
+      <dd>Returns the first matching element (or <code>0</code>/null if none); stops early.</dd>
+      <dt><code>arr.forEach(callback)</code></dt>
+      <dd>Calls the callback for each element.</dd>
+    </dl>
+    <div class="notecard note">
+      <p><strong>Note:</strong> callback methods compile to <em>inline loops</em>
+      that call your <a href="#ref-arrow-functions">arrow function</a> directly —
+      there is no dispatch overhead versus a hand-written loop.</p>
+    </div>
+
+    <h2 id="arr-examples">Examples</h2>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let numbers: i32[] = [1, 2, 3, 4, 5, 6];
+
+let doubled = numbers.map(x =&gt; x * 2);              // [2,4,6,8,10,12]
+let evens   = numbers.filter(x =&gt; x % 2 == 0);      // [2,4,6]
+let sum     = numbers.reduce((acc, x) =&gt; acc + x, 0); // 21
+let firstBig = numbers.find(x =&gt; x &gt; 4);            // 5
+
+let labels = numbers.map((x: i32): string =&gt; `n${x}`);
+println(labels[0]);                                  // n1
+
+// Queue idiom
+let queue: string[] = [];
+queue.push("first");
+queue.push("second");
+println(queue.shift());   // first</code></pre>
+    </div>
+    <h3>f64 arrays</h3>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let temps: f64[] = [36.6, 37.2, 39.1];
+let total = temps.reduce((a: f64, t: f64): f64 =&gt; a + t, 0.0);
+println(total);   // 112.9</code></pre>
+    </div>
+
+    <h2 id="arr-see">See also</h2>
+    <ul>
+      <li><a href="#ref-loops">Loops &amp; iteration</a> — <code>for...of</code></li>
+      <li><a href="#ref-arrow-functions">Arrow functions</a></li>
+    </ul>
+  </article>
+
+  <article id="ref-objects" class="doc-article" data-keywords="literal property destructuring this struct record" data-title="Objects" data-crumbs="Reference &gt; Types">
+    <h1>Objects</h1>
+    <p class="article-summary">
+      Object literals create typed records with named properties. Under the
+      hood they are native structs with compile-time layouts — property access
+      is a single instruction, not a hash lookup.
+    </p>
+
+    <h2 id="obj-syntax">Syntax</h2>
+    <pre class="syntaxbox"><code>let name = {
+  property: expression,
+  method(param: type): returnType { statements },
+  other: function(param: type): returnType { statements },
+};
+
+object.property               // read
+object.property = value      // write
+object.method(args)          // call
+let { a, b } = object;       // destructuring</code></pre>
+
+    <h2 id="obj-desc">Description</h2>
+    <p>
+      Property types are fixed by the literal; properties cannot be added or
+      removed at runtime (that constraint is where the speed comes from).
+      Objects nest freely — <code>company.employee.name</code> resolves through
+      pointer fields. Passing an object copies its <em>pointer</em>, so
+      functions and closures can mutate shared objects.
+    </p>
+    <p>
+      Inside a method, <code>this</code> refers to the object and supports both
+      reads and writes, including compound assignment
+      (<code>this.total += x</code>).
+    </p>
+    <p>
+      <code>println(obj)</code> prints the object's JSON representation, and
+      <a href="#ref-builtins"><code>JSON.stringify</code>/<code>JSON.parse</code></a>
+      convert to and from JSON strings.
+    </p>
+    <div class="notecard warning">
+      <p><strong>Warning:</strong> objects are stack-allocated in the function
+      that creates them — do not return a locally-created object literal from a
+      function. Create it in the caller, or use a
+      <a href="#ref-classes">class</a> at top level.</p>
+    </div>
+
+    <h2 id="obj-examples">Examples</h2>
+    <h3>Literals, methods, destructuring</h3>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let account = {
+    owner: "Alice",
+    balance: 100,
+    deposit(amount: i32): i32 {
+        this.balance += amount;
+        return this.balance;
+    }
+};
+
+println(account.deposit(50));   // 150
+account.balance = 42;           // property assignment
+
+let { owner, balance } = account;
+println(`${owner}: ${balance}`);  // Alice: 42</code></pre>
+    </div>
+    <h3>Nested objects</h3>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let company = {
+    name: "TechCorp",
+    employee: { name: "Bob", age: 35 }
+};
+println(company.employee.name);   // Bob</code></pre>
+    </div>
+
+    <h2 id="obj-see">See also</h2>
+    <ul>
+      <li><a href="#ref-classes"><code>class</code></a></li>
+      <li><a href="#ref-interfaces"><code>interface</code></a> — structural checking of literals</li>
+    </ul>
+  </article>
+
+  <!-- ===================== Reference · Built-ins ===================== -->
+  <article id="ref-print" class="doc-article" data-keywords="output log logging stdout" data-title="println &amp; console" data-crumbs="Reference &gt; Built-ins">
+    <h1><code>println</code> &amp; <code>console</code></h1>
+    <p class="article-summary">
+      <strong><code>println</code></strong> writes a value and a newline to
+      standard output; <strong><code>print</code></strong> omits the newline.
+      <strong><code>console.log</code></strong> is supported for TypeScript
+      compatibility.
+    </p>
+
+    <h2 id="print-syntax">Syntax</h2>
+    <pre class="syntaxbox"><code>println(value)
+print(value)
+console.log(value1, value2, ...)     // space-joined, newline
+console.error(value1, ...)           // alias of console.log</code></pre>
+    <dl>
+      <dt><code>value</code></dt>
+      <dd>A <code>string</code>, <code>i32</code>, <code>f64</code>,
+      <code>boolean</code> (prints <code>1</code>/<code>0</code>), or object
+      (prints its JSON representation).</dd>
+    </dl>
+
+    <h2 id="print-examples">Examples</h2>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>println("plain string");
+println(42);
+println(3.14);
+console.log("x =", 5, "y =", 7);
+
+let user = { name: "Alice", age: 28 };
+println(user);</code></pre>
+    </div>
+    <div class="output-block"><span class="output-label">Output</span>
+      <pre>plain string
+42
+3.14
+x = 5 y = 7
+{"name":"Alice","age":28}</pre>
+    </div>
+  </article>
+
+  <article id="ref-builtins" class="doc-article" data-keywords="stringify parse collection dictionary hashmap" data-title="Math, JSON, Map &amp; Set" data-crumbs="Reference &gt; Built-ins">
+    <h1><code>Math</code>, <code>JSON</code>, <code>Map</code> &amp; <code>Set</code></h1>
+    <p class="article-summary">
+      Built-in namespaces and collections, compatible with their TypeScript
+      counterparts.
+    </p>
+
+    <h2 id="bi-math">Math</h2>
+    <pre class="syntaxbox"><code>Math.sqrt(x)   Math.pow(base, exp)   Math.abs(x)   Math.floor(x)
+Math.sin(x)    Math.cos(x)           Math.log(x)   Math.exp(x)</code></pre>
+    <p>All take and return <code>f64</code>; integer arguments are promoted automatically.</p>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>console.log(Math.sqrt(144));      // 12
+console.log(Math.pow(2, 10));     // 1024
+console.log(Math.floor(3.7));     // 3</code></pre>
+    </div>
+
+    <h2 id="bi-json">JSON</h2>
+    <pre class="syntaxbox"><code>JSON.stringify(object)   // object → JSON string
+JSON.parse(string)       // JSON string → dynamic object</code></pre>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let config = { app: "docs", port: 8080 };
+let text: string = JSON.stringify(config);
+println(text);                     // {"app":"docs","port":8080}
+
+let parsed = JSON.parse(text);
+println(parsed.app);               // docs
+println(parsed.port);              // 8080</code></pre>
+    </div>
+    <div class="notecard note">
+      <p><strong>Note:</strong> values from <code>JSON.parse</code> resolve their
+      properties at runtime (dynamically), unlike native object literals which
+      use static struct layouts.</p>
+    </div>
+
+    <h2 id="bi-map">Map &amp; Set</h2>
+    <pre class="syntaxbox"><code>let m: Map&lt;K, V&gt; = new Map&lt;K, V&gt;();
+m.set(key, value)     m.get(key)     m.has(key)
+
+let s: Set&lt;T&gt; = new Set&lt;T&gt;();
+s.add(value)          s.has(value)</code></pre>
+    <div class="code-example">
+      <div class="example-header"><span>Cypescript</span></div>
+      <pre><code>let graph: Map&lt;string, string[]&gt; = new Map&lt;string, string[]&gt;();
+graph.set("A", ["B", "C"]);
+let neighbors: string[] = graph.get("A") || [];
+println(neighbors.length);   // 2
+
+let visited: Set&lt;string&gt; = new Set&lt;string&gt;();
+visited.add("A");
+println(visited.has("A"));   // 1</code></pre>
+    </div>
+
+    <h2 id="bi-see">See also</h2>
+    <ul>
+      <li><a href="#guide-cpp">C++ integration</a> — the full standard-library function list</li>
+      <li><a href="#ref-objects">Objects</a> — <code>println(obj)</code> JSON printing</li>
+    </ul>
+  </article>
+
+
+  <!-- ===================== Playground ===================== -->
+  <article id="playground" class="doc-article" data-title="Playground" data-crumbs="Tools">
+    <h1>Playground</h1>
+    <p class="article-summary">
+      Run Cypescript in your browser. The playground uses a JavaScript
+      interpreter that supports the <span class="badge core">core</span> language
+      subset: variables, arithmetic, comparisons, <code>if</code>/<code>else</code>,
+      loops, functions, and <code>print</code>/<code>println</code>.
+    </p>
+    <div class="notecard note">
+      <p><strong>Note:</strong> modern features — classes, arrow functions,
+      interfaces, exceptions, modules, <code>switch</code>, <code>f64</code> — need
+      the native compiler: <code>cscript -r your_file.csc</code>. See
+      <a href="#guide-getting-started">Getting started</a>.</p>
+    </div>
+
+    <div class="playground-toolbar">
+      <button id="playground-run" class="run-btn">▶ Run</button>
+      <button id="playground-clear">Clear</button>
+    </div>
+    <textarea id="playground-code" class="playground-editor" spellcheck="false">// Core-subset playground
+let n: i32 = 10;
+let sum: i32 = 0;
+let i: i32 = 1;
+while (i <= n) {
+    sum = sum + i;
+    i = i + 1;
+}
+print("Sum of 1..");
+print(n);
+print(" = ");
+println(sum);</textarea>
+    <div id="playground-output" class="output-block">
+      <span class="output-label">Output</span>
+      <pre></pre>
+    </div>
+  </article>
+
+</main>
+
+<aside id="toc" class="toc">
+  <h4>In this article</h4>
+  <ul id="toc-list"></ul>
+</aside>
+
+</div>
+
+<footer class="site-footer">
+  Cypescript is <a href="https://github.com/kr4ckhe4d/Cypescript/blob/main/LICENSE">MIT licensed</a> ·
+  <a href="https://github.com/kr4ckhe4d/Cypescript">Source on GitHub</a> ·
+  Docs styled after the excellent <a href="https://developer.mozilla.org">MDN Web Docs</a>
+</footer>
+
+<script src="cypescript-interpreter.js"></script>
+<script src="script.js"></script>
 </body>
 </html>
