@@ -139,6 +139,11 @@ void cyps_circle(double x, double y, double radius, int color) {
     DrawCircleV((Vector2){(float)x, (float)y}, (float)radius, cyps_unpack(color));
 }
 
+void cyps_circle_lines(double x, double y, double radius, int color) {
+    if (g_headless) return;
+    DrawCircleLinesV((Vector2){(float)x, (float)y}, (float)radius, cyps_unpack(color));
+}
+
 void cyps_line(double x1, double y1, double x2, double y2, double thickness, int color) {
     if (g_headless) return;
     DrawLineEx((Vector2){(float)x1, (float)y1}, (Vector2){(float)x2, (float)y2},

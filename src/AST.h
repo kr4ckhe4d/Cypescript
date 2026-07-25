@@ -980,6 +980,9 @@ public:
         std::string key;
         std::unique_ptr<ExpressionNode> value;
         std::unique_ptr<FunctionDeclarationNode> method; // non-null for method properties
+        // Set for class fields, which are declared with an explicit type. Lets
+        // a class's struct layout be computed before any code is generated.
+        std::string declaredType;
 
         Property(std::string k, std::unique_ptr<ExpressionNode> v)
             : key(std::move(k)), value(std::move(v)) {}

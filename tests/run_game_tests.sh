@@ -98,6 +98,34 @@ else
     FAIL=$((FAIL + 1))
 fi
 
+# --- 02_asteroids: heap objects in arrays, spawned and despawned live ---
+"$COMPILER" -o "$BIN_DIR/asteroids" "$ROOT_DIR/example/game/02_asteroids.csc" >/dev/null 2>&1
+out=$(CYPS_HEADLESS=1 CYPS_FRAMES=12000 "$BIN_DIR/asteroids" 2>/dev/null)
+check "02_asteroids completes a run" "$out" "Asteroids ended"
+
+# Rocks are shot, split into smaller rocks, and removed from the array; clearing
+# a wave spawns the next one. Reaching a later wave proves the whole object
+# lifecycle works — spawn, store in Rock[], mutate, remove.
+wave=$(echo "$out" | sed -n 's/.*wave \([0-9]*\),.*/\1/p')
+printf "  %-32s" "02_asteroids clears waves"
+if [[ -n "$wave" && "$wave" -gt 1 ]]; then
+    echo -e "${GREEN}✅ PASS${NC} (reached wave ${wave})"
+    PASS=$((PASS + 1))
+else
+    echo -e "${RED}❌ FAIL${NC} (wave: '${wave}', expected > 1)"
+    FAIL=$((FAIL + 1))
+fi
+
+score=$(echo "$out" | sed -n 's/.*score \([0-9]*\),.*/\1/p')
+printf "  %-32s" "02_asteroids scores points"
+if [[ -n "$score" && "$score" -gt 0 ]]; then
+    echo -e "${GREEN}✅ PASS${NC} (score ${score})"
+    PASS=$((PASS + 1))
+else
+    echo -e "${RED}❌ FAIL${NC} (score: '${score}', expected > 0)"
+    FAIL=$((FAIL + 1))
+fi
+
 echo "============================================"
 echo -e "  ${GREEN}Passed: $PASS${NC}  ${RED}Failed: $FAIL${NC}  Total: $((PASS + FAIL))"
 

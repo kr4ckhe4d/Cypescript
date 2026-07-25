@@ -44,13 +44,17 @@ and the full language test suite work either way.
 |---|---|
 | `00_window.csc` | Opening a window, the frame loop, text, colors |
 | `01_breakout.csc` | A complete game: paddle, ball physics, brick field, scoring, lives, sound |
+| `02_asteroids.csc` | Entity objects — classes in arrays, spawned and despawned at runtime |
 
 ```bash
 ./build/cscript -r example/game/00_window.csc
 ./build/cscript -r example/game/01_breakout.csc
+./build/cscript -r example/game/02_asteroids.csc
 ```
 
 **Breakout controls:** LEFT/RIGHT or A/D to move, SPACE to launch, R to restart, ESC to quit.
+
+**Asteroids controls:** LEFT/RIGHT rotate, UP thrusts, SPACE fires, R restarts, ESC quits.
 
 ## Headless mode
 
@@ -65,12 +69,33 @@ CYPS_HEADLESS=1 CYPS_FRAMES=1200 cscript -r example/game/01_breakout.csc
 Breakout checks `isHeadless()` and plays itself when there is no keyboard, which is how
 `tests/run_game_tests.sh` asserts that collision and scoring actually work.
 
-## A note on style
+## Two styles, on purpose
 
-Entities live in **parallel arrays** rather than an array of objects. That is not
-preference — objects cannot yet be returned from a function or stored in an array. Fixing
-that is Phase 3 in [GAME_ROADMAP.md](../../GAME_ROADMAP.md), after which these examples get
-rewritten idiomatically.
+**Breakout** keeps its entities in parallel arrays (`brickX[]`, `brickY[]`, `brickAlive[]`).
+That was the only option when it was written — objects could not be returned from a
+function or stored in an array. It is kept as-is because a fixed entity count genuinely
+suits struct-of-arrays, and it shows what the language could do before Phase 3.
+
+**Asteroids** uses real objects, which is what you'd reach for now:
+
+```ts
+class Rock {
+    x: f64; y: f64; vx: f64; vy: f64; radius: f64; size: i32;
+    constructor(x: f64, y: f64, vx: f64, vy: f64, size: i32) { ... }
+    step(dt: f64): void { this.x += this.vx * dt; this.y += this.vy * dt; }
+}
+
+let rocks: Rock[] = [];
+rocks.push(spawnRock(3));          // a function returning an object
+
+let rock: Rock = rocks[i];
+rock.step(dt);                     // mutation through the array
+rocks.removeAt(i);                 // despawning
+```
+
+Objects are heap-allocated, so they outlive the function that built them. Nothing frees
+them yet when they leave an array — for a long-running game, pool and reuse entities rather
+than allocating per spawn. See [GAME_ROADMAP.md](../../GAME_ROADMAP.md) Phase 4.
 
 ## Writing your own
 

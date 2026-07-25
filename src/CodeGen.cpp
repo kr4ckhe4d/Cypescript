@@ -293,6 +293,13 @@ void CodeGen::visit(ProgramNode *node)
         }
     }
 
+    // Class struct layouts are computed from declared field types before any
+    // code is generated, so a class-typed value knows its layout no matter
+    // where it came from
+    for (auto &entry : classes) {
+        registerClassLayout(entry.second);
+    }
+
     // First pass: declare every function's signature, but generate no bodies
     // yet. main is emitted before the bodies because it is what creates the
     // module-level globals those bodies may reference.
@@ -505,9 +512,10 @@ void CodeGen::visit(VariableDeclarationNode *node)
         variableToArrow[node->variableName] = arrowLit;
     } else if (dynamic_cast<NewExpressionNode*>(node->initializer.get()) &&
                classes.count(static_cast<NewExpressionNode*>(node->initializer.get())->className)) {
-        // Class instance: track the class template's object layout
+        // Class instance: record the class as the variable's type, so its layout
+        // can be found from the type alone, and keep the direct binding too
         auto *newExpr = static_cast<NewExpressionNode*>(node->initializer.get());
-        typeToStore = "object";
+        typeToStore = newExpr->className;
         variableToObjectKey[node->variableName] = "opt_obj_" +
             std::to_string(reinterpret_cast<uintptr_t>(classes[newExpr->className]->objectTemplate.get()));
     } else if (auto *arrLit = dynamic_cast<ArrayLiteralNode*>(node->initializer.get())) {
@@ -521,7 +529,15 @@ void CodeGen::visit(VariableDeclarationNode *node)
                 // A declared foreign function knows its own return type — without
                 // this an opaque `ptr` handle would be mistaken for a string.
                 auto externIt = externFunctions.find(callNode->functionName);
-                typeToStore = (externIt != externFunctions.end()) ? externIt->second->returnType : "";
+                if (externIt != externFunctions.end()) {
+                    typeToStore = externIt->second->returnType;
+                } else {
+                    // A user function's declared return type carries object
+                    // identity, so `let v = make();` knows v's layout.
+                    auto retIt = functionReturnTypes.find(callNode->functionName);
+                    typeToStore = (retIt != functionReturnTypes.end()) ? retIt->second : "";
+                    if (typeToStore == "void") typeToStore = "";
+                }
             }
         } else if (auto *newExpr = dynamic_cast<NewExpressionNode*>(node->initializer.get())) {
             // e.g. new Map<string, string[]>() -> "Map<string,string[]>"
@@ -549,6 +565,18 @@ void CodeGen::visit(VariableDeclarationNode *node)
         } else if (auto *methodCall = dynamic_cast<MethodCallNode*>(node->initializer.get())) {
             // e.g. numbers.map(...) -> i32[]/string[], arr.filter(...) -> source type
             typeToStore = inferMethodCallTypeName(methodCall);
+        } else if (auto *arrAccess = dynamic_cast<ArrayAccessNode*>(node->initializer.get())) {
+            // let e = entities[i]; takes the array's element type, so an object
+            // element keeps its layout
+            if (auto *arrVar = dynamic_cast<VariableExpressionNode*>(arrAccess->array.get())) {
+                auto arrTypeIt = variableTypes.find(arrVar->name);
+                if (arrTypeIt != variableTypes.end()) {
+                    const std::string &arrType = arrTypeIt->second;
+                    if (arrType.size() > 2 && arrType.substr(arrType.size() - 2) == "[]") {
+                        typeToStore = arrType.substr(0, arrType.size() - 2);
+                    }
+                }
+            }
         } else {
             typeToStore = "";
         }
@@ -1282,7 +1310,11 @@ void CodeGen::visit(ArrayAssignmentStatementNode *node)
     }
 
     // Use dynamic array functions
-    if (elemType == "string") {
+    if (isObjectTypeName(elemType)) {
+        llvm::FunctionCallee setFunc = m_module->getOrInsertFunction("array_set_object",
+            llvm::Type::getVoidTy(m_context), llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0), llvm::Type::getInt32Ty(m_context), llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+        m_builder.CreateCall(setFunc, {arrayValue, indexValue, valueToAssign});
+    } else if (elemType == "string") {
         llvm::FunctionCallee setFunc = m_module->getOrInsertFunction("array_set_string",
             llvm::Type::getVoidTy(m_context),
             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
@@ -1421,7 +1453,11 @@ void CodeGen::visit(ForOfStatementNode *node)
 
     // Load current element from dynamic array
     llvm::Value *element;
-    if (elemType == "f64") {
+    if (isObjectTypeName(elemType)) {
+        llvm::FunctionCallee getFunc = m_module->getOrInsertFunction("array_get_object",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0), llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0), llvm::Type::getInt32Ty(m_context));
+        element = m_builder.CreateCall(getFunc, {arrPtr, currentIndex}, "iter_element");
+    } else if (elemType == "f64") {
         llvm::FunctionCallee getFunc = m_module->getOrInsertFunction("array_get_f64",
             llvm::Type::getDoubleTy(m_context),
             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
@@ -2026,7 +2062,9 @@ llvm::Value *CodeGen::visit(ArrayLiteralNode *node)
     
     llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
     llvm::FunctionCallee createFunc;
-    if (elemType == "string") {
+    if (isObjectTypeName(elemType)) {
+        createFunc = m_module->getOrInsertFunction("array_create_object", charPtr);
+    } else if (elemType == "string") {
         createFunc = m_module->getOrInsertFunction("array_create_string", charPtr);
     } else if (elemType == "f64") {
         createFunc = m_module->getOrInsertFunction("array_create_f64", charPtr);
@@ -2099,7 +2137,11 @@ llvm::Value *CodeGen::visit(ArrayAccessNode *node)
     }
     
     // Call the appropriate C++ dynamic array function
-    if (elemType == "string") {
+    if (isObjectTypeName(elemType)) {
+        llvm::FunctionCallee getFunc = m_module->getOrInsertFunction("array_get_object",
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0), llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0), llvm::Type::getInt32Ty(m_context));
+        return m_builder.CreateCall(getFunc, {arrayValue, indexValue}, "array_element");
+    } else if (elemType == "string") {
         llvm::FunctionCallee getFunc = m_module->getOrInsertFunction("array_get_string",
             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
@@ -2226,6 +2268,19 @@ llvm::Value *CodeGen::createObjectWithProperties(ObjectLiteralNode *node)
     return objectId;
 }
 
+bool CodeGen::isObjectTypeName(const std::string &typeName) {
+    return classes.count(typeName) > 0 || interfaces.count(typeName) > 0;
+}
+
+std::string CodeGen::objectKeyForTypeName(const std::string &typeName) {
+    auto classIt = classes.find(typeName);
+    if (classIt != classes.end() && classIt->second->objectTemplate) {
+        return "opt_obj_" +
+               std::to_string(reinterpret_cast<uintptr_t>(classIt->second->objectTemplate.get()));
+    }
+    return "";
+}
+
 std::string CodeGen::getExpressionObjectKey(ExpressionNode* expr) {
     if (auto* varExpr = dynamic_cast<VariableExpressionNode*>(expr)) {
         if (varExpr->name == "this" && !currentThisObjectKey.empty()) {
@@ -2233,6 +2288,31 @@ std::string CodeGen::getExpressionObjectKey(ExpressionNode* expr) {
         }
         auto it = variableToObjectKey.find(varExpr->name);
         if (it != variableToObjectKey.end()) return it->second;
+        // Fall back to the variable's recorded type: a class-typed value knows
+        // its layout even when it was never bound to an object literal here
+        // (a parameter, or a value returned from another function).
+        auto typeIt = variableTypes.find(varExpr->name);
+        if (typeIt != variableTypes.end()) {
+            std::string key = objectKeyForTypeName(typeIt->second);
+            if (!key.empty()) return key;
+        }
+    } else if (auto* newExpr = dynamic_cast<NewExpressionNode*>(expr)) {
+        return objectKeyForTypeName(newExpr->className);
+    } else if (auto* call = dynamic_cast<FunctionCallNode*>(expr)) {
+        // A function declared to return a class hands back that layout
+        auto retIt = functionReturnTypes.find(call->functionName);
+        if (retIt != functionReturnTypes.end()) return objectKeyForTypeName(retIt->second);
+    } else if (auto* arrAccess = dynamic_cast<ArrayAccessNode*>(expr)) {
+        // Element of an object array: rocks[i].x
+        if (auto* arrVar = dynamic_cast<VariableExpressionNode*>(arrAccess->array.get())) {
+            auto typeIt = variableTypes.find(arrVar->name);
+            if (typeIt != variableTypes.end()) {
+                const std::string &arrType = typeIt->second;
+                if (arrType.size() > 2 && arrType.substr(arrType.size() - 2) == "[]") {
+                    return objectKeyForTypeName(arrType.substr(0, arrType.size() - 2));
+                }
+            }
+        }
     } else if (auto* objAccess = dynamic_cast<ObjectAccessNode*>(expr)) {
         std::string parentKey = getExpressionObjectKey(objAccess->object.get());
         if (!parentKey.empty()) {
@@ -2250,6 +2330,52 @@ std::string CodeGen::getExpressionObjectKey(ExpressionNode* expr) {
         }
     }
     return "";
+}
+
+// Computes a class's struct layout from its declared field types alone, without
+// generating any code. Runs in pass 0 so that property access on a class-typed
+// value works even before the class has been instantiated anywhere — which is
+// what makes `function make(): Vec` and `Vec[]` usable.
+void CodeGen::registerClassLayout(ClassDeclarationNode *cls)
+{
+    if (!cls || !cls->objectTemplate) return;
+    ObjectLiteralNode *tmpl = cls->objectTemplate.get();
+    std::string objectKey = "opt_obj_" + std::to_string(reinterpret_cast<uintptr_t>(tmpl));
+    if (objectLayouts.count(objectKey)) return;
+
+    std::vector<std::pair<std::string, std::string>> propertyInfo;
+    for (const auto &prop : tmpl->properties) {
+        if (prop.method) {
+            objectMethods[objectKey][prop.key] = prop.method.get();
+            continue;
+        }
+
+        // Prefer the declared field type; fall back to the default's literal kind
+        std::string propertyType = prop.declaredType;
+        if (propertyType == "number") propertyType = "f64";
+        if (propertyType.empty() || (propertyType != "string" && propertyType != "i32" &&
+                                     propertyType != "f64" && propertyType != "boolean")) {
+            if (dynamic_cast<StringLiteralNode*>(prop.value.get())) propertyType = "string";
+            else if (dynamic_cast<FloatLiteralNode*>(prop.value.get())) propertyType = "f64";
+            else if (dynamic_cast<BooleanLiteralNode*>(prop.value.get())) propertyType = "boolean";
+            else if (dynamic_cast<IntegerLiteralNode*>(prop.value.get())) propertyType = "i32";
+            else if (!prop.declaredType.empty()) {
+                // Class-, interface- or array-typed field: an opaque pointer,
+                // which the layout represents the same way it does a string
+                propertyType = "string";
+            } else {
+                propertyType = "i32";
+            }
+        }
+        propertyInfo.push_back({prop.key, propertyType});
+    }
+
+    if (propertyInfo.empty()) {
+        propertyInfo.push_back({"__pad", "i32"});
+    }
+
+    objectLayouts[objectKey] = objectOptimizer.createObjectLayout(propertyInfo, m_context);
+    variableToObjectKey[objectKey] = objectKey;
 }
 
 // OPTIMIZED: Phase 1 object creation with direct struct access
@@ -2349,7 +2475,8 @@ llvm::Value *CodeGen::createOptimizedObjectWithProperties(ObjectLiteralNode *nod
         m_context,
         m_module.get(),
         layout,
-        propertyValues
+        propertyValues,
+        allocateObjectsOnHeap
     );
     
     // Track this object for optimized property access
@@ -2428,8 +2555,10 @@ llvm::Value *CodeGen::visit(ObjectAccessNode *node)
                         "obj_ptr_load"
                     );
                 }
-            } else if (auto *objAccess = dynamic_cast<ObjectAccessNode*>(node->object.get())) {
-                objectPtr = visit(objAccess);
+            } else {
+                // Any other expression that yields an object pointer: a call
+                // result, an array element, a `new`, a nested property.
+                objectPtr = visit(node->object.get());
             }
             
             if (objectPtr) {
@@ -2613,7 +2742,11 @@ llvm::Value *CodeGen::visit(MethodCallNode *node)
             if (node->arguments.size() != 1) throw std::runtime_error("push() expects 1 argument");
             llvm::Value *argValue = visit(node->arguments[0].get());
 
-            if (elemType == "f64") {
+            if (isObjectTypeName(elemType)) {
+                llvm::FunctionCallee pushFunc = m_module->getOrInsertFunction("array_push_object",
+                    llvm::Type::getVoidTy(m_context), llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0), llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+                return m_builder.CreateCall(pushFunc, {objectValue, argValue});
+            } else if (elemType == "f64") {
                 llvm::FunctionCallee pushFunc = m_module->getOrInsertFunction("array_push_f64",
                     llvm::Type::getVoidTy(m_context),
                     llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
@@ -2633,11 +2766,26 @@ llvm::Value *CodeGen::visit(MethodCallNode *node)
                     llvm::Type::getInt32Ty(m_context));
                 return m_builder.CreateCall(pushFunc, {objectValue, argValue});
             }
+        } else if (node->methodName == "removeAt") {
+            // Removing by index is what makes despawning possible in a game loop
+            if (node->arguments.size() != 1) throw std::runtime_error("removeAt() expects 1 argument");
+            llvm::Value *indexValue = coerceValue(visit(node->arguments[0].get()),
+                                                  llvm::Type::getInt32Ty(m_context));
+            llvm::FunctionCallee removeFunc = m_module->getOrInsertFunction("array_remove_at",
+                llvm::Type::getVoidTy(m_context),
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                llvm::Type::getInt32Ty(m_context));
+            return m_builder.CreateCall(removeFunc, {objectValue, indexValue});
         } else if (node->methodName == "shift" || node->methodName == "pop") {
             if (node->arguments.size() != 0) throw std::runtime_error("shift/pop expects 0 arguments");
 
             std::string runtimeName = (node->methodName == "pop") ? "array_pop" : "array_shift";
-            if (elemType == "f64") {
+            if (isObjectTypeName(elemType)) {
+                llvm::FunctionCallee popFunc = m_module->getOrInsertFunction(runtimeName + "_object",
+                    llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
+                    llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+                return m_builder.CreateCall(popFunc, {objectValue}, "removed_val");
+            } else if (elemType == "f64") {
                 llvm::FunctionCallee popFunc = m_module->getOrInsertFunction(runtimeName + "_f64",
                     llvm::Type::getDoubleTy(m_context),
                     llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
@@ -2726,7 +2874,13 @@ llvm::Value *CodeGen::visit(NewExpressionNode *node)
     auto classIt = classes.find(node->className);
     if (classIt != classes.end()) {
         ClassDeclarationNode *cls = classIt->second;
+        // Class instances are heap-allocated so they can be returned from the
+        // function that built them and stored in arrays. Object literals keep
+        // their stack allocation, which is what the benchmarks measure.
+        bool previousHeapMode = allocateObjectsOnHeap;
+        allocateObjectsOnHeap = true;
         llvm::Value *objectPtr = visit(cls->objectTemplate.get());
+        allocateObjectsOnHeap = previousHeapMode;
         llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
         llvm::Value *rawPtr = m_builder.CreateBitCast(objectPtr, charPtr, node->className + "_instance");
 
@@ -3332,6 +3486,8 @@ llvm::Function *CodeGen::declareFunctionSignature(FunctionDeclarationNode *node)
     );
 
     declaredFunctions[node->functionName] = function;
+    // Remembered so property access on a call result can find the layout
+    functionReturnTypes[node->functionName] = node->returnType;
 
     auto argIt = function->arg_begin();
     for (size_t i = 0; i < node->parameters.size(); ++i, ++argIt) {

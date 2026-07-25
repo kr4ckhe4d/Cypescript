@@ -382,6 +382,7 @@ std::unique_ptr<StatementNode> Parser::parseClassDeclaration()
             }
             consume(TOK_SEMICOLON, "Expected ';' after class field");
             classNode->objectTemplate->properties.emplace_back(memberName, std::move(defaultValue));
+            classNode->objectTemplate->properties.back().declaredType = fieldType;
         }
     }
     consume(TOK_RBRACE, "Expected '}' after class body");

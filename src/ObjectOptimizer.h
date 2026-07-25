@@ -73,13 +73,17 @@ public:
 // Optimized object creation with struct layout
 class OptimizedObjectCreator {
 public:
-    // Create object as LLVM struct instead of hash map storage
+    // Create object as LLVM struct instead of hash map storage.
+    // `onHeap` allocates with malloc so the object can outlive the frame that
+    // created it (class instances); otherwise it is an alloca, which keeps the
+    // fast path for object literals.
     llvm::Value* createOptimizedObject(
         llvm::IRBuilder<>& builder,
         llvm::LLVMContext& context,
         llvm::Module* module,
         const ObjectOptimizer::ObjectLayout& layout,
-        const std::vector<llvm::Value*>& propertyValues
+        const std::vector<llvm::Value*>& propertyValues,
+        bool onHeap = false
     );
     
     // Generate struct type for object

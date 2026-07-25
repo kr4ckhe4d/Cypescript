@@ -14,15 +14,16 @@ Started 2026-07-25 against `main` @ `06e8d87` (v1.0.0).
 |---|---|---|
 | **1** | FFI (`declare function`) + linker control + raylib shim | ✅ **DONE** |
 | **2** | First playable game (Breakout, struct-of-arrays) | ✅ **DONE** |
-| 3 | Heap objects — escape, object arrays, despawning | ⬜ **NEXT** |
-| 4 | Frame arena / memory hygiene | ⬜ Not started |
+| **3** | Heap objects — escape, object arrays, despawning | ✅ **DONE** |
+| 4 | Frame arena / memory hygiene | ⬜ **NEXT** |
 | **5** | Numeric & ergonomic gaps | ✅ **DONE** |
 | 6 | Packaging & shipping | 🔶 Vendoring + CI done; bundling left |
 
-**Milestones reached:** M1 (a window opened from Cypescript) and M2 (a playable
-60 fps Breakout with sound, scoring and lives).
+**Milestones reached:** M1 (a window opened from Cypescript), M2 (a playable
+60 fps Breakout), and M3 (Asteroids with real entity objects — spawned by
+functions, stored in `Rock[]`/`Bullet[]`, split on impact, removed when they die).
 
-Test suites: `bash tests/run_tests.sh` → **26/26**, `bash tests/run_game_tests.sh` → **4/4**.
+Test suites: `bash tests/run_tests.sh` → **27/27**, `bash tests/run_game_tests.sh` → **7/7**.
 Benchmarks unchanged at Rust parity.
 
 **raylib is vendored** — CMake builds it from source and links it statically, so a
@@ -223,9 +224,10 @@ is the clamp idiom the game uses everywhere.
 
 ---
 
-## 5. Phase 3 — Heap objects ⬜ NEXT
+## 5. Phase 3 — Heap objects ✅ DONE
 
-**The bulk of the remaining work, and the real prize.** Target code:
+**The bulk of the work, and the real prize.** This is now the target code, and it
+runs — see `example/game/02_asteroids.csc`:
 
 ```ts
 class Asteroid { x: f64; y: f64; vx: f64; vy: f64; size: i32; alive: boolean; }
@@ -239,29 +241,48 @@ for (const r of rocks) {
 }
 ```
 
-**3a. Carry object identity in the type system, not in a name map.** Change
-`getExpressionObjectKey` to resolve from an expression's *static type* rather than
-`variableToObjectKey`. Introduce a canonical `TypeInfo { kind, name, elemType }` (or fully
-canonical type strings). Then a function return type `: Asteroid` makes property access on
-the call result resolve, and an array type `Asteroid[]` makes `rocks[i].x` resolve.
-**One change, both failing probes fixed — the highest-value single edit in this roadmap.**
+**3a. Object identity now travels with the type, not with a variable name.** ✅
+`getExpressionObjectKey` resolves from an expression's *static type*, so it works for a
+function's declared return type (`: Rock`), an array's element type (`Rock[]` ⇒
+`rocks[i].x`), a `new` expression, and a variable whose recorded type is a class. As
+predicted, one change fixed both failing probes.
 
-**3b. Heap-allocate escaping objects.** `new ClassName(...)` → `malloc` + constructor,
-returning the pointer. Class instances are *already* opaque `i8*` at the type level, so no
-ABI churn. Keep `alloca` for provably non-escaping literals so the benchmark numbers survive.
+A prerequisite fell out of it: **class layouts are now computed in pass 0** from declared
+field types (`registerClassLayout`), before any code is generated. Previously a layout only
+existed once the class had been instantiated somewhere — which, after the Phase 5 codegen
+reordering, was *after* main had already been emitted. Field declarations carry their
+declared type on the AST node for this.
 
-**3c. Object arrays.** Add `array_create_ptr / push_ptr / get_ptr / set_ptr / pop_ptr /
-shift_ptr` mirroring the existing i32/f64/string trio. Disambiguate object-pointer from
-string by the *declared element type*, not the LLVM type (both are `i8*`). Add
-**`array_remove_at`** — despawning is not optional in a game. Extend `.map`/`.filter`/
-`.forEach`/`.find` to object arrays.
+**3b. Escaping objects are heap-allocated.** ✅ `new ClassName(...)` mallocs the struct and
+runs the constructor. Class instances were already opaque `i8*` at the type level, so
+nothing about the ABI changed. **Object literals keep their `alloca`**, which is what the
+benchmarks measure — still 0.051s/0.026s, at Rust parity.
 
-**3d. Memory: pooling, not GC.** Preallocate N entities and reuse them via an `alive` flag.
-Zero compiler work, standard game-dev practice, and it protects the no-GC-pause performance
-story. Refcounting and GC stay explicitly out of scope.
+**3c. Object arrays.** ✅ The runtime's `DynamicArray` already had an unused `object_data`
+vector; it now has `array_push_object / get_object / set_object / pop_object /
+shift_object`, plus **`array_remove_at`** for despawning (`entities.removeAt(i)`).
+Object pointers are stored and returned verbatim — routing them through the string vector
+would have corrupted them, because `array_get_string` copies its element through a
+`std::string`. Codegen picks the object path from the *declared* element type, since
+object pointers and strings are both `i8*`. Array literals, indexing, `push`, `pop`,
+`shift`, element assignment and `for...of` all handle object elements.
 
-**M3 — `example/game/02_asteroids.csc`: dynamic spawn/despawn, `Asteroid[]`, code that
-reads like TypeScript.** Then rewrite Breakout's brick field on top of it.
+**3d. Memory: pooling, not GC.** Still the plan. Removing an entity from an array drops the
+pointer without freeing it — see the measurement below.
+
+**M3 reached** — `example/game/02_asteroids.csc`: a ship, `Rock[]` and `Bullet[]`, rocks
+that split into two smaller rocks on impact, bullets that expire, waves that respawn. A
+40,000-frame headless run reaches wave 12 with a score of 24,220.
+
+### What Phase 3 costs
+
+Heap objects introduce a leak of their own: `removeAt` drops the pointer, and nothing frees
+it. Measured on Asteroids, RSS grows ~135 bytes/frame (8.9 MB → 14.2 MB over 40k frames).
+Most of that is still the four HUD template literals per frame — Breakout measured ~92
+bytes/frame with three — so entity churn is the smaller share, but it is real and it is new.
+
+Both halves are Phase 4's problem: the frame arena for strings, and either pooling (the
+documented idiom) or freeing on removal for objects.
 
 ---
 
@@ -269,12 +290,17 @@ reads like TypeScript.** Then rewrite Breakout's brick field on top of it.
 
 - **Frame arena for strings.** `cyps_frame_begin` resets an arena; `string_concat` and the
   `cyps_*_to_string` helpers allocate from it. Strings become frame-lifetime, with
-  `string_persist()` to promote one. ~50 lines in the stdlib kills the 92 bytes/frame leak.
+  `string_persist()` to promote one. ~50 lines in the stdlib, and it is the larger share
+  of both games' leak.
   - Risk: programs that hold strings across frames. **Make it opt-in** (`--frame-strings`,
     or active only when the game runtime is linked).
+- **Objects removed from an array are never freed** (new in Phase 3). Either free on
+  removal, or ship pooling as the documented idiom and add a `Pool<T>`-shaped example.
 - Free on `pop`/`shift`; add `array_free` / `.clear()`.
 - `--leak-report` debug flag.
-- **Acceptance test: 100,000 headless frames with flat RSS** (currently 8.5 → 17.5 MB).
+- **Acceptance test: 100,000 headless frames with flat RSS.** Current baselines:
+  Breakout 8.5 → 17.5 MB over 100k frames (~92 B/frame), Asteroids 8.9 → 14.2 MB over
+  40k frames (~135 B/frame).
 
 ---
 
@@ -457,3 +483,19 @@ Tests: 24/24 language, 4/4 game. No regressions.
   could not see globals; all now share one `variableStorage()` helper.
 
 New tests: `test_bitwise`, `test_globals`. Suite is now 26/26 language + 4/4 game.
+
+**2026-07-25 (later still) — Phase 3 complete: heap objects.**
+
+- Object identity resolves from static types, so objects can be returned from functions
+  and stored in arrays. Class layouts are registered in pass 0 from declared field types.
+- `new` heap-allocates; object literals keep their alloca, so benchmarks are unchanged.
+- Object arrays end to end: create, push, index, assign, `for...of`, `pop`, `shift`, and
+  `removeAt` for despawning. Object pointers never go through the string vector, which
+  copies its elements.
+- `example/game/02_asteroids.csc` (M3) and `tests/test_object_arrays.csc`.
+- `drawCircleOutline` added to the shim.
+- Also fixed: a stale `cscript` on PATH produced a misleading "module not found"; the
+  message now names the search directory and the running version, and the project is
+  1.1.0 so the two builds are distinguishable.
+
+Suite is now 27/27 language + 7/7 game.

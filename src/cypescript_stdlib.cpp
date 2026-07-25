@@ -235,6 +235,63 @@ extern "C" {
         arr->string_data[index] = val;
     }
 
+    // --- Object arrays -------------------------------------------------------
+    // Elements are raw pointers to heap objects. Unlike the string vector these
+    // are stored and returned verbatim: copying them (as array_get_string does
+    // for text) would corrupt the object.
+
+    void array_push_object(void* arr_ptr, void* val) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (!arr) return;
+        if (arr->i32_data.empty() && arr->string_data.empty() && arr->object_data.empty()) {
+            arr->type = DynamicArray::Type::Object;
+        }
+        arr->object_data.push_back(val);
+    }
+
+    void* array_get_object(void* arr_ptr, int32_t index) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (!arr || index < 0 || index >= static_cast<int32_t>(arr->object_data.size())) return nullptr;
+        return arr->object_data[index];
+    }
+
+    void array_set_object(void* arr_ptr, int32_t index, void* val) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (!arr || index < 0) return;
+        if (index >= static_cast<int32_t>(arr->object_data.size())) arr->object_data.resize(index + 1);
+        arr->object_data[index] = val;
+    }
+
+    void* array_pop_object(void* arr_ptr) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (!arr || arr->object_data.empty()) return nullptr;
+        void* val = arr->object_data.back();
+        arr->object_data.pop_back();
+        return val;
+    }
+
+    void* array_shift_object(void* arr_ptr) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (!arr || arr->object_data.empty()) return nullptr;
+        void* val = arr->object_data.front();
+        arr->object_data.erase(arr->object_data.begin());
+        return val;
+    }
+
+    // Removing an element is what makes despawning possible in a game loop.
+    void array_remove_at(void* arr_ptr, int32_t index) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (!arr || index < 0) return;
+        if (index < static_cast<int32_t>(arr->object_data.size()))
+            arr->object_data.erase(arr->object_data.begin() + index);
+        else if (index < static_cast<int32_t>(arr->i32_data.size()))
+            arr->i32_data.erase(arr->i32_data.begin() + index);
+        else if (index < static_cast<int32_t>(arr->f64_data.size()))
+            arr->f64_data.erase(arr->f64_data.begin() + index);
+        else if (index < static_cast<int32_t>(arr->string_data.size()))
+            arr->string_data.erase(arr->string_data.begin() + index);
+    }
+
     // ===================
     // MATH FUNCTIONS
     // ===================

@@ -94,6 +94,24 @@ private:
     // Helper to get the object key for an expression
     std::string getExpressionObjectKey(ExpressionNode* expr);
 
+    // Declared return type of each user function, so property access works on a
+    // call result (`make().x`) without the value ever being bound to a name.
+    std::map<std::string, std::string> functionReturnTypes;
+
+    // The object layout key for a class/interface type name, or "" if the name
+    // isn't one. This is what lets object identity travel with a *type* instead
+    // of with a variable name.
+    std::string objectKeyForTypeName(const std::string &typeName);
+
+    // True for a class or interface name. Object arrays store raw pointers and
+    // must not go through the string vector, which copies its elements.
+    bool isObjectTypeName(const std::string &typeName);
+
+    // Set while instantiating a class: `new` allocates on the heap so the
+    // instance outlives the function that created it. Object literals keep
+    // their stack allocation.
+    bool allocateObjectsOnHeap = false;
+
     // Function context tracking
     llvm::Function *currentFunction = nullptr;  // Track current function being generated
     std::map<std::string, llvm::Function*> declaredFunctions; // Track declared functions
@@ -245,6 +263,9 @@ private:
     
     // OPTIMIZED: Phase 1 object creation with direct struct access
     llvm::Value *createOptimizedObjectWithProperties(ObjectLiteralNode *node);
+
+    // Computes a class's struct layout from declared field types, before codegen
+    void registerClassLayout(ClassDeclarationNode *cls);
 
     // Truthy check helper
     llvm::Value *ensureI1(llvm::Value *val);

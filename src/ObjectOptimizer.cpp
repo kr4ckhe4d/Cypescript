@@ -1,6 +1,8 @@
 #include "ObjectOptimizer.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/DataLayout.h"
+#include "llvm/IR/Module.h"
 
 // Create optimized object layout at compile time
 ObjectOptimizer::ObjectLayout ObjectOptimizer::createObjectLayout(
@@ -171,15 +173,31 @@ llvm::Value* OptimizedObjectCreator::createOptimizedObject(
     llvm::LLVMContext& context,
     llvm::Module* module,
     const ObjectOptimizer::ObjectLayout& layout,
-    const std::vector<llvm::Value*>& propertyValues) {
-    
-    // Allocate struct on stack (much faster than heap allocation)
-    llvm::Value* objectPtr = builder.CreateAlloca(
-        layout.structType,
-        nullptr,
-        "optimized_object"
-    );
-    
+    const std::vector<llvm::Value*>& propertyValues,
+    bool onHeap) {
+
+    llvm::Value* objectPtr = nullptr;
+    if (onHeap) {
+        // Heap: the object survives the function that created it, so it can be
+        // returned or stored in an array. Freed by the program (pool and reuse)
+        // rather than automatically — see GAME_ROADMAP.md on memory strategy.
+        llvm::Type* charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(context), 0);
+        uint64_t size = module->getDataLayout().getTypeAllocSize(layout.structType);
+        llvm::FunctionCallee mallocFn = module->getOrInsertFunction(
+            "malloc", charPtr, llvm::Type::getInt64Ty(context));
+        llvm::Value* raw = builder.CreateCall(mallocFn,
+            {llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), size)}, "object_malloc");
+        objectPtr = builder.CreateBitCast(raw,
+            llvm::PointerType::get(layout.structType, 0), "optimized_object");
+    } else {
+        // Stack: much faster, and correct as long as the object does not escape
+        objectPtr = builder.CreateAlloca(
+            layout.structType,
+            nullptr,
+            "optimized_object"
+        );
+    }
+
     // Initialize struct members directly - no hash map overhead
     for (size_t i = 0; i < layout.properties.size() && i < propertyValues.size(); i++) {
         std::vector<llvm::Value*> indices = {
