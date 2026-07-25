@@ -1,0 +1,12 @@
+in try
+caught: something broke
+handled
+finally ran
+no error here
+finally after success
+caught number: 42
+inner caught: inner
+outer caught: rethrown from catch
+42
+caught from function: negative input: -1
+done

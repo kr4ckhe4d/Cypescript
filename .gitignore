@@ -17,6 +17,11 @@ cscript
 *.out
 *.app
 
+# ...but the test suite's expected-output fixtures are source, not artifacts.
+# Without this the *.out rule above silently excluded them, so tests/run_tests.sh
+# found no fixtures in CI and fell back to asserting exit codes only.
+!tests/expected/*.out
+
 # Object files and libraries
 *.o
 *.obj
