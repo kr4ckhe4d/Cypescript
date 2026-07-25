@@ -98,7 +98,82 @@ The web documentation includes:
 - **AST optimizer**: compile-time constant folding and dead-branch elimination (disable with `--no-fold`)
 - **LLVM -O2 native compilation** (3–17x faster than Node.js)
 - **C++ integration** with 30+ stdlib functions (strings, arrays, file I/O, JSON, random)
+- **Foreign function interface**: `declare function` binds any C symbol, `link "raylib";`
+  controls the linker — see [FFI](#foreign-function-interface-ffi)
+- **Native games**: window, sprites, input and audio via the optional game runtime —
+  see [example/game/](example/game/) and [GAME_ROADMAP.md](GAME_ROADMAP.md)
 - **VSCode Extension** with syntax highlighting and IntelliSense
+
+## Foreign Function Interface (FFI)
+
+`declare function` binds a C symbol directly — no compiler changes, no wrapper generation:
+
+```ts
+declare function atan2(y: f64, x: f64): f64;
+declare function malloc(size: i64): ptr;
+declare function free(block: ptr): void;
+
+println(atan2(1.0, 1.0));      // 0.785398
+let block: ptr = malloc(64);
+free(block);
+```
+
+C-ABI types: `i32`, `i64`, `i8` / `u8`, `f32`, `f64`, `string` (as `char*`), `ptr` (an
+opaque handle to foreign memory), and `void`.
+
+Libraries are requested from source, so a program is self-contained:
+
+```ts
+link path "/opt/homebrew/lib";
+link "raylib";
+link framework "Cocoa";        // macOS
+```
+
+…or from the command line: `cscript -r game.csc -lraylib -L/opt/homebrew/lib`.
+
+An optional `= "symbol"` clause binds a natural name to a C symbol, so an API can read
+like TypeScript without a wrapper layer:
+
+```ts
+declare function drawRect(x: f64, y: f64, w: f64, h: f64, color: i32): void = "cyps_rect";
+```
+
+This is what the game runtime is built on: `lib/game.csc` is an ordinary Cypescript file
+containing nothing but `declare`s and `link`s. **The compiler has no built-in knowledge of
+graphics.**
+
+### Writing a game
+
+raylib is **vendored** — CMake builds it from source and links it statically, so there is
+no system package to install:
+
+```bash
+cmake -S . -B build && cmake --build build
+cscript -r example/game/01_breakout.csc
+```
+
+```ts
+import { } from "game";        // ships with the compiler
+
+openWindow(640, 360, "my game");
+setTargetFps(60);
+
+while (!windowShouldClose()) {
+    beginFrame();
+    clearScreen(rgb(20, 20, 30));
+    drawRect(100.0, 100.0, 80.0, 40.0, rgb(255, 140, 60));
+    endFrame();
+}
+
+closeWindow();
+```
+
+Build with `-DCYPESCRIPT_VENDOR_RAYLIB=OFF` to use a system raylib, or
+`-DCYPESCRIPT_BUILD_GAME_RUNTIME=OFF` to leave it out. Attribution for raylib's zlib
+license is in [THIRD_PARTY.md](THIRD_PARTY.md).
+
+See [example/game/](example/game/) for a complete Breakout, and
+[GAME_ROADMAP.md](GAME_ROADMAP.md) for what is and isn't supported yet.
 
 ## Quick Start
 
