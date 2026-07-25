@@ -208,7 +208,14 @@ public:
         
         // Logical operators
         LOGICAL_AND,    // &&
-        LOGICAL_OR      // ||
+        LOGICAL_OR,     // ||
+
+        // Bitwise operators (integer operands only)
+        BIT_AND,        // &
+        BIT_OR,         // |
+        BIT_XOR,        // ^
+        SHIFT_LEFT,     // <<
+        SHIFT_RIGHT     // >> (arithmetic)
     };
     
     Operator op;
@@ -252,15 +259,32 @@ private:
             case GREATER_EQUAL: return ">=";
             case LOGICAL_AND: return "&&";
             case LOGICAL_OR: return "||";
+            case BIT_AND: return "&";
+            case BIT_OR: return "|";
+            case BIT_XOR: return "^";
+            case SHIFT_LEFT: return "<<";
+            case SHIFT_RIGHT: return ">>";
             default: return "UNKNOWN";
         }
+    }
+};
+
+// `null` / `undefined` — a null pointer. Mostly used for optional `ptr` handles
+// coming back from C (an unloaded texture, a sound that failed to load).
+class NullLiteralNode : public ExpressionNode
+{
+public:
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "NullLiteralNode\n";
     }
 };
 
 class UnaryExpressionNode : public ExpressionNode
 {
 public:
-    enum Operator { NOT, MINUS };
+    enum Operator { NOT, MINUS, BIT_NOT };
     Operator op;
     std::unique_ptr<ExpressionNode> operand;
 
@@ -273,6 +297,7 @@ public:
         {
             case NOT: return "!";
             case MINUS: return "-";
+            case BIT_NOT: return "~";
             default: return "unknown";
         }
     }
@@ -599,6 +624,64 @@ public:
             printIndent(os, indent + 1);
             os << m.name << ": " << m.type << "\n";
         }
+    }
+};
+
+// Foreign function declaration: declare function rl_rect(x: f64, y: f64): void;
+// The body lives in a C library; codegen emits an LLVM declaration and calls it
+// directly, so the compiler never needs to know which library it came from.
+class ExternDeclarationNode : public StatementNode
+{
+public:
+    struct Parameter {
+        std::string name;
+        std::string type;
+        Parameter(std::string n, std::string t) : name(std::move(n)), type(std::move(t)) {}
+    };
+
+    std::string functionName;
+    std::vector<Parameter> parameters;
+    std::string returnType;
+    // The C symbol to call. Defaults to functionName, but `= "cyps_rect"` lets a
+    // declaration expose a natural Cypescript name over a C-style symbol.
+    std::string symbolName;
+
+    ExternDeclarationNode(std::string name, std::string retType)
+        : functionName(std::move(name)), returnType(std::move(retType)),
+          symbolName(functionName) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "ExternDeclarationNode: " << functionName << "(";
+        for (size_t i = 0; i < parameters.size(); ++i) {
+            if (i > 0) os << ", ";
+            os << parameters[i].name << ": " << parameters[i].type;
+        }
+        os << "): " << returnType;
+        if (symbolName != functionName) os << " = \"" << symbolName << "\"";
+        os << "\n";
+    }
+};
+
+// Linker directive: link "raylib"; link framework "Cocoa"; link path "/usr/local/lib";
+// Collected by the driver and turned into flags on the final clang++ invocation.
+class LinkDirectiveNode : public StatementNode
+{
+public:
+    enum class Kind { Library, Framework, SearchPath };
+
+    Kind kind;
+    std::string value;
+
+    LinkDirectiveNode(Kind k, std::string v) : kind(k), value(std::move(v)) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        const char *kindName = kind == Kind::Library ? "library"
+                             : kind == Kind::Framework ? "framework" : "path";
+        os << "LinkDirectiveNode: " << kindName << " \"" << value << "\"\n";
     }
 };
 

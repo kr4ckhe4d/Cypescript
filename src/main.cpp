@@ -24,6 +24,14 @@
 
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
+#elif defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
 #elif defined(__linux__)
 #include <unistd.h>
 #endif
@@ -42,6 +50,15 @@ fs::path getExecutablePath(const char* argv0) {
     if (_NSGetExecutablePath(buf, &size) == 0) {
         std::error_code ec;
         fs::path p = fs::canonical(buf, ec);
+        if (!ec) return p;
+        return fs::path(buf);
+    }
+#elif defined(_WIN32)
+    wchar_t buf[MAX_PATH];
+    DWORD length = GetModuleFileNameW(nullptr, buf, MAX_PATH);
+    if (length > 0 && length < MAX_PATH) {
+        std::error_code ec;
+        fs::path p = fs::canonical(fs::path(buf), ec);
         if (!ec) return p;
         return fs::path(buf);
     }
@@ -92,6 +109,37 @@ std::string findRuntimeLibrary(const char* argv0) {
         "Set CYPESCRIPT_HOME to the installation prefix or rebuild with ./build.sh");
 }
 
+// Directory holding the bundled Cypescript modules (game.csc and friends), so
+// that `import { } from "game";` works from anywhere. Search order mirrors
+// findRuntimeLibrary: $CYPESCRIPT_HOME, then paths relative to the binary.
+fs::path findModuleDirectory(const char* argv0) {
+    if (const char* home = std::getenv("CYPESCRIPT_HOME")) {
+        fs::path candidate = fs::path(home) / "lib" / "cypescript";
+        if (fs::is_directory(candidate)) return candidate;
+    }
+
+    fs::path exePath = getExecutablePath(argv0);
+    if (!exePath.empty()) {
+        fs::path exeDir = exePath.parent_path();
+        fs::path candidates[] = {
+            exeDir / ".." / "lib" / "cypescript",   // installed layout
+            exeDir / "lib",                         // build tree (build/lib/game.csc)
+            exeDir / ".." / "lib",                  // repo checkout
+        };
+        for (const auto& candidate : candidates) {
+            std::error_code ec;
+            if (fs::is_directory(candidate) && fs::exists(candidate / "game.csc")) {
+                fs::path resolved = fs::canonical(candidate, ec);
+                return ec ? candidate : resolved;
+            }
+        }
+    }
+
+    // Last resort: running from the repo root
+    if (fs::is_directory("lib")) return fs::path("lib");
+    return fs::path();
+}
+
 // ANSI color codes for better output
 namespace Colors {
     constexpr const char* RESET = "\033[0m";
@@ -120,7 +168,10 @@ public:
     bool version = false;
     bool run = false;
     bool noFold = false;
-    
+    // Extra flags appended to the final clang++ link line. Programs can add to
+    // these from source with `link "raylib";` — see LinkDirectiveNode.
+    std::vector<std::string> linkFlags;
+
     static CompilerOptions parseArgs(int argc, char** argv) {
         CompilerOptions opts;
         
@@ -144,6 +195,23 @@ public:
             } else if (arg == "-o" || arg == "--output") {
                 if (i + 1 < argc) {
                     opts.outputFile = argv[++i];
+                } else {
+                    throw std::runtime_error("Option " + arg + " requires an argument");
+                }
+            } else if (starts_with(arg, "-l") && arg.size() > 2) {
+                opts.linkFlags.push_back(arg);              // -lraylib
+            } else if (starts_with(arg, "-L") && arg.size() > 2) {
+                opts.linkFlags.push_back(arg);              // -L/opt/homebrew/lib
+            } else if (arg == "--framework") {
+                if (i + 1 < argc) {
+                    opts.linkFlags.push_back("-framework");
+                    opts.linkFlags.push_back(argv[++i]);
+                } else {
+                    throw std::runtime_error("Option " + arg + " requires an argument");
+                }
+            } else if (arg == "--link-flag") {
+                if (i + 1 < argc) {
+                    opts.linkFlags.push_back(argv[++i]);
                 } else {
                     throw std::runtime_error("Option " + arg + " requires an argument");
                 }
@@ -173,12 +241,64 @@ public:
         std::cout << "    --no-fold           Disable AST constant folding / dead-branch elimination\n";
         std::cout << "    --print-tokens      Print lexer tokens\n";
         std::cout << "    --print-ast         Print abstract syntax tree\n\n";
+        std::cout << Colors::BOLD << "LINKING (for `declare function` / FFI):" << Colors::RESET << "\n";
+        std::cout << "    -l<name>            Link against a library (e.g. -lraylib)\n";
+        std::cout << "    -L<dir>             Add a library search path\n";
+        std::cout << "    --framework NAME    Link a macOS framework\n";
+        std::cout << "    --link-flag FLAG    Pass an arbitrary flag to the linker\n";
+        std::cout << "    (a program can also request these itself with `link \"raylib\";`)\n\n";
         std::cout << Colors::BOLD << "EXAMPLES:" << Colors::RESET << "\n";
         std::cout << "    cscript hello.csc\n";
         std::cout << "    cscript -r hello.csc\n";
         std::cout << "    cscript -o my_app hello.csc\n";
+        std::cout << "    cscript -r game.csc -lraylib -L/opt/homebrew/lib\n";
     }
 };
+
+// Quotes an argument for the shell that std::system() will use. The link line is
+// built from source-controlled directives, but they still reach std::system(),
+// so nothing goes on that line unquoted.
+std::string shellQuote(const std::string& arg) {
+#ifdef _WIN32
+    // cmd.exe understands double quotes only, and has no escape for a literal
+    // quote inside them — so reject rather than silently mangle.
+    if (arg.find('"') != std::string::npos) {
+        throw std::runtime_error("Link flag contains a quote character, which cannot "
+                                 "be passed safely on Windows: " + arg);
+    }
+    return "\"" + arg + "\"";
+#else
+    std::string quoted = "'";
+    for (char c : arg) {
+        if (c == '\'') quoted += "'\\''";
+        else quoted += c;
+    }
+    return quoted + "'";
+#endif
+}
+
+// Turns the program's own `link ...;` directives into clang++ flags.
+std::vector<std::string> collectLinkFlags(const ProgramNode* astRoot) {
+    std::vector<std::string> flags;
+    if (!astRoot) return flags;
+    for (const auto& stmt : astRoot->statements) {
+        auto* link = dynamic_cast<const LinkDirectiveNode*>(stmt.get());
+        if (!link) continue;
+        switch (link->kind) {
+            case LinkDirectiveNode::Kind::Library:
+                flags.push_back("-l" + link->value);
+                break;
+            case LinkDirectiveNode::Kind::Framework:
+                flags.push_back("-framework");
+                flags.push_back(link->value);
+                break;
+            case LinkDirectiveNode::Kind::SearchPath:
+                flags.push_back("-L" + link->value);
+                break;
+        }
+    }
+    return flags;
+}
 
 class Timer {
 private:
@@ -217,6 +337,9 @@ std::string readFile(const std::string& filename) {
 
 std::string resolveImportsImpl(const std::string& source, const fs::path& baseDir,
                                std::set<std::string>& visited);
+
+// Where bare imports like `from "game"` are looked up. Set once from main().
+fs::path g_moduleSearchDir;
 
 std::string loadModule(const fs::path& modulePath, std::set<std::string>& visited) {
     fs::path resolved = modulePath;
@@ -259,7 +382,17 @@ std::string resolveImportsImpl(const std::string& source, const fs::path& baseDi
                 throw std::runtime_error("Malformed import statement: " + line);
             }
             std::string modulePath = line.substr(firstQuote + 1, lastQuote - firstQuote - 1);
+            // A bare name like "game" resolves against the modules bundled with
+            // the compiler; anything relative or absolute resolves as written.
+            bool isRelative = starts_with(modulePath, "./") || starts_with(modulePath, "../") ||
+                              starts_with(modulePath, "/");
             fs::path resolved = baseDir / modulePath;
+            if (!isRelative && !g_moduleSearchDir.empty()) {
+                fs::path bundled = g_moduleSearchDir / modulePath;
+                if (!fs::exists(resolved) && !fs::exists(resolved.string() + ".csc")) {
+                    resolved = bundled;
+                }
+            }
             output << loadModule(resolved, visited) << "\n";
         } else {
             output << line << "\n";
@@ -335,6 +468,7 @@ int main(int argc, char** argv) {
         // Module Resolution (import/export inlining)
         printStageHeader("Module Resolution", opts.verbose);
         Timer importTimer;
+        g_moduleSearchDir = findModuleDirectory(argv[0]);
         sourceCode = resolveImports(sourceCode, opts.inputFile);
         printSuccess("Imports resolved (" + std::to_string(importTimer.elapsed()) + "ms)", opts.verbose);
         
@@ -460,6 +594,25 @@ int main(int argc, char** argv) {
             std::string stdlibPath = findRuntimeLibrary(argv[0]);
 
             std::string compileCmd = "clang++ -O2 " + irFile + " \"" + stdlibPath + "\" -o " + executableName + " -std=c++17";
+
+            // Libraries the program asked for itself via `link "raylib";`, followed
+            // by anything passed on the command line (which therefore wins).
+            std::vector<std::string> sourceLinkFlags = collectLinkFlags(astRoot.get());
+            if (!sourceLinkFlags.empty() || !opts.linkFlags.empty()) {
+                // Our own lib/ dir, so `link "cypescript_game";` resolves without
+                // the program needing to know where cscript was installed.
+                fs::path runtimeDir = fs::path(stdlibPath).parent_path();
+                if (!runtimeDir.empty()) {
+                    compileCmd += " " + shellQuote("-L" + runtimeDir.string());
+                }
+            }
+            for (const std::string& flag : sourceLinkFlags) {
+                compileCmd += " " + shellQuote(flag);
+            }
+            for (const std::string& flag : opts.linkFlags) {
+                compileCmd += " " + shellQuote(flag);
+            }
+
             if (opts.verbose) {
                 llvm::outs() << "Running: " << Colors::CYAN << compileCmd << Colors::RESET << "\n";
             }

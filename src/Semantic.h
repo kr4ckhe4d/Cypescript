@@ -27,6 +27,9 @@ private:
     std::vector<std::map<std::string, Binding>> m_scopes;
     std::map<std::string, size_t> m_functions; // user function name -> arity
     std::set<std::string> m_types;             // class/interface names (not values)
+    // Module-level variables. Unlike enclosing locals these stay visible inside
+    // function bodies, matching the globals CodeGen promotes for the same names.
+    std::map<std::string, Binding> m_globals;
     int m_loopDepth = 0;
     int m_switchDepth = 0;
     bool m_inMethod = false;

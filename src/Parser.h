@@ -44,6 +44,12 @@ private:
     std::unique_ptr<StatementNode> parseTryStatement();             // For try/catch/finally
     std::unique_ptr<StatementNode> parseThrowStatement();           // For throw
     std::unique_ptr<StatementNode> parseDestructuringDeclaration(); // For let { a, b } = obj
+    std::unique_ptr<StatementNode> parseExternDeclaration();        // For declare function f(...): T;
+    std::unique_ptr<StatementNode> parseLinkDirective();            // For link "raylib";
+    // `declare` and `link` are contextual keywords: they only start a statement in
+    // the shapes above, so existing programs may still use them as identifiers.
+    bool isExternDeclarationAhead() const;
+    bool isLinkDirectiveAhead() const;
     // Parses expression-initiated statements: assignments (=, +=, ...), i++/i--,
     // property/array assignments, and plain expression statements.
     std::unique_ptr<StatementNode> parseExpressionOrAssignmentStatement(bool consumeSemicolon);
@@ -63,7 +69,14 @@ private:
     std::unique_ptr<ExpressionNode> parseExpression();
     std::unique_ptr<ExpressionNode> parseLogicalOrExpression();     // ||
     std::unique_ptr<ExpressionNode> parseLogicalAndExpression();    // &&
+    std::unique_ptr<ExpressionNode> parseBitOrExpression();         // |
+    std::unique_ptr<ExpressionNode> parseBitXorExpression();        // ^
+    std::unique_ptr<ExpressionNode> parseBitAndExpression();        // &
     std::unique_ptr<ExpressionNode> parseComparisonExpression();    // == != < <= > >=
+    std::unique_ptr<ExpressionNode> parseShiftExpression();         // << >>
+    // `<<` / `>>` are two adjacent tokens rather than one, so that nested
+    // generics like Set<Map<i32>> still close correctly.
+    bool isShiftAhead(TokenType half) const;
     std::unique_ptr<ExpressionNode> parseAdditionExpression();      // + -
     std::unique_ptr<ExpressionNode> parseMultiplicationExpression(); // * / %
     std::unique_ptr<ExpressionNode> parseUnaryExpression();          // ! -

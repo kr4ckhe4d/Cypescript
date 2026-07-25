@@ -51,6 +51,23 @@ private:
     // Symbol Table: Maps variable names to their allocated memory location (AllocaInst)
     // This will need to be enhanced for scopes later.
     std::map<std::string, llvm::AllocaInst *> namedValues;
+
+    // Module-level variables promoted to LLVM globals so that functions can see
+    // them. Only variables actually referenced by some function body are
+    // promoted — everything else stays an alloca in main, which keeps top-level
+    // hot loops (the benchmarks) exactly as fast as before.
+    std::map<std::string, llvm::GlobalVariable *> globalValues;
+    // Names referenced inside any function/method/arrow body (collected in pass 0)
+    std::set<std::string> namesUsedByFunctions;
+    // True while generating main's top-level statements
+    bool atModuleLevel = false;
+
+    // Resolves a variable to its storage slot: a local alloca if one is in
+    // scope, otherwise a module-level global. Returns null if neither exists.
+    llvm::Value *variableStorage(const std::string &name, llvm::Type **outType = nullptr);
+    // Collects every identifier referenced by function bodies, so module-level
+    // declarations know whether they need to be globals
+    void collectFunctionReferencedNames(ProgramNode *node);
     
     // Type tracking: Maps variable names to their type information
     // For arrays, stores the element type (e.g., "i32" for i32[], "string" for string[])
@@ -95,6 +112,11 @@ private:
 
     // Interface registry for structural type checking (nodes owned by the AST)
     std::map<std::string, const InterfaceDeclarationNode*> interfaces;
+
+    // Foreign functions declared with `declare function` (nodes owned by the AST).
+    // Consulted before the built-in stdlib table, so a program can bind any C
+    // symbol without the compiler knowing anything about it.
+    std::map<std::string, const ExternDeclarationNode*> externFunctions;
 
     // Class registry: `new ClassName(...)` instantiates the class's object
     // template and calls its constructor (nodes owned by the AST)
@@ -171,6 +193,8 @@ private:
     void visit(StatementNode *node);           // Dispatcher
     void visit(VariableDeclarationNode *node); // New
     void visit(FunctionDeclarationNode *node); // For function definitions
+    // Declares a function's signature without generating its body
+    llvm::Function *declareFunctionSignature(FunctionDeclarationNode *node);
     void visit(TypeAliasNode *node);           // For type aliases
     void visit(ReturnStatementNode *node);     // For return statements
     void visit(ExpressionStatementNode *node); // For expressions used as statements

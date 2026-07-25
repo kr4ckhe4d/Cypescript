@@ -18,6 +18,15 @@
 #include <csetjmp>
 #include <setjmp.h> // for _setjmp/_longjmp pairing with generated code
 
+// The longjmp paired with the setjmp that CodeGen emits (CYPS_SETJMP_SYMBOL in
+// CodeGen.cpp). Windows has no _longjmp; plain longjmp is the counterpart of
+// _setjmp there. Keep these two in sync.
+#if defined(_WIN32)
+#define CYPS_LONGJMP longjmp
+#else
+#define CYPS_LONGJMP _longjmp
+#endif
+
 class DynamicArray {
 public:
     enum class Type { I32, F64, String, Object };
@@ -269,7 +278,32 @@ extern "C" {
     double math_exp(double x) {
         return std::exp(x);
     }
-    
+
+    double math_min(double a, double b) {
+        return a < b ? a : b;
+    }
+
+    double math_max(double a, double b) {
+        return a > b ? a : b;
+    }
+
+    double math_round(double x) {
+        return std::round(x);
+    }
+
+    double math_ceil(double x) {
+        return std::ceil(x);
+    }
+
+    double math_atan2(double y, double x) {
+        return std::atan2(y, x);
+    }
+
+    // Math.random(): [0, 1). Shares random_seed() with random_int().
+    double math_random() {
+        return static_cast<double>(std::rand()) / (static_cast<double>(RAND_MAX) + 1.0);
+    }
+
     // ===================
     // STRING FUNCTIONS
     // ===================
@@ -956,7 +990,7 @@ extern "C" {
             std::exit(1);
         }
         g_cyps_try_top--;
-        _longjmp(g_cyps_try_stack[g_cyps_try_top], 1);
+        CYPS_LONGJMP(g_cyps_try_stack[g_cyps_try_top], 1);
     }
 
     void free_string(const char* str) {

@@ -116,6 +116,14 @@ std::unique_ptr<StatementNode> Parser::parseStatementInner()
     {
         return parseFunctionDeclaration();
     }
+    else if (isExternDeclarationAhead())
+    {
+        return parseExternDeclaration();
+    }
+    else if (isLinkDirectiveAhead())
+    {
+        return parseLinkDirective();
+    }
     else if (peek().type == TOK_TYPE)
     {
         return parseTypeAliasStatement();
@@ -634,23 +642,78 @@ std::unique_ptr<ExpressionNode> Parser::parseLogicalOrExpression()
 
 std::unique_ptr<ExpressionNode> Parser::parseLogicalAndExpression()
 {
-    auto expr = parseComparisonExpression();
+    auto expr = parseBitOrExpression();
     while (peek().type == TOK_AND) {
         advance();
-        expr = std::make_unique<BinaryExpressionNode>(BinaryExpressionNode::LOGICAL_AND, std::move(expr), parseComparisonExpression());
+        expr = std::make_unique<BinaryExpressionNode>(BinaryExpressionNode::LOGICAL_AND, std::move(expr), parseBitOrExpression());
+    }
+    return expr;
+}
+
+// Bitwise precedence follows TypeScript/C: | below ^ below &, all below comparison.
+std::unique_ptr<ExpressionNode> Parser::parseBitOrExpression()
+{
+    auto expr = parseBitXorExpression();
+    while (peek().type == TOK_PIPE) {
+        advance();
+        expr = std::make_unique<BinaryExpressionNode>(BinaryExpressionNode::BIT_OR, std::move(expr), parseBitXorExpression());
+    }
+    return expr;
+}
+
+std::unique_ptr<ExpressionNode> Parser::parseBitXorExpression()
+{
+    auto expr = parseBitAndExpression();
+    while (peek().type == TOK_CARET) {
+        advance();
+        expr = std::make_unique<BinaryExpressionNode>(BinaryExpressionNode::BIT_XOR, std::move(expr), parseBitAndExpression());
+    }
+    return expr;
+}
+
+std::unique_ptr<ExpressionNode> Parser::parseBitAndExpression()
+{
+    auto expr = parseComparisonExpression();
+    while (peek().type == TOK_AMPERSAND) {
+        advance();
+        expr = std::make_unique<BinaryExpressionNode>(BinaryExpressionNode::BIT_AND, std::move(expr), parseComparisonExpression());
+    }
+    return expr;
+}
+
+// True when the next two tokens are the same angle bracket written with no
+// space between them ("<<"), as opposed to the ">>" that ends nested generics.
+bool Parser::isShiftAhead(TokenType half) const
+{
+    return peek().type == half && peek(1).type == half &&
+           peek(1).line == peek().line && peek(1).column == peek().column + 1;
+}
+
+std::unique_ptr<ExpressionNode> Parser::parseShiftExpression()
+{
+    auto expr = parseAdditionExpression();
+    while (isShiftAhead(TOK_LESS) || isShiftAhead(TOK_GREATER)) {
+        BinaryExpressionNode::Operator op = (peek().type == TOK_LESS)
+            ? BinaryExpressionNode::SHIFT_LEFT
+            : BinaryExpressionNode::SHIFT_RIGHT;
+        advance();
+        advance();
+        expr = std::make_unique<BinaryExpressionNode>(op, std::move(expr), parseAdditionExpression());
     }
     return expr;
 }
 
 std::unique_ptr<ExpressionNode> Parser::parseComparisonExpression()
 {
-    auto expr = parseAdditionExpression();
+    auto expr = parseShiftExpression();
     while (peek().type == TOK_EQUAL_EQUAL || peek().type == TOK_NOT_EQUAL ||
            peek().type == TOK_LESS || peek().type == TOK_LESS_EQUAL ||
            peek().type == TOK_GREATER || peek().type == TOK_GREATER_EQUAL) {
+        // A "<<" or ">>" here belongs to the shift level, not comparison
+        if (isShiftAhead(TOK_LESS) || isShiftAhead(TOK_GREATER)) break;
         TokenType operatorType = peek().type;
         advance();
-        auto right = parseAdditionExpression();
+        auto right = parseShiftExpression();
         BinaryExpressionNode::Operator op;
         switch (operatorType) {
             case TOK_EQUAL_EQUAL: op = BinaryExpressionNode::EQUAL; break;
@@ -696,10 +759,13 @@ std::unique_ptr<ExpressionNode> Parser::parseMultiplicationExpression()
 
 std::unique_ptr<ExpressionNode> Parser::parseUnaryExpression()
 {
-    if (peek().type == TOK_BANG || peek().type == TOK_MINUS) {
+    if (peek().type == TOK_BANG || peek().type == TOK_MINUS || peek().type == TOK_TILDE) {
         TokenType operatorType = peek().type;
         advance();
-        return std::make_unique<UnaryExpressionNode>(operatorType == TOK_BANG ? UnaryExpressionNode::NOT : UnaryExpressionNode::MINUS, parseUnaryExpression());
+        UnaryExpressionNode::Operator op = UnaryExpressionNode::MINUS;
+        if (operatorType == TOK_BANG) op = UnaryExpressionNode::NOT;
+        else if (operatorType == TOK_TILDE) op = UnaryExpressionNode::BIT_NOT;
+        return std::make_unique<UnaryExpressionNode>(op, parseUnaryExpression());
     }
     return parsePrimaryExpression();
 }
@@ -713,6 +779,11 @@ std::unique_ptr<ExpressionNode> Parser::parsePrimaryExpression()
         expr = std::make_unique<FloatLiteralNode>(std::stod(advance().value));
     }
     else if (peek().type == TOK_TRUE || peek().type == TOK_FALSE) expr = parseBooleanLiteral();
+    else if (peek().type == TOK_NULL || peek().type == TOK_UNDEFINED) {
+        // A null pointer literal — mainly for optional `ptr` handles from C.
+        advance();
+        expr = std::make_unique<NullLiteralNode>();
+    }
     else if (peek().type == TOK_THIS) {
         advance();
         expr = parseArrayOrObjectAccess(std::make_unique<VariableExpressionNode>("this"));
@@ -819,7 +890,23 @@ std::unique_ptr<ExpressionNode> Parser::parseArrowFunction()
 
 std::unique_ptr<StringLiteralNode> Parser::parseStringLiteral() { return std::make_unique<StringLiteralNode>(consume(TOK_STRING_LITERAL, "Expected string literal").value); }
 
-std::unique_ptr<IntegerLiteralNode> Parser::parseIntegerLiteral() { return std::make_unique<IntegerLiteralNode>(std::stoll(consume(TOK_INT_LITERAL, "Expected integer literal").value)); }
+// Parses the literal forms the lexer accepts: 255, 0xFF, 0b1010, 0755.
+// (std::stoll defaults to base 10, which silently truncated "0xFF" to 0.)
+static long long parseIntegerLiteralValue(const std::string &text) {
+    if (text.size() > 2 && text[0] == '0') {
+        if (text[1] == 'x' || text[1] == 'X') return std::stoll(text.substr(2), nullptr, 16);
+        if (text[1] == 'b' || text[1] == 'B') return std::stoll(text.substr(2), nullptr, 2);
+    }
+    if (text.size() > 1 && text[0] == '0' && text.find_first_not_of("01234567", 1) == std::string::npos) {
+        return std::stoll(text.substr(1), nullptr, 8);
+    }
+    return std::stoll(text, nullptr, 10);
+}
+
+std::unique_ptr<IntegerLiteralNode> Parser::parseIntegerLiteral() {
+    return std::make_unique<IntegerLiteralNode>(
+        parseIntegerLiteralValue(consume(TOK_INT_LITERAL, "Expected integer literal").value));
+}
 
 std::unique_ptr<BooleanLiteralNode> Parser::parseBooleanLiteral() {
     bool val = (peek().type == TOK_TRUE);
@@ -907,6 +994,15 @@ std::unique_ptr<ExpressionNode> Parser::parseVariableExpression()
     if (varToken.value == "Math" && peek().type == TOK_DOT) {
         advance();
         const Token &methodToken = consume(TOK_IDENTIFIER, "Expected Math method");
+
+        // Math.PI is a constant, not a call
+        if (methodToken.value == "PI") {
+            return std::make_unique<FloatLiteralNode>(3.14159265358979323846);
+        }
+        if (methodToken.value == "E") {
+            return std::make_unique<FloatLiteralNode>(2.71828182845904523536);
+        }
+
         std::string target;
         if (methodToken.value == "sqrt") target = "math_sqrt";
         else if (methodToken.value == "pow") target = "math_pow";
@@ -916,6 +1012,12 @@ std::unique_ptr<ExpressionNode> Parser::parseVariableExpression()
         else if (methodToken.value == "cos") target = "math_cos";
         else if (methodToken.value == "log") target = "math_log";
         else if (methodToken.value == "exp") target = "math_exp";
+        else if (methodToken.value == "min") target = "math_min";
+        else if (methodToken.value == "max") target = "math_max";
+        else if (methodToken.value == "round") target = "math_round";
+        else if (methodToken.value == "ceil") target = "math_ceil";
+        else if (methodToken.value == "atan2") target = "math_atan2";
+        else if (methodToken.value == "random") target = "math_random";
         else throw std::runtime_error("Parse Error: Unsupported Math method 'Math." + methodToken.value + "'");
 
         auto callNode = std::make_unique<FunctionCallNode>(target);
@@ -1115,6 +1217,73 @@ std::unique_ptr<FunctionDeclarationNode> Parser::parseFunctionRest(const std::st
     while (peek().type != TOK_RBRACE && !isAtEnd()) funcNode->bodyStatements.push_back(parseStatement());
     consume(TOK_RBRACE, "Expected '}'");
     return funcNode;
+}
+
+// --- Foreign function interface ---
+// `declare` and `link` are contextual: they are only keywords in these exact
+// shapes, so a program that already uses either as an identifier keeps working.
+
+bool Parser::isExternDeclarationAhead() const
+{
+    return peek().type == TOK_IDENTIFIER && peek().value == "declare" &&
+           peek(1).type == TOK_FUNCTION;
+}
+
+bool Parser::isLinkDirectiveAhead() const
+{
+    if (peek().type != TOK_IDENTIFIER || peek().value != "link") return false;
+    if (peek(1).type == TOK_STRING_LITERAL) return true;
+    // link framework "Cocoa";  /  link path "/opt/homebrew/lib";
+    return peek(1).type == TOK_IDENTIFIER &&
+           (peek(1).value == "framework" || peek(1).value == "path") &&
+           peek(2).type == TOK_STRING_LITERAL;
+}
+
+// declare function rl_rect(x: f64, y: f64, w: f64, h: f64, color: i32): void;
+std::unique_ptr<StatementNode> Parser::parseExternDeclaration()
+{
+    advance(); // "declare"
+    consume(TOK_FUNCTION, "Expected 'function' after 'declare'");
+    const Token &nameToken = consume(TOK_IDENTIFIER, "Expected function name in declare");
+
+    auto node = std::make_unique<ExternDeclarationNode>(nameToken.value, "void");
+    consume(TOK_LPAREN, "Expected '(' in declare");
+    if (peek().type != TOK_RPAREN) {
+        do {
+            const Token &paramName = consume(TOK_IDENTIFIER, "Expected parameter name in declare");
+            consume(TOK_COLON, "Expected ':' — declared parameters need explicit types");
+            node->parameters.emplace_back(paramName.value, parseType());
+            if (peek().type == TOK_COMMA) advance();
+        } while (peek().type != TOK_RPAREN && !isAtEnd());
+    }
+    consume(TOK_RPAREN, "Expected ')' in declare");
+    if (peek().type == TOK_COLON) { advance(); node->returnType = parseType(); }
+
+    // Optional symbol binding: declare function drawRect(...): void = "cyps_rect";
+    // Lets the Cypescript-facing name differ from the C symbol it calls.
+    if (peek().type == TOK_EQUAL) {
+        advance();
+        node->symbolName = consume(TOK_STRING_LITERAL,
+            "Expected a C symbol name in quotes after '=' in declare").value;
+    }
+
+    consume(TOK_SEMICOLON, "Expected ';' after declare (foreign functions have no body)");
+    return node;
+}
+
+// link "raylib";  link framework "Cocoa";  link path "/opt/homebrew/lib";
+std::unique_ptr<StatementNode> Parser::parseLinkDirective()
+{
+    advance(); // "link"
+    LinkDirectiveNode::Kind kind = LinkDirectiveNode::Kind::Library;
+    if (peek().type == TOK_IDENTIFIER) {
+        kind = (peek().value == "framework") ? LinkDirectiveNode::Kind::Framework
+                                             : LinkDirectiveNode::Kind::SearchPath;
+        advance();
+    }
+    const Token &valueToken = consume(TOK_STRING_LITERAL, "Expected a string after 'link'");
+    consume(TOK_SEMICOLON, "Expected ';' after link directive");
+    return std::make_unique<LinkDirectiveNode>(kind, valueToken.value);
 }
 
 std::unique_ptr<FunctionDeclarationNode> Parser::parseFunctionDeclaration()

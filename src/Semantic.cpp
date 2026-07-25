@@ -27,6 +27,9 @@ const SemanticAnalyzer::Binding *SemanticAnalyzer::lookup(const std::string &nam
         auto found = it->find(name);
         if (found != it->end()) return &found->second;
     }
+    // Module-level variables remain in scope inside functions
+    auto global = m_globals.find(name);
+    if (global != m_globals.end()) return &global->second;
     return nullptr;
 }
 
@@ -35,10 +38,20 @@ void SemanticAnalyzer::hoistDeclarations(const std::vector<std::unique_ptr<State
     for (const auto &stmt : statements) {
         if (auto *funcDecl = dynamic_cast<FunctionDeclarationNode*>(stmt.get())) {
             m_functions[funcDecl->functionName] = funcDecl->parameters.size();
+        } else if (auto *externDecl = dynamic_cast<ExternDeclarationNode*>(stmt.get())) {
+            // Foreign functions are arity-checked just like local ones
+            m_functions[externDecl->functionName] = externDecl->parameters.size();
         } else if (auto *classDecl = dynamic_cast<ClassDeclarationNode*>(stmt.get())) {
             m_types.insert(classDecl->className);
         } else if (auto *interfaceDecl = dynamic_cast<InterfaceDeclarationNode*>(stmt.get())) {
             m_types.insert(interfaceDecl->interfaceName);
+        } else if (auto *varDecl = dynamic_cast<VariableDeclarationNode*>(stmt.get())) {
+            // Module-level variables are visible inside function bodies
+            m_globals[varDecl->variableName] = Binding{varDecl->isConst};
+        } else if (auto *destructure = dynamic_cast<DestructuringDeclarationNode*>(stmt.get())) {
+            for (const auto &name : destructure->bindings) {
+                m_globals[name] = Binding{destructure->isConst};
+            }
         }
     }
 }
@@ -256,6 +269,7 @@ void SemanticAnalyzer::analyze(ProgramNode *program)
     m_scopes.clear();
     m_functions.clear();
     m_types.clear();
+    m_globals.clear();
     m_loopDepth = 0;
     m_switchDepth = 0;
     m_inMethod = false;

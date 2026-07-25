@@ -41,17 +41,34 @@ llvm::Value *CodeGen::coerceValue(llvm::Value *val, llvm::Type *targetType)
     if (!val || !targetType || val->getType() == targetType) return val;
 
     llvm::Type *srcType = val->getType();
-    if (srcType->isIntegerTy(1) && targetType->isIntegerTy(32)) {
-        return m_builder.CreateZExt(val, targetType, "bool_ext");
+
+    // Integer <-> integer (booleans are i1 internally, i32 everywhere else;
+    // i8/i64 show up at foreign-function boundaries)
+    if (srcType->isIntegerTy() && targetType->isIntegerTy()) {
+        unsigned srcBits = srcType->getIntegerBitWidth();
+        unsigned dstBits = targetType->getIntegerBitWidth();
+        if (srcBits == dstBits) return val;
+        if (dstBits == 1) {
+            return m_builder.CreateICmpNE(val, llvm::ConstantInt::get(srcType, 0), "bool_trunc");
+        }
+        if (srcBits == 1) {
+            return m_builder.CreateZExt(val, targetType, "bool_ext");
+        }
+        return srcBits < dstBits ? m_builder.CreateSExt(val, targetType, "int_ext")
+                                 : m_builder.CreateTrunc(val, targetType, "int_trunc");
     }
-    if (srcType->isIntegerTy(32) && targetType->isIntegerTy(1)) {
-        return m_builder.CreateICmpNE(val, llvm::ConstantInt::get(srcType, 0), "bool_trunc");
+    // Integer -> floating point (f32 or f64)
+    if (srcType->isIntegerTy() && targetType->isFloatingPointTy()) {
+        return m_builder.CreateSIToFP(val, targetType, "int_to_fp");
     }
-    if (srcType->isIntegerTy() && targetType->isDoubleTy()) {
-        return m_builder.CreateSIToFP(val, targetType, "int_to_f64");
+    // Floating point -> integer
+    if (srcType->isFloatingPointTy() && targetType->isIntegerTy()) {
+        return m_builder.CreateFPToSI(val, targetType, "fp_to_int");
     }
-    if (srcType->isDoubleTy() && targetType->isIntegerTy(32)) {
-        return m_builder.CreateFPToSI(val, targetType, "f64_to_int");
+    // f64 <-> f32
+    if (srcType->isFloatingPointTy() && targetType->isFloatingPointTy()) {
+        return srcType->isDoubleTy() ? m_builder.CreateFPTrunc(val, targetType, "f64_to_f32")
+                                     : m_builder.CreateFPExt(val, targetType, "f32_to_f64");
     }
     return val;
 }
@@ -79,15 +96,26 @@ llvm::Value *CodeGen::toStringValue(llvm::Value *val)
     return m_builder.CreateCall(toStr, {val}, "i32_str");
 }
 
+// setjmp cannot be wrapped in a helper — its stack frame is what returns twice —
+// so generated code has to call the C symbol directly. The name differs by
+// platform, and must stay paired with the longjmp that cyps_throw() calls in
+// cypescript_stdlib.cpp (see CYPS_LONGJMP there).
+#if defined(_WIN32)
+#define CYPS_SETJMP_SYMBOL "_setjmp"
+#else
+#define CYPS_SETJMP_SYMBOL "_setjmp"
+#endif
+
 llvm::FunctionCallee CodeGen::getOrDeclareSetjmp()
 {
-    llvm::Function *fn = m_module->getFunction("_setjmp");
+    llvm::Function *fn = m_module->getFunction(CYPS_SETJMP_SYMBOL);
     if (!fn) {
         llvm::FunctionType *fnType = llvm::FunctionType::get(
             llvm::Type::getInt32Ty(m_context),
             {llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0)},
             false);
-        fn = llvm::Function::Create(fnType, llvm::Function::ExternalLinkage, "_setjmp", m_module.get());
+        fn = llvm::Function::Create(fnType, llvm::Function::ExternalLinkage,
+                                    CYPS_SETJMP_SYMBOL, m_module.get());
         fn->addFnAttr(llvm::Attribute::ReturnsTwice);
     }
     return llvm::FunctionCallee(fn->getFunctionType(), fn);
@@ -129,6 +157,24 @@ llvm::Type *CodeGen::getLLVMType(const std::string &typeName)
     else if (typeName == "f64")
     {
         return llvm::Type::getDoubleTy(m_context);
+    }
+    else if (typeName == "f32")
+    {
+        return llvm::Type::getFloatTy(m_context);
+    }
+    else if (typeName == "i64")
+    {
+        return llvm::Type::getInt64Ty(m_context);
+    }
+    else if (typeName == "i8" || typeName == "u8")
+    {
+        return llvm::Type::getInt8Ty(m_context);
+    }
+    else if (typeName == "ptr")
+    {
+        // Opaque handle to foreign memory (a Texture*, a Sound*, ...). The
+        // compiler deliberately knows nothing about what it points at.
+        return llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
     }
     else if (typeName == "boolean")
     {
@@ -222,8 +268,15 @@ void CodeGen::visit(ProgramNode *node)
     arrowCounter = 0;
 
     classes.clear();
+    externFunctions.clear();
+    globalValues.clear();
+    atModuleLevel = false;
 
-    // Pass 0: Register all interfaces and classes so they are usable everywhere
+    // Which module-level variables do functions reach for? Only those get promoted.
+    collectFunctionReferencedNames(node);
+
+    // Pass 0: Register interfaces, classes and foreign declarations so they are
+    // usable everywhere, including above their point of declaration
     for (const auto &stmt : node->statements)
     {
         if (auto *interfaceNode = dynamic_cast<InterfaceDeclarationNode *>(stmt.get()))
@@ -234,14 +287,22 @@ void CodeGen::visit(ProgramNode *node)
         {
             classes[classNode->className] = classNode;
         }
+        else if (auto *externNode = dynamic_cast<ExternDeclarationNode *>(stmt.get()))
+        {
+            externFunctions[externNode->functionName] = externNode;
+        }
     }
 
-    // First pass: Process all function declarations at module level
+    // First pass: declare every function's signature, but generate no bodies
+    // yet. main is emitted before the bodies because it is what creates the
+    // module-level globals those bodies may reference.
+    std::vector<FunctionDeclarationNode *> functionDecls;
     for (const auto &stmt : node->statements)
     {
         if (auto *funcDeclNode = dynamic_cast<FunctionDeclarationNode *>(stmt.get()))
         {
-            visit(funcDeclNode);
+            declareFunctionSignature(funcDeclNode);
+            functionDecls.push_back(funcDeclNode);
         }
     }
 
@@ -251,7 +312,9 @@ void CodeGen::visit(ProgramNode *node)
     {
         if (!dynamic_cast<FunctionDeclarationNode *>(stmt.get()) &&
             !dynamic_cast<InterfaceDeclarationNode *>(stmt.get()) &&
-            !dynamic_cast<ClassDeclarationNode *>(stmt.get()))
+            !dynamic_cast<ClassDeclarationNode *>(stmt.get()) &&
+            !dynamic_cast<ExternDeclarationNode *>(stmt.get()) &&
+            !dynamic_cast<LinkDirectiveNode *>(stmt.get()))
         {
             mainStatements.push_back(stmt.get());
         }
@@ -270,11 +333,14 @@ void CodeGen::visit(ProgramNode *node)
         // Set current function context for main
         currentFunction = mainFunc;
 
-        // Process main statements
+        // Process main statements. Declarations directly at this level (not
+        // nested inside a block) are the ones eligible to become globals.
         for (StatementNode* stmt : mainStatements)
         {
+            atModuleLevel = dynamic_cast<VariableDeclarationNode *>(stmt) != nullptr;
             visit(stmt);
         }
+        atModuleLevel = false;
 
         m_builder.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt32Ty(m_context), 0));
         
@@ -285,6 +351,13 @@ void CodeGen::visit(ProgramNode *node)
         {
             std::cerr << "Error: main function verification failed!\n";
         }
+    }
+
+    // Third pass: generate the function bodies, now that module-level globals
+    // exist and their recorded types are known
+    for (FunctionDeclarationNode *funcDeclNode : functionDecls)
+    {
+        visit(funcDeclNode);
     }
 }
 
@@ -374,6 +447,12 @@ void CodeGen::visit(StatementNode *node)
     {
         visit(throwNode);
     }
+    else if (dynamic_cast<ExternDeclarationNode *>(node) ||
+             dynamic_cast<LinkDirectiveNode *>(node))
+    {
+        // Declarations only: externs are registered in pass 0 and emitted lazily
+        // at their first call site; link directives are consumed by the driver.
+    }
     else
     {
         std::cerr << "Codegen Error: Unsupported statement type.\n";
@@ -397,6 +476,12 @@ void CodeGen::visit(VariableDeclarationNode *node)
             arrLit->elementType = node->typeName.substr(0, node->typeName.length() - 2);
         }
     }
+
+    // Claim the module-level flag immediately: generating the initializer may
+    // recurse into nested bodies (an arrow function, say), and those
+    // declarations must not be mistaken for module-level ones.
+    const bool isModuleLevelDecl = atModuleLevel;
+    atModuleLevel = false;
 
     // Generate the initializer first so its value can drive type inference
     llvm::Value *initVal = nullptr;
@@ -432,7 +517,12 @@ void CodeGen::visit(VariableDeclarationNode *node)
         if (auto *callNode = dynamic_cast<FunctionCallNode*>(node->initializer.get())) {
             if (callNode->functionName == "JSON.parse") typeToStore = "json";
             else if (callNode->functionName == "JSON.stringify") typeToStore = "string";
-            else typeToStore = "";
+            else {
+                // A declared foreign function knows its own return type — without
+                // this an opaque `ptr` handle would be mistaken for a string.
+                auto externIt = externFunctions.find(callNode->functionName);
+                typeToStore = (externIt != externFunctions.end()) ? externIt->second->returnType : "";
+            }
         } else if (auto *newExpr = dynamic_cast<NewExpressionNode*>(node->initializer.get())) {
             // e.g. new Map<string, string[]>() -> "Map<string,string[]>"
             typeToStore = newExpr->className;
@@ -477,12 +567,28 @@ void CodeGen::visit(VariableDeclarationNode *node)
         ? getLLVMType(typeToStore)
         : getLLVMType(node->typeName);
 
-    // Create alloca at the beginning of the function
-    llvm::Function *currentFunction = m_builder.GetInsertBlock()->getParent();
-    llvm::IRBuilder<> TmpB(&currentFunction->getEntryBlock(), currentFunction->getEntryBlock().begin());
-    llvm::AllocaInst *allocaInst = TmpB.CreateAlloca(varLLVMType, nullptr, node->variableName);
+    // A module-level variable that some function reads becomes an LLVM global so
+    // it is reachable from outside main. The initializer still runs here, in
+    // declaration order, so observable behaviour is unchanged.
+    llvm::Value *storage = nullptr;
+    if (isModuleLevelDecl && namesUsedByFunctions.count(node->variableName)) {
+        auto *global = new llvm::GlobalVariable(
+            *m_module, varLLVMType, /*isConstant=*/false,
+            llvm::GlobalValue::InternalLinkage,
+            llvm::Constant::getNullValue(varLLVMType),
+            node->variableName);
+        globalValues[node->variableName] = global;
+        namedValues.erase(node->variableName);
+        storage = global;
+    } else {
+        // Create alloca at the beginning of the function
+        llvm::Function *currentFunction = m_builder.GetInsertBlock()->getParent();
+        llvm::IRBuilder<> TmpB(&currentFunction->getEntryBlock(), currentFunction->getEntryBlock().begin());
+        llvm::AllocaInst *allocaInst = TmpB.CreateAlloca(varLLVMType, nullptr, node->variableName);
+        namedValues[node->variableName] = allocaInst;
+        storage = allocaInst;
+    }
 
-    namedValues[node->variableName] = allocaInst;
     variableTypes[node->variableName] = typeToStore;
     constVariables[node->variableName] = node->isConst;
 
@@ -495,7 +601,7 @@ void CodeGen::visit(VariableDeclarationNode *node)
         } else {
             initVal = coerceValue(initVal, varLLVMType);
         }
-        m_builder.CreateStore(initVal, allocaInst);
+        m_builder.CreateStore(initVal, storage);
     }
 }
 
@@ -516,6 +622,11 @@ llvm::Value *CodeGen::visit(ExpressionNode *node)
     else if (auto *floatNode = dynamic_cast<FloatLiteralNode *>(node))
     {
         return visit(floatNode);
+    }
+    else if (dynamic_cast<NullLiteralNode *>(node))
+    {
+        return llvm::ConstantPointerNull::get(
+            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
     }
     else if (auto *varNode = dynamic_cast<VariableExpressionNode *>(node))
     {
@@ -589,16 +700,69 @@ llvm::Value *CodeGen::visit(FloatLiteralNode *node)
     return llvm::ConstantFP::get(llvm::Type::getDoubleTy(m_context), node->value);
 }
 
+// Walks every function, method and arrow body and records the identifiers they
+// reference. A module-level `let`/`const` is promoted to an LLVM global only if
+// it appears here; anything else keeps its alloca in main so that top-level hot
+// loops stay register-allocated exactly as before.
+void CodeGen::collectFunctionReferencedNames(ProgramNode *node)
+{
+    namesUsedByFunctions.clear();
+
+    for (const auto &stmt : node->statements) {
+        std::set<std::string> bound;
+        std::set<std::string> free;
+
+        if (auto *funcDecl = dynamic_cast<FunctionDeclarationNode *>(stmt.get())) {
+            for (const auto &param : funcDecl->parameters) bound.insert(param.name);
+            for (const auto &bodyStmt : funcDecl->bodyStatements) {
+                collectFreeVars(bodyStmt.get(), bound, free);
+            }
+        } else if (auto *classDecl = dynamic_cast<ClassDeclarationNode *>(stmt.get())) {
+            for (const auto &prop : classDecl->objectTemplate->properties) {
+                if (!prop.method) continue;
+                std::set<std::string> methodBound;
+                std::set<std::string> methodFree;
+                methodBound.insert("this");
+                for (const auto &param : prop.method->parameters) methodBound.insert(param.name);
+                for (const auto &bodyStmt : prop.method->bodyStatements) {
+                    collectFreeVars(bodyStmt.get(), methodBound, methodFree);
+                }
+                free.insert(methodFree.begin(), methodFree.end());
+            }
+        } else {
+            continue;
+        }
+
+        namesUsedByFunctions.insert(free.begin(), free.end());
+    }
+}
+
+llvm::Value *CodeGen::variableStorage(const std::string &name, llvm::Type **outType)
+{
+    auto local = namedValues.find(name);
+    if (local != namedValues.end() && local->second) {
+        if (outType) *outType = local->second->getAllocatedType();
+        return local->second;
+    }
+    auto global = globalValues.find(name);
+    if (global != globalValues.end() && global->second) {
+        if (outType) *outType = global->second->getValueType();
+        return global->second;
+    }
+    return nullptr;
+}
+
 llvm::Value *CodeGen::visit(VariableExpressionNode *node)
 {
-    llvm::AllocaInst *allocaInst = namedValues[node->name];
-    if (!allocaInst)
+    llvm::Type *storedType = nullptr;
+    llvm::Value *storage = variableStorage(node->name, &storedType);
+    if (!storage)
     {
         throw std::runtime_error("Codegen Error: Unknown variable name: " + node->name);
     }
-    
+
     // Load the value from the memory location
-    return m_builder.CreateLoad(allocaInst->getAllocatedType(), allocaInst, node->name + "_val");
+    return m_builder.CreateLoad(storedType, storage, node->name + "_val");
 }
 
 llvm::Value *CodeGen::visit(UnaryExpressionNode *node)
@@ -621,6 +785,12 @@ llvm::Value *CodeGen::visit(UnaryExpressionNode *node)
                 return m_builder.CreateFNeg(operand, "fnegtmp");
             }
             return m_builder.CreateNeg(operand, "negtmp");
+        case UnaryExpressionNode::BIT_NOT:
+            if (!operand->getType()->isIntegerTy()) {
+                throw std::runtime_error("Codegen Error: '~' requires an integer operand");
+            }
+            operand = coerceValue(operand, llvm::Type::getInt32Ty(m_context));
+            return m_builder.CreateNot(operand, "bitnottmp");
         default:
             throw std::runtime_error("Unknown unary operator");
     }
@@ -675,6 +845,31 @@ llvm::Value *CodeGen::visit(BinaryExpressionNode *node)
         throw std::runtime_error("Codegen Error: Failed to generate operands for binary expression");
     }
     
+    // Bitwise operators are integer-only, and bind before the float promotion
+    // below so that `&`/`|` never silently turn into floating-point work.
+    if (node->op == BinaryExpressionNode::BIT_AND || node->op == BinaryExpressionNode::BIT_OR ||
+        node->op == BinaryExpressionNode::BIT_XOR || node->op == BinaryExpressionNode::SHIFT_LEFT ||
+        node->op == BinaryExpressionNode::SHIFT_RIGHT) {
+        if (!leftVal->getType()->isIntegerTy() || !rightVal->getType()->isIntegerTy()) {
+            throw std::runtime_error("Codegen Error: bitwise operators require integer operands");
+        }
+        // Widen to the larger of the two so i32 & i64 works
+        llvm::Type *wide = leftVal->getType()->getIntegerBitWidth() >= rightVal->getType()->getIntegerBitWidth()
+            ? leftVal->getType() : rightVal->getType();
+        if (wide->getIntegerBitWidth() < 32) wide = llvm::Type::getInt32Ty(m_context);
+        leftVal = coerceValue(leftVal, wide);
+        rightVal = coerceValue(rightVal, wide);
+
+        switch (node->op) {
+            case BinaryExpressionNode::BIT_AND: return m_builder.CreateAnd(leftVal, rightVal, "andtmp");
+            case BinaryExpressionNode::BIT_OR: return m_builder.CreateOr(leftVal, rightVal, "ortmp");
+            case BinaryExpressionNode::BIT_XOR: return m_builder.CreateXor(leftVal, rightVal, "xortmp");
+            case BinaryExpressionNode::SHIFT_LEFT: return m_builder.CreateShl(leftVal, rightVal, "shltmp");
+            case BinaryExpressionNode::SHIFT_RIGHT: return m_builder.CreateAShr(leftVal, rightVal, "ashrtmp");
+            default: break;
+        }
+    }
+
     // String concatenation: `+` where either side is a string.
     // Non-string operands are converted with cyps_i32_to_string / cyps_f64_to_string.
     if (node->op == BinaryExpressionNode::ADD &&
@@ -1018,9 +1213,10 @@ void CodeGen::visit(SwitchStatementNode *node)
 
 void CodeGen::visit(AssignmentStatementNode *node)
 {
-    // Look up the variable in our symbol table
-    auto it = namedValues.find(node->variableName);
-    if (it == namedValues.end()) {
+    // Look up the variable: a local first, then a module-level global
+    llvm::Type *storedType = nullptr;
+    llvm::Value *varAlloca = variableStorage(node->variableName, &storedType);
+    if (!varAlloca) {
         throw std::runtime_error("Codegen Error: Undefined variable '" + node->variableName + "'");
     }
 
@@ -1029,8 +1225,6 @@ void CodeGen::visit(AssignmentStatementNode *node)
     if (constIt != constVariables.end() && constIt->second) {
         throw std::runtime_error("Codegen Error: Cannot reassign to const variable '" + node->variableName + "'");
     }
-
-    llvm::AllocaInst *varAlloca = it->second;
     // Generate code for the value expression
     llvm::Value *value = visit(node->value.get());
     if (!value) {
@@ -1038,7 +1232,7 @@ void CodeGen::visit(AssignmentStatementNode *node)
     }
 
     // Store the value in the variable's memory location (with i1/i32/f64 coercion)
-    value = coerceValue(value, varAlloca->getAllocatedType());
+    value = coerceValue(value, storedType);
     m_builder.CreateStore(value, varAlloca);
 }
 
@@ -1497,9 +1691,9 @@ llvm::Value *CodeGen::visit(FunctionCallNode *node)
             if (layoutIt != objectLayouts.end()) {
                 const ObjectOptimizer::ObjectLayout& layout = layoutIt->second;
                 
-                auto namedValueIt = namedValues.find(dynamic_cast<VariableExpressionNode*>(node->arguments[0].get())->name);
-                if (namedValueIt != namedValues.end()) {
-                    llvm::Value* objectPtrAlloca = namedValueIt->second;
+                llvm::Value* storageSlot = variableStorage(dynamic_cast<VariableExpressionNode*>(node->arguments[0].get())->name);
+                if (storageSlot != nullptr) {
+                    llvm::Value* objectPtrAlloca = storageSlot;
                     llvm::Value* objectPtr = m_builder.CreateLoad(
                         llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
                         objectPtrAlloca,
@@ -1622,9 +1816,9 @@ llvm::Value *CodeGen::visit(FunctionCallNode *node)
             if (layoutIt != objectLayouts.end()) {
                 const ObjectOptimizer::ObjectLayout& layout = layoutIt->second;
                 
-                auto namedValueIt = namedValues.find(dynamic_cast<VariableExpressionNode*>(node->arguments[0].get())->name);
-                if (namedValueIt != namedValues.end()) {
-                    llvm::Value* objectPtrAlloca = namedValueIt->second;
+                llvm::Value* storageSlot = variableStorage(dynamic_cast<VariableExpressionNode*>(node->arguments[0].get())->name);
+                if (storageSlot != nullptr) {
+                    llvm::Value* objectPtrAlloca = storageSlot;
                     llvm::Value* objectPtr = m_builder.CreateLoad(
                         llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
                         objectPtrAlloca,
@@ -2177,9 +2371,9 @@ llvm::Value *CodeGen::visit(ObjectAccessNode *node)
                 std::string varType = typeIt->second;
                 // Check if it's an array type
                 if (varType.length() > 2 && varType.substr(varType.length() - 2) == "[]") {
-                    auto namedValueIt = namedValues.find(varExpr->name);
-                    if (namedValueIt != namedValues.end()) {
-                        llvm::Value* arrPtrAlloca = namedValueIt->second;
+                    llvm::Value* storageSlot = variableStorage(varExpr->name);
+                    if (storageSlot != nullptr) {
+                        llvm::Value* arrPtrAlloca = storageSlot;
                         llvm::Value* arrPtr = m_builder.CreateLoad(
                             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
                             arrPtrAlloca,
@@ -2225,9 +2419,9 @@ llvm::Value *CodeGen::visit(ObjectAccessNode *node)
             llvm::Value* objectPtr = nullptr;
             
             if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(node->object.get())) {
-                auto namedValueIt = namedValues.find(varExpr->name);
-                if (namedValueIt != namedValues.end()) {
-                    llvm::Value* objectPtrAlloca = namedValueIt->second;
+                llvm::Value* storageSlot = variableStorage(varExpr->name);
+                if (storageSlot != nullptr) {
+                    llvm::Value* objectPtrAlloca = storageSlot;
                     objectPtr = m_builder.CreateLoad(
                         llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
                         objectPtrAlloca,
@@ -2312,9 +2506,9 @@ llvm::Value *CodeGen::visit(ObjectAccessNode *node)
                 std::string varType = typeIt->second;
                 
                 if (varType == "json") {
-                    auto namedValueIt = namedValues.find(varExpr->name);
-                    if (namedValueIt != namedValues.end()) {
-                        llvm::Value* jsonStrPtrAlloca = namedValueIt->second;
+                    llvm::Value* storageSlot = variableStorage(varExpr->name);
+                    if (storageSlot != nullptr) {
+                        llvm::Value* jsonStrPtrAlloca = storageSlot;
                         llvm::Value* jsonStrPtr = m_builder.CreateLoad(
                             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
                             jsonStrPtrAlloca,
@@ -2354,9 +2548,9 @@ llvm::Value *CodeGen::visit(MethodCallNode *node)
         if (typeIt != variableTypes.end()) {
             varType = typeIt->second;
         }
-        auto namedValueIt = namedValues.find(varExpr->name);
-        if (namedValueIt != namedValues.end()) {
-            llvm::Value* ptrAlloca = namedValueIt->second;
+        llvm::Value* storageSlot = variableStorage(varExpr->name);
+        if (storageSlot != nullptr) {
+            llvm::Value* ptrAlloca = storageSlot;
             objectValue = m_builder.CreateLoad(
                 llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
                 ptrAlloca,
@@ -2620,6 +2814,23 @@ llvm::Value *CodeGen::generateExternalFunctionCall(FunctionCallNode *node)
 
 llvm::FunctionCallee CodeGen::getOrDeclareExternalFunction(const std::string& name)
 {
+    // User-declared foreign functions win over the built-in stdlib table, so a
+    // program can bind any C symbol (graphics, audio, ...) without compiler changes.
+    auto externIt = externFunctions.find(name);
+    if (externIt != externFunctions.end()) {
+        const ExternDeclarationNode *decl = externIt->second;
+        std::vector<llvm::Type*> paramTypes;
+        paramTypes.reserve(decl->parameters.size());
+        for (const auto &param : decl->parameters) {
+            paramTypes.push_back(getLLVMType(param.type));
+        }
+        llvm::FunctionType *fnType =
+            llvm::FunctionType::get(getLLVMType(decl->returnType), paramTypes, false);
+        // Emit a call to the bound C symbol, which may differ from the name used
+        // in Cypescript (`declare function drawRect(...) = "cyps_rect";`)
+        return m_module->getOrInsertFunction(decl->symbolName, fnType);
+    }
+
     // Math functions
     if (name == "math_sqrt") {
         return m_module->getOrInsertFunction("math_sqrt",
@@ -2670,6 +2881,38 @@ llvm::FunctionCallee CodeGen::getOrDeclareExternalFunction(const std::string& na
     else if (name == "math_exp") {
         return m_module->getOrInsertFunction("math_exp",
             llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context));
+    }
+    else if (name == "math_ceil") {
+        return m_module->getOrInsertFunction("math_ceil",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context));
+    }
+    else if (name == "math_round") {
+        return m_module->getOrInsertFunction("math_round",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context));
+    }
+    else if (name == "math_min") {
+        return m_module->getOrInsertFunction("math_min",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context));
+    }
+    else if (name == "math_max") {
+        return m_module->getOrInsertFunction("math_max",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context));
+    }
+    else if (name == "math_atan2") {
+        return m_module->getOrInsertFunction("math_atan2",
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context),
+            llvm::Type::getDoubleTy(m_context));
+    }
+    else if (name == "math_random") {
+        return m_module->getOrInsertFunction("math_random",
             llvm::Type::getDoubleTy(m_context));
     }
     
@@ -3056,8 +3299,14 @@ llvm::FunctionCallee CodeGen::getOrDeclareExternalFunction(const std::string& na
 }
 
 // Function Declaration Visitor
-void CodeGen::visit(FunctionDeclarationNode *node)
+// Creates the LLVM function and registers it, without generating a body.
+// Signatures are declared for every function up front so that main (generated
+// first, because it is what creates the module-level globals) can call them.
+llvm::Function *CodeGen::declareFunctionSignature(FunctionDeclarationNode *node)
 {
+    auto existing = declaredFunctions.find(node->functionName);
+    if (existing != declaredFunctions.end()) return existing->second;
+
     // Convert parameter types to LLVM types
     std::vector<llvm::Type*> paramTypes;
     for (const auto& param : node->parameters) {
@@ -3067,33 +3316,34 @@ void CodeGen::visit(FunctionDeclarationNode *node)
         }
         paramTypes.push_back(paramType);
     }
-    
+
     // Convert return type to LLVM type
     llvm::Type* returnType = getLLVMType(node->returnType);
     if (!returnType) {
         throw std::runtime_error("Unknown return type: " + node->returnType);
     }
-    
-    // Create function type
+
     llvm::FunctionType* funcType = llvm::FunctionType::get(returnType, paramTypes, false);
-    
-    // Create function
     llvm::Function* function = llvm::Function::Create(
-        funcType, 
-        llvm::Function::ExternalLinkage, 
-        node->functionName, 
+        funcType,
+        llvm::Function::ExternalLinkage,
+        node->functionName,
         m_module.get()
     );
-    
-    // Store function in our map
+
     declaredFunctions[node->functionName] = function;
-    
-    // Set parameter names
+
     auto argIt = function->arg_begin();
     for (size_t i = 0; i < node->parameters.size(); ++i, ++argIt) {
         argIt->setName(node->parameters[i].name);
     }
-    
+    return function;
+}
+
+void CodeGen::visit(FunctionDeclarationNode *node)
+{
+    llvm::Function* function = declareFunctionSignature(node);
+
     // Create basic block for function body
     llvm::BasicBlock* entryBlock = llvm::BasicBlock::Create(m_context, "entry", function);
     m_builder.SetInsertPoint(entryBlock);
@@ -3105,9 +3355,13 @@ void CodeGen::visit(FunctionDeclarationNode *node)
     // Save current symbol table (for nested scopes later)
     auto prevNamedValues = namedValues;
     auto prevVariableTypes = variableTypes;
-    
+
+    // A function body sees its parameters and module-level globals, never the
+    // caller's locals — those allocas belong to a different LLVM function.
+    namedValues.clear();
+
     // Create allocas for parameters
-    argIt = function->arg_begin();
+    auto argIt = function->arg_begin();
     for (size_t i = 0; i < node->parameters.size(); ++i, ++argIt) {
         const auto& param = node->parameters[i];
         
@@ -3964,11 +4218,11 @@ void CodeGen::visit(ObjectPropertyAssignmentNode *node)
     // Resolve the object pointer
     llvm::Value *objectPtr = nullptr;
     if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(node->object.get())) {
-        auto namedValueIt = namedValues.find(varExpr->name);
-        if (namedValueIt != namedValues.end()) {
+        llvm::Value* storageSlot = variableStorage(varExpr->name);
+        if (storageSlot != nullptr) {
             objectPtr = m_builder.CreateLoad(
                 llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
-                namedValueIt->second,
+                storageSlot,
                 "obj_ptr_load");
         }
     } else {
