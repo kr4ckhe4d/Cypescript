@@ -854,6 +854,31 @@ llvm::Value *CodeGen::visit(BinaryExpressionNode *node)
         // Right block
         m_builder.SetInsertPoint(rightBlock);
         llvm::Value *rightVal = visit(node->right.get());
+
+        // The two sides can produce different LLVM types — most often an i32
+        // boolean field on one side and an i1 comparison on the other. Both
+        // arms of the phi must agree, so reconcile them here. Integers widen to
+        // the larger width, which keeps `a || b` returning a usable value (the
+        // pointer-valued idiom `map.get(k) || []` still yields a pointer).
+        if (leftVal->getType() != rightVal->getType()) {
+            llvm::Type *leftType = leftVal->getType();
+            llvm::Type *rightType = rightVal->getType();
+            if (leftType->isIntegerTy() && rightType->isIntegerTy()) {
+                llvm::Type *wide =
+                    leftType->getIntegerBitWidth() >= rightType->getIntegerBitWidth()
+                        ? leftType : rightType;
+                if (wide->isIntegerTy(1)) wide = llvm::Type::getInt32Ty(m_context);
+                rightVal = coerceValue(rightVal, wide);
+                // The left value is produced in a different block, so widen it there
+                llvm::IRBuilder<> leftBuilder(leftEndBlock->getTerminator());
+                if (leftVal->getType() != wide) {
+                    leftVal = leftBuilder.CreateZExt(leftVal, wide, "log_left_ext");
+                }
+            } else {
+                rightVal = coerceValue(rightVal, leftType);
+            }
+        }
+
         m_builder.CreateBr(mergeBlock);
         llvm::BasicBlock *rightEndBlock = m_builder.GetInsertBlock();
 
@@ -952,8 +977,22 @@ llvm::Value *CodeGen::visit(BinaryExpressionNode *node)
         rightVal = coerceValue(rightVal, i32Ty);
     }
 
-    // Check if we're dealing with strings
-    bool isStringComparison = leftVal->getType()->isPointerTy() && rightVal->getType()->isPointerTy();
+    // Check if we're dealing with strings. Object handles, `ptr` values and
+    // `null` are pointers too, and must be compared by identity — handing them
+    // to strcmp reads them as text and segfaults on anything non-null.
+    bool isStringComparison = leftVal->getType()->isPointerTy() && rightVal->getType()->isPointerTy() &&
+                              !isNonStringPointer(node->left.get()) &&
+                              !isNonStringPointer(node->right.get());
+
+    if (leftVal->getType()->isPointerTy() && rightVal->getType()->isPointerTy() && !isStringComparison &&
+        (node->op == BinaryExpressionNode::EQUAL || node->op == BinaryExpressionNode::NOT_EQUAL)) {
+        if (leftVal->getType() != rightVal->getType()) {
+            rightVal = m_builder.CreateBitCast(rightVal, leftVal->getType(), "ptr_cmp_cast");
+        }
+        return node->op == BinaryExpressionNode::EQUAL
+            ? m_builder.CreateICmpEQ(leftVal, rightVal, "ptr_eq")
+            : m_builder.CreateICmpNE(leftVal, rightVal, "ptr_ne");
+    }
 
     // Handle string comparisons
     if (isStringComparison && (node->op == BinaryExpressionNode::EQUAL || node->op == BinaryExpressionNode::NOT_EQUAL)) {
@@ -2272,6 +2311,43 @@ bool CodeGen::isObjectTypeName(const std::string &typeName) {
     return classes.count(typeName) > 0 || interfaces.count(typeName) > 0;
 }
 
+// True when an expression is a pointer that is NOT text: a class instance, an
+// opaque `ptr` from C, or `null`. Equality on these must compare addresses;
+// strcmp would read them as strings.
+bool CodeGen::isNonStringPointer(ExpressionNode *expr) {
+    if (!expr) return false;
+    if (dynamic_cast<NullLiteralNode*>(expr)) return true;
+    if (dynamic_cast<NewExpressionNode*>(expr)) return true;
+
+    auto isHandleType = [&](const std::string &t) {
+        return t == "ptr" || t == "object" || isObjectTypeName(t);
+    };
+
+    if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(expr)) {
+        auto typeIt = variableTypes.find(varExpr->name);
+        if (typeIt != variableTypes.end() && isHandleType(typeIt->second)) return true;
+        return variableToObjectKey.count(varExpr->name) > 0;
+    }
+    if (auto *call = dynamic_cast<FunctionCallNode*>(expr)) {
+        auto externIt = externFunctions.find(call->functionName);
+        if (externIt != externFunctions.end()) return isHandleType(externIt->second->returnType);
+        auto retIt = functionReturnTypes.find(call->functionName);
+        if (retIt != functionReturnTypes.end()) return isHandleType(retIt->second);
+    }
+    if (auto *arrAccess = dynamic_cast<ArrayAccessNode*>(expr)) {
+        if (auto *arrVar = dynamic_cast<VariableExpressionNode*>(arrAccess->array.get())) {
+            auto typeIt = variableTypes.find(arrVar->name);
+            if (typeIt != variableTypes.end()) {
+                const std::string &arrType = typeIt->second;
+                if (arrType.size() > 2 && arrType.substr(arrType.size() - 2) == "[]") {
+                    return isHandleType(arrType.substr(0, arrType.size() - 2));
+                }
+            }
+        }
+    }
+    return false;
+}
+
 std::string CodeGen::objectKeyForTypeName(const std::string &typeName) {
     auto classIt = classes.find(typeName);
     if (classIt != classes.end() && classIt->second->objectTemplate) {
@@ -2766,6 +2842,12 @@ llvm::Value *CodeGen::visit(MethodCallNode *node)
                     llvm::Type::getInt32Ty(m_context));
                 return m_builder.CreateCall(pushFunc, {objectValue, argValue});
             }
+        } else if (node->methodName == "clear") {
+            if (node->arguments.size() != 0) throw std::runtime_error("clear() expects 0 arguments");
+            llvm::FunctionCallee clearFunc = m_module->getOrInsertFunction("array_clear",
+                llvm::Type::getVoidTy(m_context),
+                llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
+            return m_builder.CreateCall(clearFunc, {objectValue});
         } else if (node->methodName == "removeAt") {
             // Removing by index is what makes despawning possible in a game loop
             if (node->arguments.size() != 1) throw std::runtime_error("removeAt() expects 1 argument");

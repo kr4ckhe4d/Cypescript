@@ -15,7 +15,7 @@ Started 2026-07-25 against `main` @ `06e8d87` (v1.0.0).
 | **1** | FFI (`declare function`) + linker control + raylib shim | ✅ **DONE** |
 | **2** | First playable game (Breakout, struct-of-arrays) | ✅ **DONE** |
 | **3** | Heap objects — escape, object arrays, despawning | ✅ **DONE** |
-| 4 | Frame arena / memory hygiene | ⬜ **NEXT** |
+| **4** | Frame arena / memory hygiene | ✅ **DONE** |
 | **5** | Numeric & ergonomic gaps | ✅ **DONE** |
 | 6 | Packaging & shipping | 🔶 Vendoring + CI done; bundling left |
 
@@ -23,8 +23,11 @@ Started 2026-07-25 against `main` @ `06e8d87` (v1.0.0).
 60 fps Breakout), and M3 (Asteroids with real entity objects — spawned by
 functions, stored in `Rock[]`/`Bullet[]`, split on impact, removed when they die).
 
-Test suites: `bash tests/run_tests.sh` → **27/27**, `bash tests/run_game_tests.sh` → **7/7**.
+Test suites: `bash tests/run_tests.sh` → **30/30**, `bash tests/run_game_tests.sh` → **9/9**.
 Benchmarks unchanged at Rust parity.
+
+**Memory is flat.** Both games hold steady RSS from 2,000 to 300,000 headless frames —
+83 minutes of play at 60 fps with no growth — and the game suite asserts it.
 
 **raylib is vendored** — CMake builds it from source and links it statically, so a
 Cypescript install is self-contained with no system package. **`lib/game.csc` ships with
@@ -286,21 +289,66 @@ documented idiom) or freeing on removal for objects.
 
 ---
 
-## 6. Phase 4 — Memory & frame hygiene ⬜
+## 6. Phase 4 — Memory & frame hygiene ✅ DONE
 
-- **Frame arena for strings.** `cyps_frame_begin` resets an arena; `string_concat` and the
-  `cyps_*_to_string` helpers allocate from it. Strings become frame-lifetime, with
-  `string_persist()` to promote one. ~50 lines in the stdlib, and it is the larger share
-  of both games' leak.
-  - Risk: programs that hold strings across frames. **Make it opt-in** (`--frame-strings`,
-    or active only when the game runtime is linked).
-- **Objects removed from an array are never freed** (new in Phase 3). Either free on
-  removal, or ship pooling as the documented idiom and add a `Pool<T>`-shaped example.
-- Free on `pop`/`shift`; add `array_free` / `.clear()`.
-- `--leak-report` debug flag.
-- **Acceptance test: 100,000 headless frames with flat RSS.** Current baselines:
-  Breakout 8.5 → 17.5 MB over 100k frames (~92 B/frame), Asteroids 8.9 → 14.2 MB over
-  40k frames (~135 B/frame).
+Two separate leaks, fixed two different ways.
+
+### Strings: a frame arena
+
+`cyps_i32_to_string`, `cyps_f64_to_string` and `string_concat` — exactly what a template
+literal desugars into, and so essentially all per-frame string churn — now allocate from a
+bump arena that `beginFrame()` rewinds. Chunks are kept and reused, so a steady game loop
+stops calling the allocator at all.
+
+The blast radius is deliberately narrow. **Every other string function keeps its permanent
+allocation**, so `file_read`, `string_upper`, `array_get_string` and the rest behave
+identically whether or not the arena is on, and non-game programs are untouched.
+
+It is **opt-in** (`enableFrameStrings()`), because it changes a real contract: an arena
+string only lives until the next frame. Anything that must outlive its frame — a string in
+an object field, or pushed to an array you keep — has to be copied out with `persist()`.
+Strings built before the *first* `beginFrame()` are kept automatically, so start-up labels
+and static text need no special handling.
+
+The rewind happens before the headless early-return, so CI measures what a real frame does.
+
+### Objects: pooling
+
+Nothing frees a heap object when it leaves an array, and nothing safely can — other
+references may still point at it. So `example/game/02_asteroids.csc` was rewritten to
+**pool** its entities: every rock and bullet is allocated once at start-up and reused, with
+an `active` flag standing in for spawn and despawn. After setup the game never allocates.
+
+This is the standard arcade answer, it needs no unsafe primitive, and it keeps the
+no-GC-pause performance story intact. `.clear()` was added for releasing an array's storage.
+`removeAt` is still there and still tested (`tests/test_object_arrays.csc`) — pooling is the
+recommendation for hot paths, not a replacement for the operation.
+
+### Result
+
+| | Before | After |
+|---|---|---|
+| Breakout | 8.5 → 17.5 MB over 100k frames (~92 B/frame) | **8.31 MB, flat** |
+| Asteroids | 8.9 → 14.2 MB over 40k frames (~135 B/frame) | **8.36 MB, flat to 300k frames** |
+
+`tests/run_game_tests.sh` now samples peak RSS at 2,000 and 60,000 frames and fails if the
+long run grows materially — so a reintroduced leak breaks the build.
+
+### Two compiler bugs this uncovered
+
+Writing pooled entities immediately hit two latent codegen bugs, both now fixed and
+regression-tested:
+
+- **Pointer equality went through `strcmp`.** Any two pointers looked like strings to the
+  compiler, so `rock == null` called `strcmp` on an object address and segfaulted on
+  anything non-null. Class instances, `ptr` handles and `null` now compare by address;
+  strings still compare by value. This also meant the `ptr` null-check the FFI docs
+  recommend had never actually worked — `tests/test_bitwise.csc` only passed because
+  `strcmp(NULL, NULL)` happened not to crash.
+- **`&&` / `||` emitted invalid IR on mixed operand types.** The phi took its type from the
+  left arm, so `rock.active && dist < r` (an `i32` boolean field against an `i1`
+  comparison) failed LLVM verification. Both arms are now reconciled, with integers
+  widening — which preserves the pointer-valued `map.get(k) || []` idiom.
 
 ---
 
@@ -499,3 +547,17 @@ New tests: `test_bitwise`, `test_globals`. Suite is now 26/26 language + 4/4 gam
   1.1.0 so the two builds are distinguishable.
 
 Suite is now 27/27 language + 7/7 game.
+
+**2026-07-25 — Phase 4 complete: memory is flat.**
+
+- Frame arena behind `enableFrameStrings()`, covering the three functions template
+  literals desugar into; `persist()` copies a string out. Rewound by `beginFrame()`.
+- `array.clear()`; Asteroids rewritten to pool its rocks and bullets.
+- Both games hold flat RSS to 300,000 frames; `run_game_tests.sh` asserts it by
+  sampling peak RSS at two run lengths.
+- Fixed two latent codegen bugs found on the way: pointer equality dispatching to
+  `strcmp` (segfaulted on any non-null object or `ptr` compared to `null`), and `&&`/`||`
+  building a phi from mismatched operand types (invalid IR).
+
+New tests: `test_pointer_equality`, `test_logical_mixed_types`, `test_frame_strings`.
+Suite is now 30/30 language + 9/9 game. Benchmarks still at Rust parity.

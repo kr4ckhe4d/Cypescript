@@ -49,6 +49,21 @@ declare function elapsedTime(): f64 = "cyps_time";
 declare function currentFps(): i32 = "cyps_fps";
 
 // =============================================================================
+// Frame-scoped strings
+// =============================================================================
+// Opt in once, before the loop. Strings built by template literals and `+` then
+// live only until the next beginFrame(), which makes a HUD free rather than
+// leaking around 100 bytes every frame.
+//
+// CONTRACT: anything that must outlive the frame that built it — a string stored
+// in an object field, or pushed to an array you keep — must be copied out with
+// persist(). Strings built before the first beginFrame() are kept automatically.
+
+declare function enableFrameStrings(): void = "cyps_arena_enable";
+declare function persist(text: string): string = "cyps_string_persist";
+declare function frameStringBytes(): i64 = "cyps_arena_bytes_reserved";
+
+// =============================================================================
 // Colors
 // =============================================================================
 

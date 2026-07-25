@@ -1,10 +1,15 @@
 // 02 — Asteroids: dynamic entities, written the way you'd actually write them.
 //
 // Where Breakout (01) had to keep entities in parallel arrays, this game uses
-// real objects: classes with constructors and methods, stored in `Rock[]` and
-// `Bullet[]`, spawned by functions that return them, and removed when they die.
-// That is Phase 3 of GAME_ROADMAP.md — objects now live on the heap, so they
+// real objects: classes with methods, stored in `Rock[]` and `Bullet[]`.
+// That is Phase 3 of GAME_ROADMAP.md — objects live on the heap, so they
 // outlive the function that created them.
+//
+// Entities are POOLED: every rock and bullet is allocated once at start-up and
+// then reused, with an `active` flag standing in for spawn and despawn. Nothing
+// frees a heap object when it leaves an array, so a game that allocated per
+// spawn would grow without bound. Pooling is the standard arcade answer and it
+// keeps memory genuinely flat — see GAME_ROADMAP.md Phase 4.
 //
 //   Run:      cscript -r example/game/02_asteroids.csc
 //   Headless: CYPS_HEADLESS=1 CYPS_FRAMES=600 cscript -r example/game/02_asteroids.csc
@@ -22,6 +27,10 @@ const SHIP_DRAG: f64 = 0.72;
 const BULLET_SPEED: f64 = 520.0;
 const BULLET_LIFE: f64 = 1.1;
 const FIRE_DELAY: f64 = 0.18;
+
+// Pool capacities. Both are hard ceilings: the game never allocates after setup.
+const MAX_BULLETS: i32 = 48;
+const MAX_ROCKS: i32 = 96;
 
 // =============================================================================
 // Entities
@@ -59,20 +68,23 @@ class Ship {
 }
 
 class Rock {
-    x: f64;
-    y: f64;
-    vx: f64;
-    vy: f64;
-    radius: f64;
-    size: i32;          // 3 = large, 2 = medium, 1 = small
+    x: f64 = 0.0;
+    y: f64 = 0.0;
+    vx: f64 = 0.0;
+    vy: f64 = 0.0;
+    radius: f64 = 0.0;
+    size: i32 = 0;          // 3 = large, 2 = medium, 1 = small
+    active: boolean = false;
 
-    constructor(x: f64, y: f64, vx: f64, vy: f64, size: i32) {
+    // Reusing a pooled slot instead of allocating a new object
+    spawn(x: f64, y: f64, vx: f64, vy: f64, size: i32): void {
         this.x = x;
         this.y = y;
         this.vx = vx;
         this.vy = vy;
         this.size = size;
         this.radius = size * 15.0;
+        this.active = true;
     }
 
     step(dt: f64): void {
@@ -82,24 +94,27 @@ class Rock {
 }
 
 class Bullet {
-    x: f64;
-    y: f64;
-    vx: f64;
-    vy: f64;
-    life: f64;
+    x: f64 = 0.0;
+    y: f64 = 0.0;
+    vx: f64 = 0.0;
+    vy: f64 = 0.0;
+    life: f64 = 0.0;
+    active: boolean = false;
 
-    constructor(x: f64, y: f64, vx: f64, vy: f64) {
+    spawn(x: f64, y: f64, vx: f64, vy: f64): void {
         this.x = x;
         this.y = y;
         this.vx = vx;
         this.vy = vy;
         this.life = BULLET_LIFE;
+        this.active = true;
     }
 
     step(dt: f64): void {
         this.x += this.vx * dt;
         this.y += this.vy * dt;
         this.life -= dt;
+        if (this.life <= 0.0) { this.active = false; }
     }
 }
 
@@ -119,35 +134,79 @@ function distance(ax: f64, ay: f64, bx: f64, by: f64): f64 {
     return Math.sqrt(dx * dx + dy * dy);
 }
 
-function spawnRock(size: i32): Rock {
+// The pool idiom: hand back a dormant slot, or null when the pool is full.
+// Returning an object from a function is Phase 3 work; this is what replaces
+// `new` in the hot path.
+function takeRock(pool: Rock[]): Rock {
+    let i: i32 = 0;
+    while (i < pool.length) {
+        let candidate: Rock = pool[i];
+        if (!candidate.active) { return candidate; }
+        i += 1;
+    }
+    return null;
+}
+
+function takeBullet(pool: Bullet[]): Bullet {
+    let i: i32 = 0;
+    while (i < pool.length) {
+        let candidate: Bullet = pool[i];
+        if (!candidate.active) { return candidate; }
+        i += 1;
+    }
+    return null;
+}
+
+function spawnRock(pool: Rock[], size: i32): void {
+    let rock: Rock = takeRock(pool);
+    if (rock == null) { return; }
     // Start near an edge so rocks drift inward rather than onto the ship
     let x: f64 = Math.random() * WIDTH;
     let y: f64 = 0.0;
     if (Math.random() < 0.5) { y = HEIGHT; }
     let speed: f64 = 40.0 + Math.random() * 60.0;
     let dir: f64 = Math.random() * 6.2831853;
-    return new Rock(x, y, Math.cos(dir) * speed, Math.sin(dir) * speed, size);
+    rock.spawn(x, y, Math.cos(dir) * speed, Math.sin(dir) * speed, size);
 }
 
-function splitRock(parent: Rock, dir: f64): Rock {
+function splitRock(pool: Rock[], parent: Rock, dir: f64): void {
+    let rock: Rock = takeRock(pool);
+    if (rock == null) { return; }
     let speed: f64 = 70.0 + Math.random() * 70.0;
-    return new Rock(parent.x, parent.y,
-                    Math.cos(dir) * speed, Math.sin(dir) * speed,
-                    parent.size - 1);
+    rock.spawn(parent.x, parent.y,
+               Math.cos(dir) * speed, Math.sin(dir) * speed,
+               parent.size - 1);
 }
 
-function fire(ship: Ship): Bullet {
+function fire(pool: Bullet[], ship: Ship): void {
+    let bullet: Bullet = takeBullet(pool);
+    if (bullet == null) { return; }
     let nose: f64 = 16.0;
-    return new Bullet(ship.x + Math.cos(ship.angle) * nose,
-                      ship.y + Math.sin(ship.angle) * nose,
-                      ship.vx + Math.cos(ship.angle) * BULLET_SPEED,
-                      ship.vy + Math.sin(ship.angle) * BULLET_SPEED);
+    bullet.spawn(ship.x + Math.cos(ship.angle) * nose,
+                 ship.y + Math.sin(ship.angle) * nose,
+                 ship.vx + Math.cos(ship.angle) * BULLET_SPEED,
+                 ship.vy + Math.sin(ship.angle) * BULLET_SPEED);
+}
+
+// Counts live entities — the arrays are fixed-size, so length is the capacity
+function countActiveRocks(pool: Rock[]): i32 {
+    let n: i32 = 0;
+    let i: i32 = 0;
+    while (i < pool.length) {
+        let rock: Rock = pool[i];
+        if (rock.active) { n += 1; }
+        i += 1;
+    }
+    return n;
 }
 
 // =============================================================================
 // Setup
 // =============================================================================
 
+// HUD text is rebuilt every frame; frame-scoped strings make that free
+// instead of leaking. See lib/game.csc on what this costs you.
+enableFrameStrings();
 quietLogs();
 openWindow(900, 650, "Cypescript Asteroids");
 setTargetFps(60);
@@ -175,10 +234,16 @@ let wave: i32 = 1;
 let fireCooldown: f64 = 0.0;
 let frames: i32 = 0;
 
+// Allocate every entity once, here. After this line the game never allocates.
+let p: i32 = 0;
+while (p < MAX_ROCKS) { rocks.push(new Rock()); p += 1; }
+p = 0;
+while (p < MAX_BULLETS) { bullets.push(new Bullet()); p += 1; }
+
 let startRocks: i32 = 4;
 let r: i32 = 0;
 while (r < startRocks) {
-    rocks.push(spawnRock(3));
+    spawnRock(rocks, 3);
     r += 1;
 }
 
@@ -204,14 +269,20 @@ while (!windowShouldClose()) {
         thrusting = false;
         shooting = true;
 
-        if (rocks.length > 0) {
-            let target: Rock = rocks[0];
-            let want: f64 = Math.atan2(target.y - ship.y, target.x - ship.x);
-            let diff: f64 = want - ship.angle;
-            while (diff > 3.1415927) { diff -= 6.2831853; }
-            while (diff < 0.0 - 3.1415927) { diff += 6.2831853; }
-            if (diff > 0.05) { turnRight = true; }
-            if (diff < 0.0 - 0.05) { turnLeft = true; }
+        let ti: i32 = 0;
+        while (ti < rocks.length) {
+            let target: Rock = rocks[ti];
+            if (target.active) {
+                let want: f64 = Math.atan2(target.y - ship.y, target.x - ship.x);
+                let diff: f64 = want - ship.angle;
+                while (diff > 3.1415927) { diff -= 6.2831853; }
+                while (diff < 0.0 - 3.1415927) { diff += 6.2831853; }
+                if (diff > 0.05) { turnRight = true; }
+                if (diff < 0.0 - 0.05) { turnLeft = true; }
+                ti = rocks.length;
+            } else {
+                ti += 1;
+            }
         }
     }
 
@@ -230,66 +301,71 @@ while (!windowShouldClose()) {
     if (shooting) {
         if (ship.alive) {
             if (fireCooldown <= 0.0) {
-                bullets.push(fire(ship));
+                fire(bullets, ship);
                 fireCooldown = FIRE_DELAY;
                 playSound(sndFire);
             }
         }
     }
 
-    // --- Advance bullets, dropping the expired ones -------------------------
-    let b: i32 = bullets.length - 1;
-    while (b >= 0) {
+    // --- Advance live bullets; step() retires them when their life runs out --
+    let b: i32 = 0;
+    while (b < bullets.length) {
         let bullet: Bullet = bullets[b];
-        bullet.step(dt);
-        bullet.x = wrap(bullet.x, WIDTH);
-        bullet.y = wrap(bullet.y, HEIGHT);
-        if (bullet.life <= 0.0) {
-            bullets.removeAt(b);
+        if (bullet.active) {
+            bullet.step(dt);
+            bullet.x = wrap(bullet.x, WIDTH);
+            bullet.y = wrap(bullet.y, HEIGHT);
         }
-        b -= 1;
+        b += 1;
     }
 
     // --- Advance rocks ------------------------------------------------------
     let k: i32 = 0;
     while (k < rocks.length) {
         let rock: Rock = rocks[k];
-        rock.step(dt);
-        rock.x = wrap(rock.x, WIDTH);
-        rock.y = wrap(rock.y, HEIGHT);
+        if (rock.active) {
+            rock.step(dt);
+            rock.x = wrap(rock.x, WIDTH);
+            rock.y = wrap(rock.y, HEIGHT);
+        }
         k += 1;
     }
 
     // --- Bullet / rock collisions ------------------------------------------
     // Walk backwards so removing an entity doesn't disturb the indices ahead.
-    let bi: i32 = bullets.length - 1;
-    while (bi >= 0) {
+    let bi: i32 = 0;
+    while (bi < bullets.length) {
         let bullet: Bullet = bullets[bi];
-        let ri: i32 = rocks.length - 1;
-        let consumed: boolean = false;
-
-        while (ri >= 0) {
-            if (!consumed) {
+        if (bullet.active) {
+            let ri: i32 = 0;
+            while (ri < rocks.length) {
                 let rock: Rock = rocks[ri];
-                if (distance(bullet.x, bullet.y, rock.x, rock.y) < rock.radius) {
-                    score += rock.size * 20;
-                    playSound(sndHit);
+                if (rock.active) {
+                    if (distance(bullet.x, bullet.y, rock.x, rock.y) < rock.radius) {
+                        score += rock.size * 20;
+                        playSound(sndHit);
 
-                    // Large and medium rocks split into two smaller ones
-                    if (rock.size > 1) {
-                        let spin: f64 = Math.random() * 6.2831853;
-                        rocks.push(splitRock(rock, spin));
-                        rocks.push(splitRock(rock, spin + 3.1415927));
+                        // Large and medium rocks split into two smaller ones
+                        if (rock.size > 1) {
+                            let spin: f64 = Math.random() * 6.2831853;
+                            splitRock(rocks, rock, spin);
+                            splitRock(rocks, rock, spin + 3.1415927);
+                        }
+
+                        // Retiring an entity is a flag, not a deallocation
+                        rock.active = false;
+                        bullet.active = false;
+                        ri = rocks.length;
+                    } else {
+                        ri += 1;
                     }
-
-                    rocks.removeAt(ri);
-                    bullets.removeAt(bi);
-                    consumed = true;
+                } else {
+                    ri += 1;
                 }
             }
-            ri -= 1;
         }
-        bi -= 1;
+        bi += 1;
     }
 
     // --- Ship / rock collisions --------------------------------------------
@@ -300,7 +376,7 @@ while (!windowShouldClose()) {
         let ci: i32 = 0;
         while (ci < rocks.length) {
             let rock: Rock = rocks[ci];
-            if (distance(ship.x, ship.y, rock.x, rock.y) < rock.radius + 9.0) {
+            if (rock.active && distance(ship.x, ship.y, rock.x, rock.y) < rock.radius + 9.0) {
                 lives -= 1;
                 playSound(sndDeath);
                 ship.x = WIDTH / 2.0;
@@ -316,12 +392,13 @@ while (!windowShouldClose()) {
     }
 
     // --- Next wave ----------------------------------------------------------
-    if (rocks.length == 0) {
+    let liveRocks: i32 = countActiveRocks(rocks);
+    if (liveRocks == 0) {
         wave += 1;
         let spawnCount: i32 = 3 + wave;
         let s: i32 = 0;
         while (s < spawnCount) {
-            rocks.push(spawnRock(3));
+            spawnRock(rocks, 3);
             s += 1;
         }
     }
@@ -346,14 +423,14 @@ while (!windowShouldClose()) {
     let d: i32 = 0;
     while (d < rocks.length) {
         let rock: Rock = rocks[d];
-        drawCircleOutline(rock.x, rock.y, rock.radius, colRock);
+        if (rock.active) { drawCircleOutline(rock.x, rock.y, rock.radius, colRock); }
         d += 1;
     }
 
     let e: i32 = 0;
     while (e < bullets.length) {
         let bullet: Bullet = bullets[e];
-        drawCircle(bullet.x, bullet.y, 2.5, colBullet);
+        if (bullet.active) { drawCircle(bullet.x, bullet.y, 2.5, colBullet); }
         e += 1;
     }
 
@@ -373,7 +450,7 @@ while (!windowShouldClose()) {
     drawText(`SCORE ${score}`, 16.0, 12.0, 20, colText);
     drawText(`LIVES ${lives}`, 220.0, 12.0, 20, colText);
     drawText(`WAVE ${wave}`, 400.0, 12.0, 20, colDim);
-    drawText(`ROCKS ${rocks.length}`, 560.0, 12.0, 20, colDim);
+    drawText(`ROCKS ${liveRocks}`, 560.0, 12.0, 20, colDim);
 
     if (!ship.alive) {
         drawText("GAME OVER", 330.0, 300.0, 40, rgb(239, 83, 80));

@@ -41,6 +41,9 @@ const STATE_PLAYING: i32 = 1;
 const STATE_WON: i32 = 2;
 const STATE_LOST: i32 = 3;
 
+// HUD text is rebuilt every frame; frame-scoped strings make that free
+// instead of leaking. See lib/game.csc on what this costs you.
+enableFrameStrings();
 quietLogs();
 openWindow(WIDTH, HEIGHT, "Cypescript Breakout");
 setTargetFps(60);

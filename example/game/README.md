@@ -93,9 +93,54 @@ rock.step(dt);                     // mutation through the array
 rocks.removeAt(i);                 // despawning
 ```
 
-Objects are heap-allocated, so they outlive the function that built them. Nothing frees
-them yet when they leave an array — for a long-running game, pool and reuse entities rather
-than allocating per spawn. See [GAME_ROADMAP.md](../../GAME_ROADMAP.md) Phase 4.
+Objects are heap-allocated, so they outlive the function that built them.
+
+## Memory
+
+Both games hold **flat memory** — steady RSS from 2,000 to 300,000 headless frames, which
+is 83 minutes of play at 60 fps. Two things make that true, and a game you write needs both:
+
+**1. Frame-scoped strings.** A HUD rebuilt every frame used to leak ~100 bytes per frame.
+Opt in once, before the loop:
+
+```ts
+enableFrameStrings();
+```
+
+Strings built by template literals and `+` then live only until the next `beginFrame()`.
+The catch: anything that must outlive its frame — a string stored in an object field, or
+pushed to an array you keep — must be copied out with `persist()`. Strings built *before*
+the first `beginFrame()` are kept automatically, so start-up labels are fine as they are.
+
+**2. Pool your entities.** Nothing frees a heap object when it leaves an array, and nothing
+safely can — other references may still point at it. Asteroids allocates every rock and
+bullet once at start-up and reuses them:
+
+```ts
+class Bullet {
+    x: f64 = 0.0; y: f64 = 0.0; active: boolean = false;
+    spawn(x: f64, y: f64): void { this.x = x; this.y = y; this.active = true; }
+}
+
+// Allocate once...
+let bullets: Bullet[] = [];
+let i: i32 = 0;
+while (i < MAX_BULLETS) { bullets.push(new Bullet()); i += 1; }
+
+// ...then reuse. Despawning is a flag, not a deallocation.
+function takeBullet(pool: Bullet[]): Bullet {
+    let i: i32 = 0;
+    while (i < pool.length) {
+        let candidate: Bullet = pool[i];
+        if (!candidate.active) { return candidate; }
+        i += 1;
+    }
+    return null;
+}
+```
+
+`removeAt()` and `clear()` still exist and are the right tool when entity churn is not in
+the hot path. See [GAME_ROADMAP.md](../../GAME_ROADMAP.md) Phase 4 for the measurements.
 
 ## Writing your own
 

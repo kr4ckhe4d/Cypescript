@@ -17,6 +17,10 @@
 #include <string.h>
 #include <math.h>
 
+// Frame-scoped strings, implemented in the Cypescript runtime (cypescript_stdlib.cpp).
+// Declared here rather than included so the shim keeps its single dependency.
+extern void cyps_arena_frame(void);
+
 // --- Headless mode -----------------------------------------------------------
 // CYPS_HEADLESS=1 runs the whole game loop with no window and no drawing, so a
 // game can be exercised in CI. CYPS_FRAMES caps the run length (default 120).
@@ -83,6 +87,9 @@ void cyps_set_target_fps(int fps) {
 }
 
 void cyps_frame_begin(void) {
+    // Rewind the string arena first, and do it in headless runs too — otherwise
+    // the CI memory test would not be measuring what a real frame does.
+    cyps_arena_frame();
     if (g_headless) return;
     BeginDrawing();
 }

@@ -1,0 +1,8 @@
+live object is not null
+!= null works
+null object compares equal to null
+distinct objects are not equal
+alias is the same object
+malloc returned non-null
+null ptr compares equal to null
+strings still compare by value

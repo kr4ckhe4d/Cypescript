@@ -1,0 +1,10 @@
+bool && comparison
+comparison && bool
+bool || comparison
+comparison || bool
+chained mixed
+0
+or short-circuits
+0
+primary
+10

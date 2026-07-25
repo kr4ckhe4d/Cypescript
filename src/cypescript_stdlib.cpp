@@ -27,6 +27,126 @@
 #define CYPS_LONGJMP _longjmp
 #endif
 
+// =============================================================================
+// Frame arena
+// =============================================================================
+// Strings built while a game runs — almost all of them HUD text like
+// `SCORE ${score}` — used to be allocated with new[] and never freed, costing
+// ~90-135 bytes every frame forever.
+//
+// When enabled, the three functions a template literal desugars into
+// (cyps_i32_to_string, cyps_f64_to_string, string_concat) allocate from a bump
+// arena that is rewound once per frame. Chunks are kept and reused, so a steady
+// game loop stops calling the allocator at all.
+//
+// The blast radius is deliberately small: every other string function keeps its
+// permanent allocation, so file_read, string_upper, array_get_string and friends
+// behave exactly as before whether or not the arena is on.
+//
+// CONTRACT: an arena string only lives until the next frame. A string that must
+// outlive the frame that built it — stored in an object field, pushed to an
+// array kept across frames — has to be copied out with cyps_string_persist().
+// This is why the arena is opt-in rather than always on.
+namespace {
+
+struct ArenaChunk {
+    char* data;
+    size_t size;
+};
+
+struct FrameArena {
+    std::vector<ArenaChunk> chunks;
+    size_t chunkIndex = 0;      // chunk currently being filled
+    size_t offset = 0;          // bump offset within that chunk
+    bool baselineSet = false;   // baseline recorded at the first frame boundary
+    size_t baseChunk = 0;
+    size_t baseOffset = 0;
+    unsigned long long bytesServed = 0;
+    unsigned long long framesReset = 0;
+};
+
+FrameArena g_arena;
+bool g_arenaEnabled = false;
+
+const size_t kArenaChunkSize = 64 * 1024;
+
+char* arenaAllocate(size_t bytes) {
+    // Try the current chunk, then any already-allocated chunk after it, then grow
+    while (g_arena.chunkIndex < g_arena.chunks.size()) {
+        ArenaChunk& chunk = g_arena.chunks[g_arena.chunkIndex];
+        if (g_arena.offset + bytes <= chunk.size) {
+            char* result = chunk.data + g_arena.offset;
+            g_arena.offset += bytes;
+            g_arena.bytesServed += bytes;
+            return result;
+        }
+        g_arena.chunkIndex++;
+        g_arena.offset = 0;
+    }
+
+    size_t size = bytes > kArenaChunkSize ? bytes : kArenaChunkSize;
+    char* data = new char[size];
+    g_arena.chunks.push_back({data, size});
+    g_arena.chunkIndex = g_arena.chunks.size() - 1;
+    g_arena.offset = bytes;
+    g_arena.bytesServed += bytes;
+    return data;
+}
+
+// Allocates a NUL-terminated copy: from the arena when enabled, otherwise with
+// new[] exactly as before.
+const char* allocString(const char* data, size_t length) {
+    char* result = g_arenaEnabled ? arenaAllocate(length + 1) : new char[length + 1];
+    std::memcpy(result, data, length);
+    result[length] = '\0';
+    return result;
+}
+
+const char* allocString(const std::string& s) {
+    return allocString(s.c_str(), s.length());
+}
+
+} // namespace
+
+extern "C" {
+
+// Turns on frame-scoped strings. Call once, before the game loop.
+void cyps_arena_enable() { g_arenaEnabled = true; }
+
+// Called at each frame boundary. The first call records a baseline, so anything
+// built during start-up (labels, static text) is kept; later calls rewind to it.
+void cyps_arena_frame() {
+    if (!g_arenaEnabled) return;
+    if (!g_arena.baselineSet) {
+        g_arena.baseChunk = g_arena.chunkIndex;
+        g_arena.baseOffset = g_arena.offset;
+        g_arena.baselineSet = true;
+        return;
+    }
+    g_arena.chunkIndex = g_arena.baseChunk;
+    g_arena.offset = g_arena.baseOffset;
+    g_arena.framesReset++;
+}
+
+// Copies a string out of the arena so it survives the frame.
+const char* cyps_string_persist(const char* str) {
+    if (!str) return nullptr;
+    size_t length = std::strlen(str);
+    char* result = new char[length + 1];
+    std::memcpy(result, str, length + 1);
+    return result;
+}
+
+unsigned long long cyps_arena_bytes_reserved() {
+    unsigned long long total = 0;
+    for (const auto& chunk : g_arena.chunks) total += chunk.size;
+    return total;
+}
+
+unsigned long long cyps_arena_frames() { return g_arena.framesReset; }
+
+} // extern "C"
+
 class DynamicArray {
 public:
     enum class Type { I32, F64, String, Object };
@@ -278,6 +398,18 @@ extern "C" {
         return val;
     }
 
+    // Drops every element and releases the vector's storage. Object elements are
+    // pointers the program still owns — clearing the array does not free them,
+    // because other references may exist. Pool and reuse instead.
+    void array_clear(void* arr_ptr) {
+        auto* arr = static_cast<DynamicArray*>(arr_ptr);
+        if (!arr) return;
+        std::vector<int32_t>().swap(arr->i32_data);
+        std::vector<double>().swap(arr->f64_data);
+        std::vector<std::string>().swap(arr->string_data);
+        std::vector<void*>().swap(arr->object_data);
+    }
+
     // Removing an element is what makes despawning possible in a game loop.
     void array_remove_at(void* arr_ptr, int32_t index) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
@@ -418,30 +550,33 @@ extern "C" {
     // ===================
     // VALUE -> STRING CONVERSION (used by `+` concatenation and template literals)
     // ===================
+    // These three are what a template literal desugars into, and so account for
+    // essentially all per-frame string churn. They allocate from the frame arena
+    // when it is enabled — see the note at the top of this file.
     const char* cyps_i32_to_string(int32_t value) {
         std::string s = std::to_string(value);
-        char* result = new char[s.length() + 1];
-        std::strcpy(result, s.c_str());
-        return result;
+        return allocString(s);
     }
 
     const char* cyps_f64_to_string(double value) {
         char buf[64];
         std::snprintf(buf, sizeof(buf), "%g", value);
-        char* result = new char[std::strlen(buf) + 1];
-        std::strcpy(result, buf);
-        return result;
+        return allocString(buf, std::strlen(buf));
     }
 
     const char* string_concat(const char* str1, const char* str2) {
         if (!str1 && !str2) return nullptr;
         if (!str1) str1 = "";
         if (!str2) str2 = "";
-        
-        std::string result = std::string(str1) + std::string(str2);
-        char* cstr = new char[result.length() + 1];
-        strcpy(cstr, result.c_str());
-        return cstr;
+
+        size_t len1 = std::strlen(str1);
+        size_t len2 = std::strlen(str2);
+        char* result = g_arenaEnabled ? arenaAllocate(len1 + len2 + 1)
+                                      : new char[len1 + len2 + 1];
+        std::memcpy(result, str1, len1);
+        std::memcpy(result + len1, str2, len2);
+        result[len1 + len2] = '\0';
+        return result;
     }
     
     // ===================

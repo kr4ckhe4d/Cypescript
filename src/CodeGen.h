@@ -107,6 +107,10 @@ private:
     // must not go through the string vector, which copies its elements.
     bool isObjectTypeName(const std::string &typeName);
 
+    // True for a pointer that isn't text (class instance, `ptr`, `null`), which
+    // must be compared by address rather than with strcmp
+    bool isNonStringPointer(ExpressionNode *expr);
+
     // Set while instantiating a class: `new` allocates on the heap so the
     // instance outlives the function that created it. Object literals keep
     // their stack allocation.

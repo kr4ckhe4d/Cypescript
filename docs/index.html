@@ -471,14 +471,89 @@ playSound(blip);</code></pre>
     <pre><code>CYPS_HEADLESS=1 CYPS_FRAMES=1200 ./build/cscript -r example/game/01_breakout.csc</code></pre>
     <div class="output-block"><pre>Breakout ended — score 290, 1200 frames, 51 bricks left</pre></div>
 
+    <h2 id="games-memory">Keeping memory flat</h2>
+    <p>
+      A game loop runs for hours, so anything allocated per frame has to go
+      somewhere. Two things keep memory steady, and a real game needs both.
+    </p>
+
+    <h3 id="games-frame-strings">Frame-scoped strings</h3>
+    <p>
+      A HUD rebuilt every frame from template literals would otherwise leak
+      around 100 bytes per frame. Opt in once, before the loop:
+    </p>
+    <div class="code-example">
+      <div class="example-header"><span>Enabling the frame arena</span></div>
+      <pre><code>enableFrameStrings();
+
+// ...later, inside the loop — free instead of leaking
+drawText(`SCORE ${score}`, 16.0, 12.0, 20, colText);</code></pre>
+    </div>
+    <p>
+      Strings built by template literals and <code>+</code> then live only until
+      the next <code>beginFrame()</code>. Everything else — <code>file_read</code>,
+      <code>string_upper</code>, array elements — keeps its permanent allocation.
+    </p>
+    <div class="notecard warning">
+      <p>
+        <strong>An arena string does not survive the frame that built it.</strong>
+        Anything kept longer — stored in an object field, or pushed to an array you
+        keep — must be copied out with <code>persist()</code>. Strings built
+        <em>before</em> the first <code>beginFrame()</code> are kept automatically,
+        so start-up labels need no special handling.
+      </p>
+    </div>
+
+    <h3 id="games-pooling">Pool your entities</h3>
+    <p>
+      Objects are heap-allocated, and nothing frees one when it leaves an array —
+      nothing safely can, since other references may still point at it. Allocate
+      entities once and reuse them, with a flag standing in for spawn and despawn:
+    </p>
+    <div class="code-example">
+      <div class="example-header"><span>The pool idiom</span></div>
+      <pre><code>class Bullet {
+    x: f64 = 0.0;
+    y: f64 = 0.0;
+    active: boolean = false;
+
+    spawn(x: f64, y: f64): void {
+        this.x = x;
+        this.y = y;
+        this.active = true;
+    }
+}
+
+// Allocate once, at start-up
+let bullets: Bullet[] = [];
+let i: i32 = 0;
+while (i &lt; MAX_BULLETS) { bullets.push(new Bullet()); i += 1; }
+
+// Then reuse — despawning is a flag, not a deallocation
+function takeBullet(pool: Bullet[]): Bullet {
+    let i: i32 = 0;
+    while (i &lt; pool.length) {
+        let candidate: Bullet = pool[i];
+        if (!candidate.active) { return candidate; }
+        i += 1;
+    }
+    return null;
+}</code></pre>
+    </div>
+    <p>
+      <code>removeAt()</code> and <code>clear()</code> remain the right tool when
+      entity churn is not in the hot path. With both techniques applied, the
+      bundled games hold steady memory from 2,000 to 300,000 frames — 83 minutes
+      of play at 60 fps with no growth.
+    </p>
+
     <h2 id="games-limits">Current limitations</h2>
     <div class="notecard note">
       <p>
-        Objects cannot yet be returned from a function or stored in an array, so
-        game entities are held in parallel arrays rather than an array of objects.
-        Strings allocated each frame (a HUD built from template literals) are not
-        yet freed, costing roughly 90 bytes per frame. Both are being addressed —
-        see <code>GAME_ROADMAP.md</code> in the repository.
+        There is no automatic memory reclamation: heap objects live until the
+        program exits unless you pool and reuse them. Class inheritance
+        (<code>extends</code>) and union types are not implemented. See
+        <code>GAME_ROADMAP.md</code> in the repository for what is planned.
       </p>
     </div>
 
