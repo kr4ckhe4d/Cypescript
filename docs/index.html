@@ -28,6 +28,7 @@
     <li><a href="#guide-getting-started">Getting started</a></li>
     <li><a href="#guide-typescript">TypeScript compatibility</a></li>
     <li><a href="#guide-cpp">C++ integration</a></li>
+    <li><a href="#guide-games">Writing a game</a></li>
     <li><a href="#guide-performance">Performance</a></li>
   </ul>
   <h3>Reference · Statements</h3>
@@ -42,6 +43,7 @@
     <li><a href="#ref-interfaces"><code>interface</code> &amp; <code>type</code></a></li>
     <li><a href="#ref-try-catch"><code>try...catch</code> &amp; <code>throw</code></a></li>
     <li><a href="#ref-modules"><code>import</code> &amp; <code>export</code></a></li>
+    <li><a href="#ref-ffi"><code>declare</code> &amp; <code>link</code></a></li>
   </ul>
   <h3>Reference · Expressions</h3>
   <ul>
@@ -358,6 +360,134 @@ println(random_int(1, 100));</code></pre>
       design for short-lived programs; long-running services should be mindful of
       allocation in hot loops.</p>
     </div>
+  </article>
+
+  <article id="guide-games" class="doc-article" data-keywords="game games raylib window graphics sprite input audio sound arcade breakout render draw" data-title="Writing a game" data-crumbs="Guides">
+    <h1>Writing a game</h1>
+    <p class="article-summary">
+      Cypescript can open a window, draw, read input and play sound, producing a
+      single native binary. The graphics layer is not built into the compiler —
+      it is an ordinary Cypescript module of
+      <a href="#ref-ffi"><code>declare</code></a> statements over a small C shim
+      that wraps <a href="https://github.com/raysan5/raylib">raylib</a>.
+    </p>
+
+    <h2 id="games-setup">Building</h2>
+    <p>
+      raylib is vendored: CMake fetches and builds it from source and links it
+      statically, so there is no system package to install.
+    </p>
+    <pre><code>cmake -S . -B build &amp;&amp; cmake --build build --parallel
+./build/cscript -r example/game/01_breakout.csc</code></pre>
+    <div class="notecard warning">
+      <p>
+        <strong>Use <code>./build/cscript</code>, not a bare <code>cscript</code>.</strong>
+        If Cypescript is already installed, a bare <code>cscript</code> runs that
+        older copy, which has no game runtime and fails with
+        <code>Imported module not found: .../game.csc</code>. The game runtime needs
+        <strong>1.1.0 or newer</strong> — check with <code>cscript --version</code>.
+        To put the new build on your PATH:
+        <code>cmake --install build --prefix /opt/homebrew</code>.
+      </p>
+    </div>
+    <p>
+      Pass <code>-DCYPESCRIPT_VENDOR_RAYLIB=OFF</code> to link a system raylib, or
+      <code>-DCYPESCRIPT_BUILD_GAME_RUNTIME=OFF</code> to leave the game runtime
+      out entirely — the compiler and the language test suite build either way.
+    </p>
+
+    <h2 id="games-loop">The game loop</h2>
+    <div class="code-example">
+      <div class="example-header"><span>A complete program</span></div>
+      <pre><code>import { } from "game";
+
+openWindow(640, 360, "my game");
+setTargetFps(60);
+
+let x: f64 = 100.0;
+
+while (!windowShouldClose()) {
+    let dt: f64 = deltaTime();
+    if (isKeyDown(KEY_LEFT))  { x -= 200.0 * dt; }
+    if (isKeyDown(KEY_RIGHT)) { x += 200.0 * dt; }
+
+    beginFrame();
+    clearScreen(rgb(20, 20, 30));
+    drawRect(x, 100.0, 80.0, 40.0, rgb(255, 140, 60));
+    drawText(`x = ${x}`, 20.0, 20.0, 20, rgb(200, 200, 220));
+    endFrame();
+}
+
+closeWindow();</code></pre>
+    </div>
+    <p>
+      <code>import { } from "game"</code> uses a bare module name: <code>game.csc</code>
+      ships with the compiler and is found relative to the <code>cscript</code>
+      binary, so it works from any directory.
+    </p>
+    <p>
+      Multiply every movement by <code>deltaTime()</code> — the seconds elapsed
+      since the previous frame — so speeds stay the same regardless of frame rate.
+    </p>
+
+    <h2 id="games-api">API</h2>
+    <table>
+      <thead><tr><th>Area</th><th>Functions</th></tr></thead>
+      <tbody>
+        <tr><td>Window</td><td><code>openWindow</code>, <code>closeWindow</code>, <code>windowShouldClose</code>, <code>windowWidth</code>, <code>windowHeight</code>, <code>setTargetFps</code>, <code>setExitKey</code>, <code>quietLogs</code>, <code>isHeadless</code></td></tr>
+        <tr><td>Frame</td><td><code>beginFrame</code>, <code>endFrame</code>, <code>clearScreen</code>, <code>deltaTime</code>, <code>elapsedTime</code>, <code>currentFps</code></td></tr>
+        <tr><td>Drawing</td><td><code>drawRect</code>, <code>drawRectOutline</code>, <code>drawCircle</code>, <code>drawLine</code>, <code>drawText</code>, <code>measureText</code></td></tr>
+        <tr><td>Color</td><td><code>rgb</code>, <code>rgba</code></td></tr>
+        <tr><td>Textures</td><td><code>loadTexture</code>, <code>unloadTexture</code>, <code>textureWidth</code>, <code>textureHeight</code>, <code>drawTexture</code>, <code>drawSprite</code></td></tr>
+        <tr><td>Input</td><td><code>isKeyDown</code>, <code>isKeyPressed</code>, <code>isKeyReleased</code>, <code>mouseX</code>, <code>mouseY</code>, <code>isMouseDown</code>, <code>isMousePressed</code>, <code>hasGamepad</code>, <code>isGamepadDown</code>, <code>gamepadAxis</code></td></tr>
+        <tr><td>Audio</td><td><code>initAudio</code>, <code>closeAudio</code>, <code>loadSound</code>, <code>makeTone</code>, <code>playSound</code>, <code>setSoundVolume</code>, <code>unloadSound</code></td></tr>
+      </tbody>
+    </table>
+    <p>
+      Colors are packed <code>i32</code> values built with <code>rgb(r, g, b)</code>
+      or <code>rgba(r, g, b, a)</code>. Key codes are constants
+      (<code>KEY_LEFT</code>, <code>KEY_SPACE</code>, …).
+    </p>
+
+    <h2 id="games-sound">Sound without asset files</h2>
+    <p>
+      <code>makeTone()</code> synthesises a square-wave blip at runtime, so an
+      arcade game can be a single <code>.csc</code> file with no assets beside it.
+    </p>
+    <div class="code-example">
+      <div class="example-header"><span>Synthesised effects</span></div>
+      <pre><code>initAudio();
+let blip: ptr = makeTone(880.0, 50, 0.30);   // 880 Hz, 50 ms, 30% volume
+playSound(blip);</code></pre>
+    </div>
+
+    <h2 id="games-headless">Headless mode</h2>
+    <p>
+      Setting <code>CYPS_HEADLESS=1</code> runs the whole loop with no window and
+      no drawing, and <code>CYPS_FRAMES</code> caps the run length. The simulation
+      still executes, so a game can be tested in CI. <code>isHeadless()</code> lets
+      a game notice and drive itself.
+    </p>
+    <pre><code>CYPS_HEADLESS=1 CYPS_FRAMES=1200 ./build/cscript -r example/game/01_breakout.csc</code></pre>
+    <div class="output-block"><pre>Breakout ended — score 290, 1200 frames, 51 bricks left</pre></div>
+
+    <h2 id="games-limits">Current limitations</h2>
+    <div class="notecard note">
+      <p>
+        Objects cannot yet be returned from a function or stored in an array, so
+        game entities are held in parallel arrays rather than an array of objects.
+        Strings allocated each frame (a HUD built from template literals) are not
+        yet freed, costing roughly 90 bytes per frame. Both are being addressed —
+        see <code>GAME_ROADMAP.md</code> in the repository.
+      </p>
+    </div>
+
+    <h2 id="games-see">See also</h2>
+    <ul>
+      <li><a href="#ref-ffi"><code>declare</code> &amp; <code>link</code></a> — how the game API is defined</li>
+      <li><a href="#ref-types">Data types</a> — <code>ptr</code> and the C ABI types</li>
+      <li><a href="#guide-performance">Performance</a></li>
+    </ul>
   </article>
 
   <article id="guide-performance" class="doc-article" data-keywords="benchmark benchmarks speed fast rust node python" data-title="Performance" data-crumbs="Guides">
@@ -1045,6 +1175,117 @@ println(square(7));   // 49</code></pre>
     <h2 id="mod-see">See also</h2>
     <ul>
       <li><a href="#guide-getting-started">Getting started</a> — the compilation pipeline</li>
+      <li><a href="#ref-ffi"><code>declare</code> &amp; <code>link</code></a> — importing from C instead</li>
+    </ul>
+  </article>
+
+  <article id="ref-ffi" class="doc-article" data-keywords="ffi extern foreign native c library binding link linker ptr symbol" data-title="declare &amp; link" data-crumbs="Reference &gt; Statements">
+    <h1><code>declare</code> &amp; <code>link</code></h1>
+    <p class="article-summary">
+      A <strong><code>declare function</code></strong> statement binds a C
+      function so Cypescript can call it directly, and <strong><code>link</code></strong>
+      tells the compiler which libraries to link against. Together they are the
+      foreign function interface: the compiler needs no built-in knowledge of
+      the library you are calling.
+    </p>
+
+    <h2 id="ffi-syntax">Syntax</h2>
+    <pre class="syntaxbox"><code>declare function name(param: type, ...): returnType;
+declare function name(param: type, ...): returnType = "c_symbol";
+
+link "libraryName";
+link framework "FrameworkName";
+link path "/some/lib/dir";</code></pre>
+    <dl>
+      <dt><code>returnType</code></dt>
+      <dd>Omit the <code>: returnType</code> annotation for a <code>void</code> function.</dd>
+      <dt><code>= "c_symbol"</code></dt>
+      <dd>Optional. Calls this C symbol instead of the declared name, so a
+      C-style API can be exposed under natural Cypescript names.</dd>
+      <dt><code>link framework</code></dt>
+      <dd>macOS only — emits <code>-framework Name</code>.</dd>
+      <dt><code>link path</code></dt>
+      <dd>Adds a library search directory. A path that does not exist is ignored.</dd>
+    </dl>
+
+    <h2 id="ffi-types">C ABI types</h2>
+    <p>
+      In addition to the usual types, declarations may use the types that exist
+      specifically to match a C signature.
+    </p>
+    <table>
+      <thead><tr><th>Type</th><th>C equivalent</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>i32</code></td><td><code>int</code></td><td></td></tr>
+        <tr><td><code>i64</code></td><td><code>long long</code></td><td></td></tr>
+        <tr><td><code>i8</code> / <code>u8</code></td><td><code>char</code></td><td></td></tr>
+        <tr><td><code>f32</code></td><td><code>float</code></td><td></td></tr>
+        <tr><td><code>f64</code></td><td><code>double</code></td><td></td></tr>
+        <tr><td><code>string</code></td><td><code>const char*</code></td><td>NUL-terminated</td></tr>
+        <tr><td><code>ptr</code></td><td><code>void*</code></td><td>Opaque handle; the compiler never inspects it</td></tr>
+        <tr><td><code>boolean</code></td><td><code>int</code></td><td>Zero is false</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="ffi-desc">Description</h2>
+    <p>
+      Declarations are registered before code generation, so a foreign function
+      may be called anywhere in the file, including above its own declaration.
+      Arguments are coerced to the declared parameter types at each call site,
+      and the declared arity is checked at compile time like any other function.
+    </p>
+    <p>
+      Structs are not passed by value across the boundary. A C API that takes or
+      returns structs needs a thin shim that flattens them into scalars — which
+      is exactly what the <a href="#guide-games">game runtime</a> does for raylib.
+    </p>
+    <div class="notecard warning">
+      <p>
+        <strong>Nothing is checked against the real library.</strong> A signature
+        that does not match the C function is undefined behaviour, not a compile
+        error — the same contract as a C header.
+      </p>
+    </div>
+
+    <h2 id="ffi-examples">Examples</h2>
+    <div class="code-example">
+      <div class="example-header"><span>Calling libc and libm</span></div>
+      <pre><code>declare function atan2(y: f64, x: f64): f64;
+declare function strlen(s: string): i64;
+
+println(atan2(1.0, 1.0));    // 0.785398
+println(strlen("cypescript"));   // 10</code></pre>
+    </div>
+    <div class="code-example">
+      <div class="example-header"><span>Opaque handles</span></div>
+      <pre><code>declare function malloc(size: i64): ptr;
+declare function free(block: ptr): void;
+
+let block: ptr = malloc(64);
+free(block);</code></pre>
+    </div>
+    <div class="code-example">
+      <div class="example-header"><span>Naming a C symbol something friendlier</span></div>
+      <pre><code>declare function drawRect(x: f64, y: f64, w: f64, h: f64, color: i32): void = "cyps_rect";
+
+drawRect(10.0, 10.0, 50.0, 50.0, rgb(255, 100, 50));</code></pre>
+    </div>
+    <div class="code-example">
+      <div class="example-header"><span>Linking a library</span></div>
+      <pre><code>link path "/opt/homebrew/lib";
+link "raylib";
+link framework "Cocoa";</code></pre>
+    </div>
+    <p>
+      Libraries can also be given on the command line, which takes precedence:
+    </p>
+    <pre><code>cscript -r game.csc -lraylib -L/opt/homebrew/lib --framework Cocoa</code></pre>
+
+    <h2 id="ffi-see">See also</h2>
+    <ul>
+      <li><a href="#guide-games">Writing a game</a> — the FFI in practice</li>
+      <li><a href="#guide-cpp">C++ integration</a> — the older, built-in stdlib route</li>
+      <li><a href="#ref-modules"><code>import</code> &amp; <code>export</code></a></li>
     </ul>
   </article>
 
@@ -1086,6 +1327,33 @@ println(square(7));   // 49</code></pre>
     <div class="code-example">
       <div class="example-header"><span>Cypescript</span></div>
       <pre><code>const neighbors: string[] = graph.get(node) || [];</code></pre>
+    </div>
+
+    <h2 id="op-bitwise">Bitwise</h2>
+    <p>
+      Integer operands only — applying these to an <code>f64</code> is a compile
+      error rather than a silent conversion.
+    </p>
+    <table>
+      <thead><tr><th>Operator</th><th>Meaning</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>&amp;</code> <code>|</code> <code>^</code></td><td>and, or, xor</td><td></td></tr>
+        <tr><td><code>~x</code></td><td>bitwise not</td><td></td></tr>
+        <tr><td><code>&lt;&lt;</code> <code>&gt;&gt;</code></td><td>shift left, arithmetic shift right</td><td>write without a space between the brackets</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Precedence follows TypeScript and C: <code>|</code> binds loosest, then
+      <code>^</code>, then <code>&amp;</code>, all looser than comparison; shifts
+      bind tighter than comparison but looser than <code>+</code> and <code>-</code>.
+      Integer literals may be written in hex, binary or octal.
+    </p>
+    <div class="code-example">
+      <div class="example-header"><span>Packing a color</span></div>
+      <pre><code>let color: i32 = (17 &lt;&lt; 16) | (34 &lt;&lt; 8) | 51;
+println(color);          // 1122867
+println(0xFF);           // 255
+println(0b1010);         // 10</code></pre>
     </div>
 
     <h2 id="op-assign">Assignment</h2>
@@ -1250,6 +1518,8 @@ Alice is 28 years old</pre>
         <tr><td><code>string</code></td><td>immutable text</td><td><code>let s: string = "hi";</code></td></tr>
         <tr><td><code>boolean</code></td><td><code>true</code> / <code>false</code>; prints as <code>1</code>/<code>0</code></td><td><code>let ok: boolean = true;</code></td></tr>
         <tr><td><code>void</code></td><td>no value; function returns only</td><td><code>function log(): void</code></td></tr>
+        <tr><td><code>i64</code>, <code>i8</code>, <code>u8</code>, <code>f32</code></td><td>sized numerics for matching a C signature</td><td><a href="#ref-ffi">see the FFI</a></td></tr>
+        <tr><td><code>ptr</code></td><td>opaque handle to foreign memory; never inspected by the compiler</td><td><code>let tex: ptr = loadTexture("a.png");</code></td></tr>
       </tbody>
     </table>
 

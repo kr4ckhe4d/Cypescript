@@ -341,13 +341,26 @@ std::string resolveImportsImpl(const std::string& source, const fs::path& baseDi
 // Where bare imports like `from "game"` are looked up. Set once from main().
 fs::path g_moduleSearchDir;
 
-std::string loadModule(const fs::path& modulePath, std::set<std::string>& visited) {
+std::string loadModule(const fs::path& modulePath, std::set<std::string>& visited,
+                       const std::string& requestedAs = "") {
     fs::path resolved = modulePath;
     if (resolved.extension().empty()) {
         resolved += ".csc";
     }
     if (!fs::exists(resolved)) {
-        throw std::runtime_error("Imported module not found: " + resolved.string());
+        std::string message = "Imported module not found: " + resolved.string();
+        // A bare name like "game" is meant to come from the compiler's own
+        // bundled modules. Say where we looked — the usual cause is a cscript
+        // on PATH that is older than the modules the program expects.
+        if (!requestedAs.empty() && requestedAs.find('/') == std::string::npos) {
+            message += "\n  '" + requestedAs + "' looks like a bundled module. Searched: ";
+            message += g_moduleSearchDir.empty()
+                ? "(no bundled module directory found next to this compiler)"
+                : g_moduleSearchDir.string();
+            message += "\n  This cscript is " + std::string(CYPESCRIPT_VERSION) +
+                       ". If it predates the module you want, rebuild or reinstall it.";
+        }
+        throw std::runtime_error(message);
     }
     std::string canonical = fs::canonical(resolved).string();
     if (visited.count(canonical)) {
@@ -393,7 +406,7 @@ std::string resolveImportsImpl(const std::string& source, const fs::path& baseDi
                     resolved = bundled;
                 }
             }
-            output << loadModule(resolved, visited) << "\n";
+            output << loadModule(resolved, visited, modulePath) << "\n";
         } else {
             output << line << "\n";
         }

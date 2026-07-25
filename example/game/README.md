@@ -5,16 +5,36 @@ Native games written in Cypescript, drawing through `lib/game.csc` — a module 
 raylib. **The compiler has no built-in knowledge of graphics**: adding an API means one
 line in `lib/game.csc` and one function in the shim.
 
-## Requirements
+## Running them
 
-None beyond the compiler. raylib is vendored — CMake builds it from source and links it
-statically:
+No dependencies to install — raylib is vendored, so CMake builds it from source and links
+it statically. From the repository root:
 
 ```bash
-cmake -S . -B build && cmake --build build
+cmake -S . -B build && cmake --build build --parallel
 ```
 
-Use `-DCYPESCRIPT_VENDOR_RAYLIB=OFF` to link a system raylib instead, or
+```bash
+./build/cscript -r example/game/01_breakout.csc
+```
+
+> ⚠️ **Use `./build/cscript`, not a bare `cscript`.**
+> If you have installed Cypescript before (Homebrew, `.deb`, `make install`), a bare
+> `cscript` runs *that* copy, which will not have the game runtime or the bundled `game`
+> module and fails with:
+>
+> ```
+> ✗ Error: Imported module not found: example/game/game.csc
+> ```
+>
+> Check which one you are running with `cscript --version` — the game runtime needs
+> **1.1.0 or newer**. To make the new build the one on your PATH:
+>
+> ```bash
+> cmake --install build --prefix /opt/homebrew
+> ```
+
+Build with `-DCYPESCRIPT_VENDOR_RAYLIB=OFF` to link a system raylib instead, or
 `-DCYPESCRIPT_BUILD_GAME_RUNTIME=OFF` to skip the game runtime entirely — the compiler
 and the full language test suite work either way.
 
@@ -26,8 +46,8 @@ and the full language test suite work either way.
 | `01_breakout.csc` | A complete game: paddle, ball physics, brick field, scoring, lives, sound |
 
 ```bash
-cscript -r example/game/00_window.csc
-cscript -r example/game/01_breakout.csc
+./build/cscript -r example/game/00_window.csc
+./build/cscript -r example/game/01_breakout.csc
 ```
 
 **Breakout controls:** LEFT/RIGHT or A/D to move, SPACE to launch, R to restart, ESC to quit.

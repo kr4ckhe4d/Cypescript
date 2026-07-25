@@ -3,8 +3,8 @@
 cmake_minimum_required(VERSION 3.15)
 
 # Project Name and Version - Enable both C and CXX for LLVM dependencies
-project(Cypescript 
-    VERSION 1.0.0
+project(Cypescript
+    VERSION 1.1.0
     DESCRIPTION "A TypeScript-style language compiler"
     LANGUAGES C CXX
 )

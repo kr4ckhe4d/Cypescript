@@ -142,15 +142,24 @@ This is what the game runtime is built on: `lib/game.csc` is an ordinary Cypescr
 containing nothing but `declare`s and `link`s. **The compiler has no built-in knowledge of
 graphics.**
 
-### Writing a game
+### Running the games
 
 raylib is **vendored** — CMake builds it from source and links it statically, so there is
-no system package to install:
+no system package to install. From the repository root:
 
 ```bash
-cmake -S . -B build && cmake --build build
-cscript -r example/game/01_breakout.csc
+cmake -S . -B build && cmake --build build --parallel
 ```
+
+```bash
+./build/cscript -r example/game/01_breakout.csc
+```
+
+> ⚠️ **Use `./build/cscript`, not a bare `cscript`.** If Cypescript is already installed
+> (Homebrew, `.deb`, `make install`), a bare `cscript` runs that older copy, which has no
+> game runtime and fails with `Imported module not found: .../game.csc`. The game runtime
+> needs **1.1.0 or newer** — check with `cscript --version`. To put the new build on your
+> PATH: `cmake --install build --prefix /opt/homebrew`.
 
 ```ts
 import { } from "game";        // ships with the compiler
