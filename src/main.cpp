@@ -168,6 +168,10 @@ public:
     bool version = false;
     bool run = false;
     bool noFold = false;
+    // Package the result for distribution: a .app on macOS, a self-contained
+    // directory elsewhere. Assets travel with the binary either way.
+    bool bundle = false;
+    std::string assetsDir;
     // Extra flags appended to the final clang++ link line. Programs can add to
     // these from source with `link "raylib";` — see LinkDirectiveNode.
     std::vector<std::string> linkFlags;
@@ -188,6 +192,14 @@ public:
                 opts.run = true;
             } else if (arg == "--no-fold") {
                 opts.noFold = true;
+            } else if (arg == "--bundle") {
+                opts.bundle = true;
+            } else if (arg == "--assets") {
+                if (i + 1 < argc) {
+                    opts.assetsDir = argv[++i];
+                } else {
+                    throw std::runtime_error("Option " + arg + " requires an argument");
+                }
             } else if (arg == "--print-tokens") {
                 opts.printTokens = true;
             } else if (arg == "--print-ast") {
@@ -241,6 +253,10 @@ public:
         std::cout << "    --no-fold           Disable AST constant folding / dead-branch elimination\n";
         std::cout << "    --print-tokens      Print lexer tokens\n";
         std::cout << "    --print-ast         Print abstract syntax tree\n\n";
+        std::cout << Colors::BOLD << "PACKAGING:" << Colors::RESET << "\n";
+        std::cout << "    --bundle            Package for distribution (a .app on macOS,\n";
+        std::cout << "                        a self-contained directory elsewhere)\n";
+        std::cout << "    --assets DIR        Asset directory to ship (default: assets/ beside the source)\n\n";
         std::cout << Colors::BOLD << "LINKING (for `declare function` / FFI):" << Colors::RESET << "\n";
         std::cout << "    -l<name>            Link against a library (e.g. -lraylib)\n";
         std::cout << "    -L<dir>             Add a library search path\n";
@@ -298,6 +314,84 @@ std::vector<std::string> collectLinkFlags(const ProgramNode* astRoot) {
         }
     }
     return flags;
+}
+
+// Packages a compiled game for distribution. On macOS that means a .app bundle,
+// which is what a user can double-click; elsewhere a directory holding the
+// binary and its assets. Either way the assets land where cyps_asset_path()
+// looks, so a relative path in the source keeps working after the move.
+//
+// Returns the path of the thing produced.
+fs::path createBundle(const fs::path& executable, const fs::path& sourceFile,
+                      const std::string& assetsOverride, bool verbose) {
+    const std::string appName = executable.stem().string();
+
+    // Assets: an explicit --assets, else an assets/ directory beside the source
+    fs::path assets;
+    if (!assetsOverride.empty()) {
+        assets = assetsOverride;
+        if (!fs::is_directory(assets)) {
+            throw std::runtime_error("Asset directory not found: " + assets.string());
+        }
+    } else {
+        fs::path guess = sourceFile.parent_path() / "assets";
+        if (fs::is_directory(guess)) assets = guess;
+    }
+
+#ifdef __APPLE__
+    fs::path bundle = executable.parent_path() / (appName + ".app");
+    fs::path macos = bundle / "Contents" / "MacOS";
+    fs::path resources = bundle / "Contents" / "Resources";
+
+    fs::remove_all(bundle);
+    fs::create_directories(macos);
+    fs::create_directories(resources);
+
+    fs::copy_file(executable, macos / appName, fs::copy_options::overwrite_existing);
+    fs::permissions(macos / appName, fs::perms::owner_all | fs::perms::group_read |
+                                     fs::perms::group_exec | fs::perms::others_read |
+                                     fs::perms::others_exec);
+
+    if (!assets.empty()) {
+        fs::copy(assets, resources, fs::copy_options::recursive |
+                                    fs::copy_options::overwrite_existing);
+    }
+
+    std::ofstream plist(bundle / "Contents" / "Info.plist");
+    plist << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+          << "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" "
+             "\"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
+          << "<plist version=\"1.0\">\n<dict>\n"
+          << "    <key>CFBundleName</key><string>" << appName << "</string>\n"
+          << "    <key>CFBundleDisplayName</key><string>" << appName << "</string>\n"
+          << "    <key>CFBundleExecutable</key><string>" << appName << "</string>\n"
+          << "    <key>CFBundleIdentifier</key><string>org.cypescript." << appName << "</string>\n"
+          << "    <key>CFBundlePackageType</key><string>APPL</string>\n"
+          << "    <key>CFBundleShortVersionString</key><string>1.0</string>\n"
+          << "    <key>CFBundleVersion</key><string>1</string>\n"
+          << "    <key>NSHighResolutionCapable</key><true/>\n"
+          << "</dict>\n</plist>\n";
+    plist.close();
+#else
+    fs::path bundle = executable.parent_path() / appName + "-bundle";
+    fs::remove_all(bundle);
+    fs::create_directories(bundle);
+
+    fs::copy_file(executable, bundle / appName, fs::copy_options::overwrite_existing);
+    fs::permissions(bundle / appName, fs::perms::owner_all | fs::perms::group_read |
+                                      fs::perms::group_exec | fs::perms::others_read |
+                                      fs::perms::others_exec);
+
+    if (!assets.empty()) {
+        fs::copy(assets, bundle / "assets", fs::copy_options::recursive |
+                                            fs::copy_options::overwrite_existing);
+    }
+#endif
+
+    if (verbose && !assets.empty()) {
+        llvm::outs() << "Bundled assets from " << assets.string() << "\n";
+    }
+    return bundle;
 }
 
 class Timer {
@@ -642,6 +736,14 @@ int main(int argc, char** argv) {
             }
             
             printSuccess("Executable created: " + executableName + " (" + std::to_string(compileTimer.elapsed()) + "ms)", opts.verbose);
+
+            if (opts.bundle) {
+                printStageHeader("Bundling", opts.verbose);
+                fs::path bundlePath = createBundle(executableName, opts.inputFile,
+                                                   opts.assetsDir, opts.verbose);
+                llvm::outs() << Colors::GREEN << "✓ Bundled: " << Colors::BOLD
+                             << bundlePath.string() << Colors::RESET << "\n";
+            }
         }
 
         // Print compilation summary

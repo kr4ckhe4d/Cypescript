@@ -321,5 +321,88 @@
       "let ${1:result} = ${2:items}.reduce((${3:acc}, ${4:x}) => ${5:$3 + $4}, ${6:0});"
     ],
     "description": "Array reduce with arrow callback"
+  },
+  "Foreign function declaration": {
+    "prefix": "declare",
+    "body": [
+      "declare function ${1:name}(${2:arg}: ${3:i32}): ${4:void};"
+    ],
+    "description": "Bind a C function (FFI)"
+  },
+  "Foreign function with symbol binding": {
+    "prefix": "declaresym",
+    "body": [
+      "declare function ${1:niceName}(${2:arg}: ${3:i32}): ${4:void} = \"${5:c_symbol}\";"
+    ],
+    "description": "Bind a C symbol under a friendlier name"
+  },
+  "Link a library": {
+    "prefix": "link",
+    "body": [
+      "link \"${1:raylib}\";"
+    ],
+    "description": "Link against a native library"
+  },
+  "Game loop": {
+    "prefix": "gameloop",
+    "body": [
+      "import { } from \"game\";",
+      "",
+      "enableFrameStrings();",
+      "openWindow(${1:800}, ${2:600}, \"${3:my game}\");",
+      "setTargetFps(60);",
+      "",
+      "while (!windowShouldClose()) {",
+      "\tlet dt: f64 = deltaTime();",
+      "",
+      "\tbeginFrame();",
+      "\tclearScreen(rgb(20, 20, 30));",
+      "\t$0",
+      "\tendFrame();",
+      "}",
+      "",
+      "closeWindow();"
+    ],
+    "description": "A complete game loop"
+  },
+  "Poolable entity class": {
+    "prefix": "entity",
+    "body": [
+      "class ${1:Entity} {",
+      "\tx: f64 = 0.0;",
+      "\ty: f64 = 0.0;",
+      "\tactive: boolean = false;",
+      "",
+      "\tspawn(x: f64, y: f64): void {",
+      "\t\tthis.x = x;",
+      "\t\tthis.y = y;",
+      "\t\tthis.active = true;",
+      "\t}",
+      "",
+      "\tstep(dt: f64): void {",
+      "\t\t$0",
+      "\t}",
+      "}"
+    ],
+    "description": "An entity class shaped for pooling"
+  },
+  "Entity pool": {
+    "prefix": "pool",
+    "body": [
+      "let ${1:entities}: ${2:Entity}[] = [];",
+      "let ${3:i}: i32 = 0;",
+      "while (${3:i} < ${4:MAX_${2/(.*)/${1:/upcase}/}}) { ${1:entities}.push(new ${2:Entity}()); ${3:i} += 1; }",
+      "",
+      "function take${2:Entity}(pool: ${2:Entity}[]): ${2:Entity} {",
+      "\tlet i: i32 = 0;",
+      "\twhile (i < pool.length) {",
+      "\t\tlet candidate: ${2:Entity} = pool[i];",
+      "\t\tif (!candidate.active) { return candidate; }",
+      "\t\ti += 1;",
+      "\t}",
+      "\treturn null;",
+      "}"
+    ],
+    "description": "Preallocated entity pool with a claim helper"
   }
 }

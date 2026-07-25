@@ -181,6 +181,18 @@ Build with `-DCYPESCRIPT_VENDOR_RAYLIB=OFF` to use a system raylib, or
 `-DCYPESCRIPT_BUILD_GAME_RUNTIME=OFF` to leave it out. Attribution for raylib's zlib
 license is in [THIRD_PARTY.md](THIRD_PARTY.md).
 
+### Shipping a game
+
+```bash
+cscript --bundle mygame.csc
+```
+
+Produces a double-clickable `mygame.app` on macOS, or a self-contained directory
+elsewhere. Assets are taken from `assets/` beside the source (override with
+`--assets DIR`) and placed where the runtime looks for them — relative paths like
+`loadTexture("sprite.png")` resolve against the binary, not the working directory, so a
+packaged game runs from anywhere.
+
 See [example/game/](example/game/) for a complete Breakout, and
 [GAME_ROADMAP.md](GAME_ROADMAP.md) for what is and isn't supported yet.
 

@@ -86,6 +86,12 @@ declare function measureText(text: string, size: i32): i32 = "cyps_text_width";
 // Textures
 // =============================================================================
 
+// Resolves a relative asset path against the binary's own location — beside it,
+// in assets/, or inside a macOS .app bundle — falling back to the working
+// directory. loadTexture and loadSound do this for you; call it directly for
+// files you open yourself.
+declare function assetPath(relative: string): string = "cyps_asset_path";
+
 declare function loadTexture(path: string): ptr = "cyps_tex_load";
 declare function unloadTexture(texture: ptr): void = "cyps_tex_unload";
 declare function textureWidth(texture: ptr): i32 = "cyps_tex_width";

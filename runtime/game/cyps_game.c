@@ -15,7 +15,20 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <math.h>
+
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#include <limits.h>
+#elif defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 // Frame-scoped strings, implemented in the Cypescript runtime (cypescript_stdlib.cpp).
 // Declared here rather than included so the shim keeps its single dependency.
@@ -167,6 +180,73 @@ int cyps_text_width(const char *text, int size) {
     return MeasureText(text, size);
 }
 
+// --- Asset paths -------------------------------------------------------------
+// A game is launched by double-clicking it, from a shell in another directory,
+// or from inside a .app bundle — so a relative asset path must not be resolved
+// against the current working directory. Look next to the binary first, then in
+// the places a packaged game keeps its files, and only then fall back to the cwd
+// so running from a source tree still works.
+
+static char g_asset_buffer[4096];
+
+static int cyps_executable_dir(char *out, size_t size) {
+#if defined(__APPLE__)
+    char raw[4096];
+    uint32_t rawSize = sizeof(raw);
+    if (_NSGetExecutablePath(raw, &rawSize) != 0) return 0;
+    char resolved[4096];
+    if (!realpath(raw, resolved)) snprintf(resolved, sizeof(resolved), "%s", raw);
+    snprintf(out, size, "%s", resolved);
+#elif defined(_WIN32)
+    DWORD length = GetModuleFileNameA(NULL, out, (DWORD)size);
+    if (length == 0 || length >= size) return 0;
+#else
+    ssize_t length = readlink("/proc/self/exe", out, size - 1);
+    if (length <= 0) return 0;
+    out[length] = '\0';
+#endif
+
+    // Strip the file name, leaving the directory
+    char *lastSeparator = NULL;
+    for (char *c = out; *c; c++) {
+        if (*c == '/' || *c == '\\') lastSeparator = c;
+    }
+    if (!lastSeparator) return 0;
+    *lastSeparator = '\0';
+    return 1;
+}
+
+// Resolves a relative asset path. Returns a pointer to a static buffer, so copy
+// it if you need to keep it. An absolute path, or one that cannot be found, is
+// returned unchanged so raylib reports the failure normally.
+const char *cyps_asset_path(const char *relative) {
+    if (!relative || !relative[0]) return relative;
+    if (relative[0] == '/' || relative[0] == '\\' ||
+        (relative[0] && relative[1] == ':')) {
+        return relative; // already absolute
+    }
+
+    char exeDir[4096];
+    if (cyps_executable_dir(exeDir, sizeof(exeDir))) {
+        const char *layouts[] = {
+            "%s/%s",                 // beside the binary
+            "%s/assets/%s",          // the convention `cscript --bundle` produces
+            "%s/../Resources/%s",    // inside a macOS .app bundle
+            "%s/../assets/%s",       // binary in a bin/ subdirectory
+        };
+        for (size_t i = 0; i < sizeof(layouts) / sizeof(layouts[0]); i++) {
+            snprintf(g_asset_buffer, sizeof(g_asset_buffer), layouts[i], exeDir, relative);
+            FILE *probe = fopen(g_asset_buffer, "rb");
+            if (probe) {
+                fclose(probe);
+                return g_asset_buffer;
+            }
+        }
+    }
+
+    return relative; // fall back to the working directory
+}
+
 // --- Textures ----------------------------------------------------------------
 // raylib returns Texture2D by value; we heap-allocate one and hand back a ptr.
 
@@ -174,7 +254,7 @@ void *cyps_tex_load(const char *path) {
     if (g_headless) return NULL;
     Texture2D *tex = (Texture2D *)malloc(sizeof(Texture2D));
     if (!tex) return NULL;
-    *tex = LoadTexture(path);
+    *tex = LoadTexture(cyps_asset_path(path));
     return tex;
 }
 
@@ -242,7 +322,7 @@ void *cyps_sound_load(const char *path) {
     if (g_headless || !g_audio_ready) return NULL;
     Sound *sound = (Sound *)malloc(sizeof(Sound));
     if (!sound) return NULL;
-    *sound = LoadSound(path);
+    *sound = LoadSound(cyps_asset_path(path));
     return sound;
 }
 

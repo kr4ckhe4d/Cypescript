@@ -17,13 +17,17 @@ Started 2026-07-25 against `main` @ `06e8d87` (v1.0.0).
 | **3** | Heap objects — escape, object arrays, despawning | ✅ **DONE** |
 | **4** | Frame arena / memory hygiene | ✅ **DONE** |
 | **5** | Numeric & ergonomic gaps | ✅ **DONE** |
-| 6 | Packaging & shipping | 🔶 Vendoring + CI done; bundling left |
+| **6** | Packaging & shipping | ✅ **DONE** |
+
+**Every phase is complete.** Cypescript can develop a fully native arcade game:
+`example/game/02_asteroids.csc` is written in idiomatic Cypescript, runs at 60 fps with
+flat memory, and `cscript --bundle` turns it into a double-clickable `.app`.
 
 **Milestones reached:** M1 (a window opened from Cypescript), M2 (a playable
 60 fps Breakout), and M3 (Asteroids with real entity objects — spawned by
 functions, stored in `Rock[]`/`Bullet[]`, split on impact, removed when they die).
 
-Test suites: `bash tests/run_tests.sh` → **30/30**, `bash tests/run_game_tests.sh` → **9/9**.
+Test suites: `bash tests/run_tests.sh` → **30/30**, `bash tests/run_game_tests.sh` → **12/12**.
 Benchmarks unchanged at Rust parity.
 
 **Memory is flat.** Both games hold steady RSS from 2,000 to 300,000 headless frames —
@@ -387,7 +391,7 @@ globals. All now go through a single `variableStorage()` helper.
 
 ---
 
-## 8. Phase 6 — Ship it 🔶
+## 8. Phase 6 — Ship it ✅ DONE
 
 - ✅ **Headless self-test mode** — `CYPS_HEADLESS=1 CYPS_FRAMES=n` plus `isHeadless()`,
   so games run and assert in CI without a display.
@@ -406,9 +410,22 @@ globals. All now go through a single `variableStorage()` helper.
 - ✅ **Cross-platform link requirements** are generated into `lib/game.csc` at configure
   time from `lib/game.csc.in`, because raylib's system dependencies differ per OS and
   Cypescript has no conditional compilation.
-- ⬜ Asset paths resolved relative to the binary, not the cwd.
-- ⬜ `cscript build` producing a distributable bundle; macOS `.app`, Linux binary + assets.
-- ⬜ Docs: a "Writing a Game" chapter; VSCode extension gains the game API.
+- ✅ **Asset paths resolve against the binary**, not the working directory. A game is
+  launched by double-clicking, from a shell somewhere else, or from inside a `.app`, so
+  `loadTexture("sprite.png")` searches: beside the binary → `assets/` → `../Resources/`
+  (the macOS bundle layout) → `../assets/` → and only then the cwd, so running from a
+  source tree still works. `assetPath()` exposes the same resolution for files you open
+  yourself.
+- ✅ **`cscript --bundle`** packages a game for distribution: a double-clickable `.app`
+  with an `Info.plist` on macOS, a self-contained directory elsewhere. Assets are taken
+  from `assets/` beside the source (or `--assets DIR`) and placed where the runtime looks
+  for them, so a relative path in the source keeps working after the move.
+- ✅ **Docs**: a "Writing a game" guide and a `declare` & `link` reference on the docs
+  site, covering the frame arena and the pooling idiom.
+- ✅ **VSCode extension 1.2.0**: `declare`/`link` keywords, the `ptr`/`i64`/`i8`/`u8`/`f32`
+  types, all 50 game API functions and the key-code constants highlighted, plus snippets
+  for a foreign declaration, a link directive, a full game loop, a poolable entity class
+  and an entity pool. Packaged as `cypescript-1.2.0.vsix`.
 
 ### Platform support
 
@@ -561,3 +578,18 @@ Suite is now 27/27 language + 7/7 game.
 
 New tests: `test_pointer_equality`, `test_logical_mixed_types`, `test_frame_strings`.
 Suite is now 30/30 language + 9/9 game. Benchmarks still at Rust parity.
+
+**2026-07-25 — Phase 6 complete: shipping.**
+
+- Asset paths resolve against the binary (beside it, `assets/`, a macOS bundle's
+  `../Resources/`), falling back to the cwd so source-tree runs are unaffected.
+  `assetPath()` exposes it; `loadTexture`/`loadSound` use it automatically.
+- `cscript --bundle` (with optional `--assets DIR`) produces a `.app` on macOS and a
+  self-contained directory elsewhere.
+- VSCode extension 1.2.0 with the game API, the new keywords and types, and five new
+  snippets; repackaged.
+- Game suite grew to 12: asset resolution from an unrelated cwd, bundle layout, and a
+  bundled binary finding its assets.
+
+**All six phases are done.** The goal — a fully native arcade game written in
+Cypescript — is met.

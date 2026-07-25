@@ -158,6 +158,58 @@ for game in breakout asteroids; do
     fi
 done
 
+# --- Assets and bundling ------------------------------------------------------
+# A distributed game is launched from anywhere, so relative asset paths must
+# resolve against the binary rather than the working directory.
+ASSET_DIR="$BIN_DIR/assetgame"
+mkdir -p "$ASSET_DIR/assets"
+echo "sample asset" > "$ASSET_DIR/assets/sprite.txt"
+cat > "$ASSET_DIR/probe.csc" <<'PROBE'
+import { } from "game";
+println(assetPath("sprite.txt"));
+PROBE
+
+"$COMPILER" -o "$ASSET_DIR/probe" "$ASSET_DIR/probe.csc" >/dev/null 2>&1
+# Run from a directory that has no assets/, so a cwd-relative lookup would fail
+out=$(cd / && CYPS_HEADLESS=1 "$ASSET_DIR/probe" 2>/dev/null)
+printf "  %-32s" "assets resolve next to binary"
+if [[ "$out" == *"assetgame/assets/sprite.txt" ]]; then
+    echo -e "${GREEN}✅ PASS${NC}"
+    PASS=$((PASS + 1))
+else
+    echo -e "${RED}❌ FAIL${NC} (got '${out}')"
+    FAIL=$((FAIL + 1))
+fi
+
+# --bundle packages the binary with its assets where the runtime looks for them
+"$COMPILER" --bundle -o "$ASSET_DIR/Probe" "$ASSET_DIR/probe.csc" >/dev/null 2>&1
+printf "  %-32s" "--bundle produces a package"
+if [[ "$(uname)" == "Darwin" ]]; then
+    BUNDLE_BIN="$ASSET_DIR/Probe.app/Contents/MacOS/Probe"
+    BUNDLE_ASSET="$ASSET_DIR/Probe.app/Contents/Resources/sprite.txt"
+else
+    BUNDLE_BIN="$ASSET_DIR/Probe-bundle/Probe"
+    BUNDLE_ASSET="$ASSET_DIR/Probe-bundle/assets/sprite.txt"
+fi
+if [[ -x "$BUNDLE_BIN" && -f "$BUNDLE_ASSET" ]]; then
+    echo -e "${GREEN}✅ PASS${NC}"
+    PASS=$((PASS + 1))
+else
+    echo -e "${RED}❌ FAIL${NC} (missing binary or asset in the bundle)"
+    FAIL=$((FAIL + 1))
+fi
+
+# ...and the packaged game finds those assets when run from elsewhere
+out=$(cd / && CYPS_HEADLESS=1 "$BUNDLE_BIN" 2>/dev/null)
+printf "  %-32s" "bundled game finds its assets"
+if [[ -n "$out" && -f "$out" ]]; then
+    echo -e "${GREEN}✅ PASS${NC}"
+    PASS=$((PASS + 1))
+else
+    echo -e "${RED}❌ FAIL${NC} (resolved to '${out}', which does not exist)"
+    FAIL=$((FAIL + 1))
+fi
+
 echo "============================================"
 echo -e "  ${GREEN}Passed: $PASS${NC}  ${RED}Failed: $FAIL${NC}  Total: $((PASS + FAIL))"
 

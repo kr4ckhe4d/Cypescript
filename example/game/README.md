@@ -142,6 +142,32 @@ function takeBullet(pool: Bullet[]): Bullet {
 `removeAt()` and `clear()` still exist and are the right tool when entity churn is not in
 the hot path. See [GAME_ROADMAP.md](../../GAME_ROADMAP.md) Phase 4 for the measurements.
 
+## Assets and shipping
+
+Relative asset paths resolve against the **binary**, not the working directory — a game
+gets launched by double-clicking, or from a shell somewhere else entirely:
+
+```ts
+let sprite: ptr = loadTexture("player.png");   // found wherever the game runs
+println(assetPath("levels/01.txt"));           // same resolution, for your own files
+```
+
+The search order is: beside the binary → `assets/` → a macOS bundle's
+`Contents/Resources/` → `../assets/` → the working directory.
+
+To package a game for distribution:
+
+```bash
+./build/cscript --bundle mygame.csc
+```
+
+That produces a double-clickable `mygame.app` on macOS, or a self-contained directory
+elsewhere. Assets are taken from `assets/` beside the source (override with
+`--assets DIR`) and placed where the runtime looks for them.
+
+The bundled examples need no assets at all — shapes are drawn and sound effects are
+synthesised with `makeTone()`.
+
 ## Writing your own
 
 ```ts

@@ -547,6 +547,33 @@ function takeBullet(pool: Bullet[]): Bullet {
       of play at 60 fps with no growth.
     </p>
 
+    <h2 id="games-assets">Assets</h2>
+    <p>
+      A relative asset path resolves against the <em>binary</em>, not the working
+      directory — a game gets launched by double-clicking, or from a shell
+      somewhere else entirely. <code>loadTexture()</code> and
+      <code>loadSound()</code> search beside the binary, then <code>assets/</code>,
+      then a macOS bundle's <code>Contents/Resources/</code>, and only then fall
+      back to the working directory so running from a source tree still works.
+    </p>
+    <div class="code-example">
+      <div class="example-header"><span>Loading an asset</span></div>
+      <pre><code>let sprite: ptr = loadTexture("player.png");   // found wherever the game runs
+
+// The same resolution, for files you open yourself
+println(assetPath("levels/01.txt"));</code></pre>
+    </div>
+
+    <h2 id="games-shipping">Shipping</h2>
+    <pre><code>cscript --bundle mygame.csc</code></pre>
+    <p>
+      Produces a double-clickable <code>mygame.app</code> on macOS (with an
+      <code>Info.plist</code>), or a self-contained directory on other platforms.
+      Assets come from <code>assets/</code> beside the source — override with
+      <code>--assets DIR</code> — and are placed where the runtime looks for them,
+      so the relative paths in your source keep working after the move.
+    </p>
+
     <h2 id="games-limits">Current limitations</h2>
     <div class="notecard note">
       <p>
