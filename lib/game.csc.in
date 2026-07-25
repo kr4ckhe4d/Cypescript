@@ -1,0 +1,136 @@
+// lib/game.csc — the Cypescript game API.
+//
+// GENERATED FROM lib/game.csc.in AT BUILD TIME — edit the .in file, not this one.
+// Only the `link` block below is substituted; everything else is verbatim.
+//
+// An ordinary Cypescript source file. Every entry point is a `declare function`
+// bound to the C shim in runtime/game/cyps_game.c, which wraps raylib. The
+// compiler has no built-in knowledge of any of it — adding a call means one line
+// here and one function in the shim.
+//
+// The `= "cyps_..."` suffix binds a natural Cypescript name to the C symbol, so
+// game code reads like TypeScript rather than like C.
+//
+// Usage:
+//     import { } from "game";      // resolved from the compiler's own lib/
+//
+// Colors are packed i32 values — build them with rgb() / rgba().
+
+// Platform link requirements, filled in by CMake at configure time. raylib and
+// its system dependencies differ per OS, and Cypescript has no conditional
+// compilation, so the build resolves them once. cscript adds its own lib/
+// directory automatically, which is where libcypescript_game.a (and the vendored
+// libraylib.a, when raylib is bundled) live.
+@CYPESCRIPT_GAME_LINK_DIRECTIVES@
+
+// =============================================================================
+// Window and frame lifecycle
+// =============================================================================
+
+declare function openWindow(width: i32, height: i32, title: string): void = "cyps_win_open";
+declare function closeWindow(): void = "cyps_win_close";
+declare function windowShouldClose(): boolean = "cyps_win_should_close";
+declare function windowWidth(): i32 = "cyps_win_width";
+declare function windowHeight(): i32 = "cyps_win_height";
+declare function setTargetFps(fps: i32): void = "cyps_set_target_fps";
+declare function setExitKey(key: i32): void = "cyps_set_exit_key";
+declare function quietLogs(): void = "cyps_log_quiet";
+
+// True when running with CYPS_HEADLESS=1 (no window). Lets a game self-play in CI.
+declare function isHeadless(): boolean = "cyps_headless";
+
+declare function beginFrame(): void = "cyps_frame_begin";
+declare function endFrame(): void = "cyps_frame_end";
+declare function clearScreen(color: i32): void = "cyps_clear";
+
+// Seconds since the previous frame — multiply movement by this
+declare function deltaTime(): f64 = "cyps_dt";
+declare function elapsedTime(): f64 = "cyps_time";
+declare function currentFps(): i32 = "cyps_fps";
+
+// =============================================================================
+// Colors
+// =============================================================================
+
+declare function rgb(r: i32, g: i32, b: i32): i32 = "cyps_rgb";
+declare function rgba(r: i32, g: i32, b: i32, a: i32): i32 = "cyps_rgba";
+
+// =============================================================================
+// Drawing
+// =============================================================================
+
+declare function drawRect(x: f64, y: f64, width: f64, height: f64, color: i32): void = "cyps_rect";
+declare function drawRectOutline(x: f64, y: f64, width: f64, height: f64, thickness: f64, color: i32): void = "cyps_rect_lines";
+declare function drawCircle(x: f64, y: f64, radius: f64, color: i32): void = "cyps_circle";
+declare function drawLine(x1: f64, y1: f64, x2: f64, y2: f64, thickness: f64, color: i32): void = "cyps_line";
+declare function drawText(text: string, x: f64, y: f64, size: i32, color: i32): void = "cyps_text";
+declare function measureText(text: string, size: i32): i32 = "cyps_text_width";
+
+// =============================================================================
+// Textures
+// =============================================================================
+
+declare function loadTexture(path: string): ptr = "cyps_tex_load";
+declare function unloadTexture(texture: ptr): void = "cyps_tex_unload";
+declare function textureWidth(texture: ptr): i32 = "cyps_tex_width";
+declare function textureHeight(texture: ptr): i32 = "cyps_tex_height";
+declare function drawTexture(texture: ptr, x: f64, y: f64, rotation: f64, scale: f64, tint: i32): void = "cyps_tex_draw";
+// Sprite-sheet blit: a source rect from the texture into a destination rect
+declare function drawSprite(texture: ptr, sx: f64, sy: f64, sw: f64, sh: f64, dx: f64, dy: f64, dw: f64, dh: f64, rotation: f64, tint: i32): void = "cyps_tex_draw_src";
+
+// =============================================================================
+// Input
+// =============================================================================
+
+declare function isKeyDown(key: i32): boolean = "cyps_key_down";
+declare function isKeyPressed(key: i32): boolean = "cyps_key_pressed";
+declare function isKeyReleased(key: i32): boolean = "cyps_key_released";
+declare function mouseX(): f64 = "cyps_mouse_x";
+declare function mouseY(): f64 = "cyps_mouse_y";
+declare function isMouseDown(button: i32): boolean = "cyps_mouse_down";
+declare function isMousePressed(button: i32): boolean = "cyps_mouse_pressed";
+declare function hasGamepad(pad: i32): boolean = "cyps_gamepad_available";
+declare function isGamepadDown(pad: i32, button: i32): boolean = "cyps_gamepad_down";
+declare function gamepadAxis(pad: i32, axis: i32): f64 = "cyps_gamepad_axis";
+
+// =============================================================================
+// Audio
+// =============================================================================
+
+declare function initAudio(): void = "cyps_audio_init";
+declare function closeAudio(): void = "cyps_audio_close";
+declare function loadSound(path: string): ptr = "cyps_sound_load";
+// Synthesises a square-wave blip, so a game needs no audio asset files
+declare function makeTone(frequency: f64, milliseconds: i32, volume: f64): ptr = "cyps_tone";
+declare function playSound(sound: ptr): void = "cyps_sound_play";
+declare function setSoundVolume(sound: ptr, volume: f64): void = "cyps_sound_volume";
+declare function unloadSound(sound: ptr): void = "cyps_sound_unload";
+
+// =============================================================================
+// Key codes (raylib values)
+// =============================================================================
+
+const KEY_SPACE: i32 = 32;
+const KEY_ESCAPE: i32 = 256;
+const KEY_ENTER: i32 = 257;
+const KEY_RIGHT: i32 = 262;
+const KEY_LEFT: i32 = 263;
+const KEY_DOWN: i32 = 264;
+const KEY_UP: i32 = 265;
+const KEY_A: i32 = 65;
+const KEY_D: i32 = 68;
+const KEY_P: i32 = 80;
+const KEY_Q: i32 = 81;
+const KEY_R: i32 = 82;
+const KEY_S: i32 = 83;
+const KEY_W: i32 = 87;
+
+const MOUSE_LEFT: i32 = 0;
+const MOUSE_RIGHT: i32 = 1;
+
+// =============================================================================
+// Common colors
+// =============================================================================
+
+const BLACK: i32 = 255;             // 0x000000FF
+const WHITE: i32 = 0 - 1;           // 0xFFFFFFFF

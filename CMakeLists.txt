@@ -74,6 +74,129 @@ set_target_properties(cypescript_stdlib PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
+# --- Cypescript Game Runtime ---
+# A flat C shim over raylib so Cypescript programs can open a window and draw.
+#
+# raylib is vendored by default: CMake downloads and builds it from source, so
+# `cscript` ships a self-contained game runtime on macOS, Linux and Windows with
+# no system package to install. Set -DCYPESCRIPT_VENDOR_RAYLIB=OFF to link a
+# system raylib instead (faster incremental builds if you already have one).
+#
+# raylib is zlib/libpng licensed, which is compatible with this project's MIT
+# license. See THIRD_PARTY.md for the attribution notice we redistribute.
+option(CYPESCRIPT_VENDOR_RAYLIB "Download and build raylib from source" ON)
+option(CYPESCRIPT_BUILD_GAME_RUNTIME "Build the game runtime (needs raylib)" ON)
+
+set(CYPESCRIPT_GAME_AVAILABLE FALSE)
+
+if(CYPESCRIPT_BUILD_GAME_RUNTIME)
+    set(RAYLIB_TARGET "")
+
+    if(CYPESCRIPT_VENDOR_RAYLIB)
+        include(FetchContent)
+        message(STATUS "Vendoring raylib (set -DCYPESCRIPT_VENDOR_RAYLIB=OFF to use a system one)")
+
+        # Build only what a game needs: a static lib, no examples, no games.
+        set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+        set(BUILD_GAMES OFF CACHE BOOL "" FORCE)
+        set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+        set(CUSTOMIZE_BUILD ON CACHE BOOL "" FORCE)
+
+        FetchContent_Declare(raylib
+            GIT_REPOSITORY https://github.com/raysan5/raylib.git
+            GIT_TAG        5.5
+            GIT_SHALLOW    TRUE
+            GIT_PROGRESS   TRUE
+        )
+        FetchContent_MakeAvailable(raylib)
+        set(RAYLIB_TARGET raylib)
+        set(CYPESCRIPT_GAME_AVAILABLE TRUE)
+    else()
+        find_path(RAYLIB_INCLUDE_DIR raylib.h
+            HINTS /opt/homebrew/opt/raylib/include /usr/local/opt/raylib/include
+                  /usr/local/include /usr/include
+        )
+        find_library(RAYLIB_LIBRARY NAMES raylib
+            HINTS /opt/homebrew/opt/raylib/lib /usr/local/opt/raylib/lib
+                  /usr/local/lib /usr/lib
+        )
+        if(RAYLIB_INCLUDE_DIR AND RAYLIB_LIBRARY)
+            message(STATUS "Found system raylib: ${RAYLIB_LIBRARY}")
+            set(CYPESCRIPT_GAME_AVAILABLE TRUE)
+        else()
+            message(STATUS "raylib not found — skipping the game runtime "
+                           "(re-run with -DCYPESCRIPT_VENDOR_RAYLIB=ON to bundle it)")
+        endif()
+    endif()
+endif()
+
+if(CYPESCRIPT_GAME_AVAILABLE)
+    add_library(cypescript_game STATIC
+        runtime/game/cyps_game.c
+    )
+    set_target_properties(cypescript_game PROPERTIES
+        C_STANDARD 11
+        OUTPUT_NAME "cypescript_game"     # -> libcypescript_game.a
+        ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+    if(RAYLIB_TARGET)
+        target_link_libraries(cypescript_game PUBLIC ${RAYLIB_TARGET})
+        # Put the vendored libraylib.a beside our own libs, where cscript's
+        # automatic -L already points, so `link "raylib";` resolves with no
+        # system package and no machine-specific paths.
+        add_custom_command(TARGET cypescript_game POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_FILE:${RAYLIB_TARGET}> ${CMAKE_BINARY_DIR}
+            COMMENT "Staging vendored raylib next to the Cypescript runtime"
+        )
+    else()
+        target_include_directories(cypescript_game PRIVATE ${RAYLIB_INCLUDE_DIR})
+    endif()
+    # raylib's headers use designated initialisers and compound literals freely
+    if(NOT MSVC)
+        target_compile_options(cypescript_game PRIVATE -Wno-missing-field-initializers)
+    endif()
+endif()
+
+# --- Platform link requirements for games ---
+# Baked into lib/game.csc at configure time: raylib's system dependencies differ
+# per OS and Cypescript has no conditional compilation.
+set(CYPESCRIPT_GAME_LINK_DIRECTIVES "link \"cypescript_game\";\nlink \"raylib\";")
+if(APPLE)
+    string(APPEND CYPESCRIPT_GAME_LINK_DIRECTIVES
+        "\nlink framework \"Cocoa\";"
+        "\nlink framework \"IOKit\";"
+        "\nlink framework \"CoreVideo\";"
+        "\nlink framework \"CoreAudio\";"
+        "\nlink framework \"OpenGL\";")
+    if(NOT CYPESCRIPT_VENDOR_RAYLIB)
+        # System raylib lives outside clang's default search path on macOS
+        set(CYPESCRIPT_GAME_LINK_DIRECTIVES
+            "link path \"/opt/homebrew/lib\";\nlink path \"/usr/local/lib\";\n${CYPESCRIPT_GAME_LINK_DIRECTIVES}")
+    endif()
+elseif(WIN32)
+    string(APPEND CYPESCRIPT_GAME_LINK_DIRECTIVES
+        "\nlink \"opengl32\";"
+        "\nlink \"gdi32\";"
+        "\nlink \"winmm\";"
+        "\nlink \"shell32\";")
+elseif(UNIX)
+    string(APPEND CYPESCRIPT_GAME_LINK_DIRECTIVES
+        "\nlink \"GL\";"
+        "\nlink \"m\";"
+        "\nlink \"pthread\";"
+        "\nlink \"dl\";"
+        "\nlink \"rt\";"
+        "\nlink \"X11\";")
+endif()
+
+# Generated into the build tree; cscript finds it next to its own binary.
+configure_file(
+    ${CMAKE_SOURCE_DIR}/lib/game.csc.in
+    ${CMAKE_BINARY_DIR}/lib/game.csc
+    @ONLY
+)
+
 # --- Our Compiler Executable ---
 add_executable(cscript
     src/main.cpp
@@ -148,3 +271,24 @@ install(TARGETS cscript
 install(TARGETS cypescript_stdlib
     ARCHIVE DESTINATION lib
 )
+if(CYPESCRIPT_GAME_AVAILABLE)
+    install(TARGETS cypescript_game
+        ARCHIVE DESTINATION lib
+    )
+endif()
+
+# Bundled Cypescript modules, importable by bare name: import { } from "game";
+# cscript locates this directory relative to its own binary (or CYPESCRIPT_HOME).
+install(DIRECTORY ${CMAKE_BINARY_DIR}/lib/
+    DESTINATION lib/cypescript
+    FILES_MATCHING PATTERN "*.csc"
+)
+
+# The vendored raylib static library ships alongside, so installed games link
+# against the exact build the runtime was compiled against.
+if(CYPESCRIPT_GAME_AVAILABLE AND CYPESCRIPT_VENDOR_RAYLIB)
+    install(FILES $<TARGET_FILE:raylib> DESTINATION lib)
+    # raylib's zlib license requires its notice to travel with binaries
+    install(FILES ${CMAKE_SOURCE_DIR}/THIRD_PARTY.md
+            DESTINATION share/cypescript)
+endif()
