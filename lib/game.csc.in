@@ -38,6 +38,11 @@ declare function quietLogs(): void = "cyps_log_quiet";
 
 // True when running with CYPS_HEADLESS=1 (no window). Lets a game self-play in CI.
 declare function isHeadless(): boolean = "cyps_headless";
+// True when nothing is driving the game — headless, or CYPS_DEMO=1. Use this to
+// let a game play itself for CI runs and screenshots.
+declare function isDemoMode(): boolean = "cyps_demo_mode";
+// Writes a PNG of the current frame. Also driven by CYPS_SCREENSHOT=path.
+declare function screenshot(path: string): void = "cyps_screenshot";
 
 declare function beginFrame(): void = "cyps_frame_begin";
 declare function endFrame(): void = "cyps_frame_end";

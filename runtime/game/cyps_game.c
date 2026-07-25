@@ -43,13 +43,38 @@ static int g_headless_frames = 120;
 static int g_frames_elapsed = 0;
 static int g_audio_ready = 0;
 
+// Demo/attract mode: a game with no player driving it. Always on when headless,
+// and forceable with CYPS_DEMO=1 so a windowed run can play itself — which is
+// how the README screenshots are captured.
+static int g_demo = 0;
+
+// CYPS_SCREENSHOT=path writes a PNG at CYPS_SCREENSHOT_FRAME and then exits, so
+// documentation images come from the real renderer rather than a screen grab.
+static const char *g_screenshot_path = NULL;
+static int g_screenshot_frame = 90;
+static int g_frame_limit = 0;   // 0 = run until the window is closed
+
 static void cyps_read_env(void) {
     const char *headless = getenv("CYPS_HEADLESS");
     g_headless = (headless && headless[0] == '1');
+
+    const char *demo = getenv("CYPS_DEMO");
+    g_demo = g_headless || (demo && demo[0] == '1');
+
     const char *frames = getenv("CYPS_FRAMES");
     if (frames) {
         int parsed = atoi(frames);
-        if (parsed > 0) g_headless_frames = parsed;
+        if (parsed > 0) {
+            g_headless_frames = parsed;
+            g_frame_limit = parsed;
+        }
+    }
+
+    g_screenshot_path = getenv("CYPS_SCREENSHOT");
+    const char *shotFrame = getenv("CYPS_SCREENSHOT_FRAME");
+    if (shotFrame) {
+        int parsed = atoi(shotFrame);
+        if (parsed > 0) g_screenshot_frame = parsed;
     }
 }
 
@@ -90,8 +115,24 @@ void cyps_win_close(void) {
 }
 
 int cyps_win_should_close(void) {
-    if (g_headless) return (++g_frames_elapsed > g_headless_frames) ? 1 : 0;
+    g_frames_elapsed++;
+    if (g_headless) return (g_frames_elapsed > g_headless_frames) ? 1 : 0;
+    // A windowed run honours CYPS_FRAMES too, so a capture run ends on its own
+    if (g_frame_limit > 0 && g_frames_elapsed > g_frame_limit) return 1;
     return WindowShouldClose() ? 1 : 0;
+}
+
+// True when nothing is driving the game — headless, or CYPS_DEMO=1. Games use
+// this to play themselves for CI and for capturing screenshots.
+int cyps_demo_mode(void) {
+    cyps_read_env();
+    return g_demo;
+}
+
+// Writes a PNG of the current frame using raylib's own renderer.
+void cyps_screenshot(const char *path) {
+    if (g_headless || !path) return;
+    TakeScreenshot(path);
 }
 
 void cyps_set_target_fps(int fps) {
@@ -99,16 +140,60 @@ void cyps_set_target_fps(int fps) {
     SetTargetFPS(fps);
 }
 
+// Screenshots render into an offscreen texture rather than reading the window
+// back. Reading the framebuffer only works when the window is composited and
+// frontmost — off-screen or occluded it returns the clear colour and nothing
+// else, which is no good for generating documentation images unattended.
+static RenderTexture2D g_shot_target;
+static int g_shot_target_ready = 0;
+
+static int cyps_capturing(void) {
+    return g_screenshot_path != NULL && !g_headless;
+}
+
 void cyps_frame_begin(void) {
     // Rewind the string arena first, and do it in headless runs too — otherwise
     // the CI memory test would not be measuring what a real frame does.
     cyps_arena_frame();
     if (g_headless) return;
+
+    if (cyps_capturing()) {
+        if (!g_shot_target_ready) {
+            g_shot_target = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
+            g_shot_target_ready = 1;
+        }
+        BeginTextureMode(g_shot_target);
+        return;
+    }
     BeginDrawing();
 }
 
 void cyps_frame_end(void) {
     if (g_headless) return;
+
+    if (cyps_capturing()) {
+        EndTextureMode();
+
+        if (g_frames_elapsed >= g_screenshot_frame) {
+            Image frame = LoadImageFromTexture(g_shot_target.texture);
+            ImageFlipVertical(&frame);   // render textures are bottom-up
+            ExportImage(frame, g_screenshot_path);
+            UnloadImage(frame);
+            g_screenshot_path = NULL;
+            g_frame_limit = g_frames_elapsed;   // captured; wind the run up
+        }
+
+        // Still present the frame, so the window keeps pumping events
+        BeginDrawing();
+        DrawTextureRec(g_shot_target.texture,
+                       (Rectangle){0.0f, 0.0f,
+                                   (float)g_shot_target.texture.width,
+                                   -(float)g_shot_target.texture.height},
+                       (Vector2){0.0f, 0.0f}, WHITE);
+        EndDrawing();
+        return;
+    }
+
     EndDrawing();
 }
 

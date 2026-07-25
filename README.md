@@ -4,7 +4,124 @@
 [![Release](https://img.shields.io/github/v/release/kr4ckhe4d/Cypescript)](https://github.com/kr4ckhe4d/Cypescript/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A TypeScript-style language compiler built with C++ and LLVM. Cypescript aims to provide a familiar syntax for developers coming from TypeScript/JavaScript while compiling to efficient native code through LLVM.
+**Write TypeScript. Get a native binary. Run at Rust speed.**
+
+Cypescript is a compiled, statically-typed language with TypeScript's syntax and none of its
+runtime. No VM, no garbage collector, no `node_modules` — `cscript game.csc` produces a
+single native executable that starts in microseconds.
+
+```ts
+class Vec {
+    x: f64 = 0.0;
+    y: f64 = 0.0;
+
+    add(other: Vec): void {
+        this.x += other.x;
+        this.y += other.y;
+    }
+}
+
+const points: Vec[] = [];
+points.push(new Vec());
+
+for (const p of points) {
+    p.add(new Vec());
+    println(`(${p.x}, ${p.y})`);
+}
+```
+
+```bash
+$ cscript -r hello.csc
+(0, 0)
+```
+
+---
+
+## It writes arcade games
+
+Two complete games ship in [`example/game/`](example/game/), written entirely in Cypescript
+and rendering through the language's own foreign function interface. **The compiler has no
+built-in knowledge of graphics** — every call below is a `declare function` binding in
+[lib/game.csc.in](lib/game.csc.in).
+
+| Breakout | Asteroids |
+|---|---|
+| ![Breakout running](docs/images/breakout.png) | ![Asteroids running](docs/images/asteroids.png) |
+| Ball physics, brick grid, scoring, lives, synthesised sound | Pooled entities, rocks that split, waves, thrust and rotation |
+
+*Both screenshots are real frames, captured by the games themselves.*
+
+```ts
+import { } from "game";
+
+openWindow(800, 600, "my game");
+setTargetFps(60);
+enableFrameStrings();
+
+let x: f64 = 100.0;
+
+while (!windowShouldClose()) {
+    let dt: f64 = deltaTime();
+    if (isKeyDown(KEY_LEFT))  { x -= 300.0 * dt; }
+    if (isKeyDown(KEY_RIGHT)) { x += 300.0 * dt; }
+
+    beginFrame();
+    clearScreen(rgb(16, 18, 28));
+    drawRect(x, 400.0, 90.0, 16.0, rgb(235, 235, 245));
+    drawText(`x = ${x}`, 16.0, 12.0, 20, rgb(200, 205, 230));
+    endFrame();
+}
+
+closeWindow();
+```
+
+```bash
+cscript --bundle mygame.csc      # → mygame.app you can double-click
+```
+
+Games hold **flat memory** — steady RSS from 2,000 to 300,000 frames, which is 83 minutes
+of play at 60 fps with no growth.
+
+---
+
+## It calls C directly
+
+`declare function` binds any C symbol. No wrapper generation, no build plugin, no compiler
+changes — this is the same mechanism the entire game runtime is built on.
+
+```ts
+declare function atan2(y: f64, x: f64): f64;
+declare function malloc(size: i64): ptr;
+declare function free(block: ptr): void;
+
+println(atan2(1.0, 1.0));        // 0.785398
+
+let block: ptr = malloc(64);
+free(block);
+```
+
+Bind a C-style API under a name that reads well, and ask for the library from source:
+
+```ts
+link "raylib";
+declare function drawCircle(x: f64, y: f64, r: f64, color: i32): void = "cyps_circle";
+```
+
+---
+
+## It's fast
+
+Best-of-3 on an M-series Mac. Same algorithms, same output, all compiled or run at `-O2`.
+
+| Benchmark | Cypescript | Rust | Node (TS) | Python |
+|---|---|---|---|---|
+| Primes < 1M (trial division) | **0.051s** | 0.051s | 0.150s | 1.78s |
+| `fib(35)` recursive | **0.025s** | 0.025s | 0.126s | 0.634s |
+
+Objects are LLVM structs, so property access is a single instruction rather than a hash
+lookup. Reproduce with `bash benchmarks/cross/run_cross_benchmarks.sh 3`.
+
+---
 
 ## Install
 
@@ -62,6 +179,115 @@ The web documentation includes:
 - 🔍 **Searchable** - Find what you need quickly
 - 📚 **Complete Reference** - All language features documented
 - 📈 **Visual Performance Analysis** - Charts showing optimization impact and scaling
+
+## A tour in code
+
+**Classes, interfaces and structural typing** — objects are LLVM structs, not hash maps:
+
+```ts
+interface Shape {
+    area(): f64;
+}
+
+class Circle {
+    radius: f64 = 1.0;
+
+    constructor(radius: f64) {
+        this.radius = radius;
+    }
+
+    area(): f64 {
+        return Math.PI * this.radius * this.radius;
+    }
+}
+
+const c: Circle = new Circle(2.0);
+println(c.area());                 // 12.5664
+```
+
+**Arrow functions, closures and callback array methods:**
+
+```ts
+const numbers: i32[] = [1, 2, 3, 4, 5, 6];
+
+const doubled = numbers.map((n: i32): i32 => n * 2);
+const evens   = numbers.filter((n: i32): boolean => n % 2 == 0);
+const total   = numbers.reduce((acc: i32, n: i32): i32 => acc + n, 0);
+
+println(total);                    // 21
+println(evens.length);             // 3
+
+// Closures capture by value
+let base: i32 = 100;
+const offset = (n: i32): i32 => n + base;
+println(offset(5));                // 105
+```
+
+**Generics, `Map`, `Set`, and real algorithms** — this is breadth-first search, and it
+produces byte-identical output to the same program run under Node:
+
+```ts
+type Graph<T> = Map<T, T[]>;
+
+function bfs<T>(graph: Graph<T>, start: T): T[] {
+    const visited: Set<T> = new Set<T>();
+    const queue: T[] = [];
+    const order: T[] = [];
+
+    visited.add(start);
+    queue.push(start);
+
+    while (queue.length > 0) {
+        const node: T = queue.shift()!;
+        order.push(node);
+
+        const neighbors: T[] = graph.get(node) || [];
+        for (const next of neighbors) {
+            if (!visited.has(next)) {
+                visited.add(next);
+                queue.push(next);
+            }
+        }
+    }
+    return order;
+}
+```
+
+**Exceptions, destructuring, template literals and modules:**
+
+```ts
+import { square } from "./math_utils";
+
+const user = { name: "Alice", age: 28, active: true };
+const { name, age } = user;
+println(`${name} is ${age}`);           // Alice is 28
+
+try {
+    if (age < 0) { throw "negative age"; }
+    println(JSON.stringify(user));
+} catch (e) {
+    println(`error: ${e}`);
+} finally {
+    println("done");
+}
+```
+
+**Bitwise operators, hex literals and sized numeric types** for packing and C interop:
+
+```ts
+let color: i32 = (0xEF << 16) | (0x53 << 8) | 0x50;
+let mask: i32  = color & 0xFF;
+let flags: i32 = 1 << 4;
+```
+
+**Errors carry positions**, from a semantic pass that runs before code generation:
+
+```
+✗ Error: Semantic Error: Use of undefined variable 'SPEED' at line 2, column 43
+```
+
+Every snippet above is drawn from [`example/`](example/), a graded tour of 20 programs
+plus the two games. Run any of them with `cscript -r example/09_objects.csc`.
 
 ## Features
 

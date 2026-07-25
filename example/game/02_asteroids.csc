@@ -253,7 +253,7 @@ while (r < startRocks) {
 while (!windowShouldClose()) {
     let dt: f64 = deltaTime();
     frames += 1;
-    let autoplay: boolean = isHeadless();
+    let autoplay: boolean = isDemoMode();
 
     // --- Input -------------------------------------------------------------
     let turnLeft: boolean = isKeyDown(KEY_LEFT);

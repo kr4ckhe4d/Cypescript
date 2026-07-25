@@ -121,7 +121,7 @@ while (!windowShouldClose()) {
     // With no window there is no keyboard, so the game plays itself: the paddle
     // chases the ball and launches on its own. This turns a headless run into a
     // real self-test of the physics, collisions and scoring.
-    let autoplay: boolean = isHeadless();
+    let autoplay: boolean = isDemoMode();
 
     let moveLeft: i32 = 0;
     let moveRight: i32 = 0;
