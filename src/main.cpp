@@ -714,7 +714,7 @@ int main(int argc, char** argv) {
             // (or CYPESCRIPT_HOME), falling back to the stdlib source in the repo
             std::string stdlibPath = findRuntimeLibrary(argv[0]);
 
-            std::string compileCmd = "clang++ -O2 " + irFile + " \"" + stdlibPath + "\" -o " + executableName + " -std=c++17";
+            std::string compileCmd = "clang++ -O2 " + irFile + " -o " + executableName + " -std=c++17";
 
             // Libraries the program asked for itself via `link "raylib";`, followed
             // by anything passed on the command line (which therefore wins).
@@ -733,6 +733,15 @@ int main(int argc, char** argv) {
             for (const std::string& flag : opts.linkFlags) {
                 compileCmd += " " + shellQuote(flag);
             }
+
+            // The runtime archive goes LAST. GNU ld scans archives strictly
+            // left-to-right and discards one once it has passed it, so a library
+            // listed earlier cannot satisfy a symbol needed by a later one — and
+            // libcypescript_game.a calls into libcypescript.a (cyps_arena_frame).
+            // Putting it at the end satisfies everything that came before.
+            // macOS's linker is order-insensitive, which is why this only ever
+            // showed up on Linux.
+            compileCmd += " \"" + stdlibPath + "\"";
 
             if (opts.verbose) {
                 llvm::outs() << "Running: " << Colors::CYAN << compileCmd << Colors::RESET << "\n";

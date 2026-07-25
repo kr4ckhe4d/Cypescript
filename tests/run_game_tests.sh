@@ -7,7 +7,11 @@
 # and scoring still execute and can be asserted in CI.
 #
 # Skips cleanly (exit 0) when the game runtime was not built.
-set -e
+#
+# Deliberately NOT `set -e`: this script's job is to report the outcome of every
+# check. Under `set -e` a single non-zero command — a pipeline whose grep found
+# nothing, say — aborts the run with no output at all, which reads as a failing
+# step with no explanation.
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -46,6 +50,29 @@ fi
 
 echo -e "${CYAN}🕹  Cypescript Game Tests${NC}"
 echo "============================================"
+# Environment, so a CI failure is diagnosable from the log alone rather than
+# needing someone to reproduce it locally on that platform.
+echo "  platform:     $(uname -s) $(uname -m)"
+echo "  compiler:     $COMPILER ($("$COMPILER" --version 2>/dev/null))"
+echo "  game runtime: $GAME_RUNTIME"
+if [[ -x /usr/bin/time ]]; then
+    echo "  /usr/bin/time: present (RSS checks enabled)"
+else
+    echo "  /usr/bin/time: missing (RSS checks will skip)"
+fi
+echo "--------------------------------------------"
+
+# Compiles a game, reporting the compiler's own output if it fails
+compile_game() {
+    local source="$1" output="$2" log
+    if ! log=$("$COMPILER" -o "$output" "$source" 2>&1); then
+        echo -e "  ${RED}❌ FAILED TO COMPILE${NC} $source"
+        echo "$log" | sed 's/^/      /' | tail -15
+        FAIL=$((FAIL + 1))
+        return 1
+    fi
+    return 0
+}
 
 check() {
     local name="$1"
@@ -67,13 +94,13 @@ BIN_DIR="$(mktemp -d)"
 trap 'rm -rf "$BIN_DIR"' EXIT
 
 # --- 00_window: the loop runs and the frame count is exact ---
-"$COMPILER" -o "$BIN_DIR/window" "$ROOT_DIR/example/game/00_window.csc" >/dev/null 2>&1
-out=$(CYPS_HEADLESS=1 CYPS_FRAMES=45 "$BIN_DIR/window" 2>/dev/null)
+compile_game "$ROOT_DIR/example/game/00_window.csc" "$BIN_DIR/window" || exit 1
+out=$(CYPS_HEADLESS=1 CYPS_FRAMES=45 "$BIN_DIR/window" 2>&1) || true
 check "00_window runs 45 frames" "$out" "ran 45 frames"
 
 # --- 01_breakout: self-play must actually break bricks and score ---
-"$COMPILER" -o "$BIN_DIR/breakout" "$ROOT_DIR/example/game/01_breakout.csc" >/dev/null 2>&1
-out=$(CYPS_HEADLESS=1 CYPS_FRAMES=1200 "$BIN_DIR/breakout" 2>/dev/null)
+compile_game "$ROOT_DIR/example/game/01_breakout.csc" "$BIN_DIR/breakout" || exit 1
+out=$(CYPS_HEADLESS=1 CYPS_FRAMES=1200 "$BIN_DIR/breakout" 2>&1) || true
 check "01_breakout completes a run" "$out" "Breakout ended"
 
 # Physics and collision actually work: the autopilot must destroy bricks.
@@ -99,8 +126,8 @@ else
 fi
 
 # --- 02_asteroids: heap objects in arrays, spawned and despawned live ---
-"$COMPILER" -o "$BIN_DIR/asteroids" "$ROOT_DIR/example/game/02_asteroids.csc" >/dev/null 2>&1
-out=$(CYPS_HEADLESS=1 CYPS_FRAMES=12000 "$BIN_DIR/asteroids" 2>/dev/null)
+compile_game "$ROOT_DIR/example/game/02_asteroids.csc" "$BIN_DIR/asteroids" || exit 1
+out=$(CYPS_HEADLESS=1 CYPS_FRAMES=12000 "$BIN_DIR/asteroids" 2>&1) || true
 check "02_asteroids completes a run" "$out" "Asteroids ended"
 
 # Rocks are shot, split into smaller rocks, and removed from the array; clearing
@@ -133,16 +160,25 @@ fi
 peak_rss_mb() {
     # BSD time (-l) reports peak RSS in bytes; GNU time (-v) in kilobytes.
     # Try both, since neither flag is understood by the other implementation.
-    local binary="$1" frames="$2" raw=""
-    if [[ "$(uname)" == "Darwin" ]]; then
-        raw=$(CYPS_HEADLESS=1 CYPS_FRAMES="$frames" /usr/bin/time -l "$binary" 2>&1 \
-              | grep -iE "maximum resident set size" | grep -oE "[0-9]+" | head -1)
-        [[ -n "$raw" ]] && awk -v b="$raw" 'BEGIN { printf "%.2f", b / 1048576 }'
-        return
+    local binary="$1" frames="$2" raw="" divisor=1048576 flag="-l"
+    # GNU time wants -v and reports kilobytes; BSD time wants -l and reports bytes
+    if [[ "$(uname)" != "Darwin" ]]; then
+        flag="-v"
+        divisor=1024
     fi
-    raw=$(CYPS_HEADLESS=1 CYPS_FRAMES="$frames" /usr/bin/time -v "$binary" 2>&1 \
-          | grep -iE "maximum resident set size" | grep -oE "[0-9]+" | head -1)
-    [[ -n "$raw" ]] && awk -v k="$raw" 'BEGIN { printf "%.2f", k / 1024 }'
+    if [[ ! -x /usr/bin/time ]]; then
+        echo ""
+        return 0
+    fi
+    raw=$(CYPS_HEADLESS=1 CYPS_FRAMES="$frames" /usr/bin/time "$flag" "$binary" 2>&1 \
+          | grep -iE "maximum resident set size" \
+          | grep -oE "[0-9]+" | head -1) || true
+    if [[ -z "$raw" ]]; then
+        echo ""
+        return 0
+    fi
+    awk -v v="$raw" -v d="$divisor" 'BEGIN { printf "%.2f", v / d }'
+    return 0
 }
 
 for game in breakout asteroids; do
@@ -171,9 +207,9 @@ import { } from "game";
 println(assetPath("sprite.txt"));
 PROBE
 
-"$COMPILER" -o "$ASSET_DIR/probe" "$ASSET_DIR/probe.csc" >/dev/null 2>&1
+compile_game "$ASSET_DIR/probe.csc" "$ASSET_DIR/probe" || exit 1
 # Run from a directory that has no assets/, so a cwd-relative lookup would fail
-out=$(cd / && CYPS_HEADLESS=1 "$ASSET_DIR/probe" 2>/dev/null)
+out=$(cd / && CYPS_HEADLESS=1 "$ASSET_DIR/probe" 2>&1) || true
 printf "  %-32s" "assets resolve next to binary"
 if [[ "$out" == *"assetgame/assets/sprite.txt" ]]; then
     echo -e "${GREEN}✅ PASS${NC}"
@@ -184,7 +220,10 @@ else
 fi
 
 # --bundle packages the binary with its assets where the runtime looks for them
-"$COMPILER" --bundle -o "$ASSET_DIR/Probe" "$ASSET_DIR/probe.csc" >/dev/null 2>&1
+bundle_log=$("$COMPILER" --bundle -o "$ASSET_DIR/Probe" "$ASSET_DIR/probe.csc" 2>&1) || {
+    echo -e "  ${RED}❌ --bundle failed to compile${NC}"
+    echo "$bundle_log" | sed 's/^/      /' | tail -10
+}
 printf "  %-32s" "--bundle produces a package"
 if [[ "$(uname)" == "Darwin" ]]; then
     BUNDLE_BIN="$ASSET_DIR/Probe.app/Contents/MacOS/Probe"
@@ -202,7 +241,7 @@ else
 fi
 
 # ...and the packaged game finds those assets when run from elsewhere
-out=$(cd / && CYPS_HEADLESS=1 "$BUNDLE_BIN" 2>/dev/null)
+out=$(cd / && CYPS_HEADLESS=1 "$BUNDLE_BIN" 2>&1) || true
 printf "  %-32s" "bundled game finds its assets"
 if [[ -n "$out" && -f "$out" ]]; then
     echo -e "${GREEN}✅ PASS${NC}"
