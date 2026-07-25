@@ -15,6 +15,11 @@ jobs:
       - name: Install LLVM
         run: brew install llvm cmake
 
+      # Optional dependency: enables the game runtime and example/game/.
+      # The compiler builds and all language tests pass without it.
+      - name: Install raylib (game runtime)
+        run: brew install raylib
+
       - name: Build compiler
         run: |
           export PATH="$(brew --prefix llvm)/bin:$PATH"
@@ -26,6 +31,11 @@ jobs:
 
       - name: Run test suite
         run: bash tests/run_tests.sh
+
+      # Runs the games headless (no window, no drawing) and asserts that the
+      # simulation actually progresses — see tests/run_game_tests.sh
+      - name: Run game tests (headless)
+        run: bash tests/run_game_tests.sh
 
       - name: Compile all examples
         run: |
@@ -55,6 +65,14 @@ jobs:
       - name: Install LLVM and clang
         run: sudo apt-get update && sudo apt-get install -y cmake llvm-dev clang zlib1g-dev libzstd-dev
 
+      # raylib is built from source by CMake, but on Linux it links against the
+      # system X11/GL/audio development headers.
+      - name: Install game runtime build dependencies
+        run: |
+          sudo apt-get install -y \
+            libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libasound2-dev
+
       - name: Build compiler
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -65,6 +83,10 @@ jobs:
 
       - name: Run test suite
         run: bash tests/run_tests.sh
+
+      # Headless: no display needed, the game loop still runs and is asserted
+      - name: Run game tests (headless)
+        run: bash tests/run_game_tests.sh
 
       - name: Compile all examples
         run: |
@@ -90,3 +112,32 @@ jobs:
         with:
           name: cypescript-deb-${{ runner.arch }}
           path: cypescript_*.deb
+
+  # Windows support is new and this job is what establishes it. It is
+  # non-blocking until it has a track record, exactly as the Linux job was.
+  build-and-test-windows:
+    runs-on: windows-latest
+    continue-on-error: true
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LLVM
+        run: choco install llvm --no-progress -y
+
+      - name: Build compiler
+        run: |
+          export PATH="/c/Program Files/LLVM/bin:$PATH"
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel --config Release
+
+      - name: Version check
+        run: ./build/cscript.exe --version || ./build/Release/cscript.exe --version
+
+      - name: Run test suite
+        run: bash tests/run_tests.sh
+
+      - name: Run game tests (headless)
+        run: bash tests/run_game_tests.sh

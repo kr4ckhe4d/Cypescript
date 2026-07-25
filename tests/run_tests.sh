@@ -12,12 +12,17 @@ NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
-COMPILER="$ROOT_DIR/build/cscript"
 PASS=0
 FAIL=0
 ERRORS=""
 
-if [[ ! -f "$COMPILER" ]]; then
+# Locate the compiler across platforms and generator layouts
+COMPILER=""
+for candidate in "$ROOT_DIR/build/cscript" "$ROOT_DIR/build/cscript.exe" \
+                 "$ROOT_DIR/build/Release/cscript.exe"; do
+    [[ -f "$candidate" ]] && COMPILER="$candidate" && break
+done
+if [[ -z "$COMPILER" ]]; then
     echo -e "${RED}❌ Compiler not found. Run ./build.sh first${NC}"
     exit 1
 fi
