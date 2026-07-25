@@ -70,7 +70,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install LLVM and clang
-        run: sudo apt-get update && sudo apt-get install -y cmake llvm-dev clang zlib1g-dev libzstd-dev
+        run: |
+          sudo apt-get update \
+          sudo apt-get install -y wget gnupg lsb-release software-properties-common \
+          wget https://apt.llvm.org/llvm.sh \
+          chmod +x llvm.sh \
+          sudo ./llvm.sh 18 \
+          sudo apt-get install -y cmake clang-18 zlib1g-dev libzstd-dev 
 
       # raylib is built from source by CMake, but on Linux it links against the
       # system X11/GL/audio development headers.
@@ -83,8 +89,9 @@ jobs:
 
       - name: Build compiler
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --parallel
+          export PATH="/usr/lib/llvm-18/bin:$PATH" \
+          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+          cmake --build build --parallel 
 
       - name: Version check
         run: ./build/cscript --version
