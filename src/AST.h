@@ -665,23 +665,34 @@ public:
 };
 
 // Linker directive: link "raylib"; link framework "Cocoa"; link path "/usr/local/lib";
+// An optional platform qualifier restricts it to one OS, which is what lets a
+// single source file describe libraries that differ per platform:
+//     link macos framework "Cocoa";
+//     link linux "GL";
+//     link windows "opengl32";
 // Collected by the driver and turned into flags on the final clang++ invocation.
 class LinkDirectiveNode : public StatementNode
 {
 public:
     enum class Kind { Library, Framework, SearchPath };
+    enum class Platform { Any, MacOS, Linux, Windows };
 
     Kind kind;
+    Platform platform;
     std::string value;
 
-    LinkDirectiveNode(Kind k, std::string v) : kind(k), value(std::move(v)) {}
+    LinkDirectiveNode(Kind k, std::string v, Platform p = Platform::Any)
+        : kind(k), platform(p), value(std::move(v)) {}
 
     void printNode(llvm::raw_ostream &os, int indent = 0) const override
     {
         printIndent(os, indent);
         const char *kindName = kind == Kind::Library ? "library"
                              : kind == Kind::Framework ? "framework" : "path";
-        os << "LinkDirectiveNode: " << kindName << " \"" << value << "\"\n";
+        const char *platformName = platform == Platform::Any ? ""
+                                 : platform == Platform::MacOS ? "macos "
+                                 : platform == Platform::Linux ? "linux " : "windows ";
+        os << "LinkDirectiveNode: " << platformName << kindName << " \"" << value << "\"\n";
     }
 };
 

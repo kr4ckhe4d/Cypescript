@@ -131,16 +131,18 @@ fi
 # leak shows up as the long run using materially more memory than the short one.
 # Frame-scoped strings and entity pooling should make the two nearly identical.
 peak_rss_mb() {
-    # /usr/bin/time -l reports peak RSS in bytes on macOS, kilobytes on Linux
-    local binary="$1" frames="$2" raw
-    raw=$(CYPS_HEADLESS=1 CYPS_FRAMES="$frames" /usr/bin/time -l "$binary" 2>&1 \
-          | grep -iE "maximum resident set size" | grep -oE "[0-9]+" | head -1)
-    [[ -z "$raw" ]] && { echo ""; return; }
+    # BSD time (-l) reports peak RSS in bytes; GNU time (-v) in kilobytes.
+    # Try both, since neither flag is understood by the other implementation.
+    local binary="$1" frames="$2" raw=""
     if [[ "$(uname)" == "Darwin" ]]; then
-        awk -v b="$raw" 'BEGIN { printf "%.2f", b / 1048576 }'
-    else
-        awk -v k="$raw" 'BEGIN { printf "%.2f", k / 1024 }'
+        raw=$(CYPS_HEADLESS=1 CYPS_FRAMES="$frames" /usr/bin/time -l "$binary" 2>&1 \
+              | grep -iE "maximum resident set size" | grep -oE "[0-9]+" | head -1)
+        [[ -n "$raw" ]] && awk -v b="$raw" 'BEGIN { printf "%.2f", b / 1048576 }'
+        return
     fi
+    raw=$(CYPS_HEADLESS=1 CYPS_FRAMES="$frames" /usr/bin/time -v "$binary" 2>&1 \
+          | grep -iE "maximum resident set size" | grep -oE "[0-9]+" | head -1)
+    [[ -n "$raw" ]] && awk -v k="$raw" 'BEGIN { printf "%.2f", k / 1024 }'
 }
 
 for game in breakout asteroids; do

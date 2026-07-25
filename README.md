@@ -42,7 +42,7 @@ $ cscript -r hello.csc
 Two complete games ship in [`example/game/`](example/game/), written entirely in Cypescript
 and rendering through the language's own foreign function interface. **The compiler has no
 built-in knowledge of graphics** — every call below is a `declare function` binding in
-[lib/game.csc.in](lib/game.csc.in).
+[lib/game.csc](lib/game.csc).
 
 | Breakout | Asteroids |
 |---|---|

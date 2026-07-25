@@ -1,8 +1,5 @@
 // lib/game.csc — the Cypescript game API.
 //
-// GENERATED FROM lib/game.csc.in AT BUILD TIME — edit the .in file, not this one.
-// Only the `link` block below is substituted; everything else is verbatim.
-//
 // An ordinary Cypescript source file. Every entry point is a `declare function`
 // bound to the C shim in runtime/game/cyps_game.c, which wraps raylib. The
 // compiler has no built-in knowledge of any of it — adding a call means one line
@@ -16,12 +13,34 @@
 //
 // Colors are packed i32 values — build them with rgb() / rgba().
 
-// Platform link requirements, filled in by CMake at configure time. raylib and
-// its system dependencies differ per OS, and Cypescript has no conditional
-// compilation, so the build resolves them once. cscript adds its own lib/
-// directory automatically, which is where libcypescript_game.a (and the vendored
-// libraylib.a, when raylib is bundled) live.
-@CYPESCRIPT_GAME_LINK_DIRECTIVES@
+// raylib's system dependencies differ per OS, so the link directives below are
+// platform-qualified — cscript keeps only the ones matching the host it is
+// compiling on. cscript adds its own lib/ directory to the search path
+// automatically, which is where libcypescript_game.a and the vendored
+// libraylib.a live.
+link "cypescript_game";
+link "raylib";
+
+// macOS: raylib windows through Cocoa, and audio/input through these frameworks
+link macos framework "Cocoa";
+link macos framework "IOKit";
+link macos framework "CoreVideo";
+link macos framework "CoreAudio";
+link macos framework "OpenGL";
+
+// Linux: X11 windowing plus OpenGL and the usual system libraries
+link linux "GL";
+link linux "m";
+link linux "pthread";
+link linux "dl";
+link linux "rt";
+link linux "X11";
+
+// Windows: GDI for the window, winmm for timing, opengl32 for rendering
+link windows "opengl32";
+link windows "gdi32";
+link windows "winmm";
+link windows "shell32";
 
 // =============================================================================
 // Window and frame lifecycle

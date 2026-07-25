@@ -293,13 +293,27 @@ std::string shellQuote(const std::string& arg) {
 #endif
 }
 
-// Turns the program's own `link ...;` directives into clang++ flags.
+// Turns the program's own `link ...;` directives into clang++ flags, skipping
+// any that are qualified for a different platform.
 std::vector<std::string> collectLinkFlags(const ProgramNode* astRoot) {
     std::vector<std::string> flags;
     if (!astRoot) return flags;
+
+#if defined(__APPLE__)
+    const auto thisPlatform = LinkDirectiveNode::Platform::MacOS;
+#elif defined(_WIN32)
+    const auto thisPlatform = LinkDirectiveNode::Platform::Windows;
+#else
+    const auto thisPlatform = LinkDirectiveNode::Platform::Linux;
+#endif
+
     for (const auto& stmt : astRoot->statements) {
         auto* link = dynamic_cast<const LinkDirectiveNode*>(stmt.get());
         if (!link) continue;
+        if (link->platform != LinkDirectiveNode::Platform::Any &&
+            link->platform != thisPlatform) {
+            continue;
+        }
         switch (link->kind) {
             case LinkDirectiveNode::Kind::Library:
                 flags.push_back("-l" + link->value);
@@ -373,7 +387,7 @@ fs::path createBundle(const fs::path& executable, const fs::path& sourceFile,
           << "</dict>\n</plist>\n";
     plist.close();
 #else
-    fs::path bundle = executable.parent_path() / appName + "-bundle";
+    fs::path bundle = executable.parent_path() / (appName + "-bundle");
     fs::remove_all(bundle);
     fs::create_directories(bundle);
 

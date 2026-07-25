@@ -1233,11 +1233,21 @@ bool Parser::isExternDeclarationAhead() const
 bool Parser::isLinkDirectiveAhead() const
 {
     if (peek().type != TOK_IDENTIFIER || peek().value != "link") return false;
+    // link "raylib";
     if (peek(1).type == TOK_STRING_LITERAL) return true;
-    // link framework "Cocoa";  /  link path "/opt/homebrew/lib";
-    return peek(1).type == TOK_IDENTIFIER &&
-           (peek(1).value == "framework" || peek(1).value == "path") &&
-           peek(2).type == TOK_STRING_LITERAL;
+    if (peek(1).type != TOK_IDENTIFIER) return false;
+
+    auto isQualifier = [](const std::string &word) {
+        return word == "framework" || word == "path" ||
+               word == "macos" || word == "linux" || word == "windows";
+    };
+    if (!isQualifier(peek(1).value)) return false;
+
+    // link framework "Cocoa";  /  link macos "raylib";
+    if (peek(2).type == TOK_STRING_LITERAL) return true;
+    // link macos framework "Cocoa";
+    return peek(2).type == TOK_IDENTIFIER && isQualifier(peek(2).value) &&
+           peek(3).type == TOK_STRING_LITERAL;
 }
 
 // declare function rl_rect(x: f64, y: f64, w: f64, h: f64, color: i32): void;
@@ -1272,19 +1282,30 @@ std::unique_ptr<StatementNode> Parser::parseExternDeclaration()
     return node;
 }
 
-// link "raylib";  link framework "Cocoa";  link path "/opt/homebrew/lib";
+// link "raylib";              link framework "Cocoa";     link path "/opt/homebrew/lib";
+// link linux "GL";            link macos framework "IOKit";
 std::unique_ptr<StatementNode> Parser::parseLinkDirective()
 {
     advance(); // "link"
+
     LinkDirectiveNode::Kind kind = LinkDirectiveNode::Kind::Library;
-    if (peek().type == TOK_IDENTIFIER) {
-        kind = (peek().value == "framework") ? LinkDirectiveNode::Kind::Framework
-                                             : LinkDirectiveNode::Kind::SearchPath;
+    LinkDirectiveNode::Platform platform = LinkDirectiveNode::Platform::Any;
+
+    // Qualifiers may appear in either order, and either may be omitted
+    while (peek().type == TOK_IDENTIFIER) {
+        const std::string &word = peek().value;
+        if (word == "framework")      kind = LinkDirectiveNode::Kind::Framework;
+        else if (word == "path")      kind = LinkDirectiveNode::Kind::SearchPath;
+        else if (word == "macos")     platform = LinkDirectiveNode::Platform::MacOS;
+        else if (word == "linux")     platform = LinkDirectiveNode::Platform::Linux;
+        else if (word == "windows")   platform = LinkDirectiveNode::Platform::Windows;
+        else break;
         advance();
     }
+
     const Token &valueToken = consume(TOK_STRING_LITERAL, "Expected a string after 'link'");
     consume(TOK_SEMICOLON, "Expected ';' after link directive");
-    return std::make_unique<LinkDirectiveNode>(kind, valueToken.value);
+    return std::make_unique<LinkDirectiveNode>(kind, valueToken.value, platform);
 }
 
 std::unique_ptr<FunctionDeclarationNode> Parser::parseFunctionDeclaration()

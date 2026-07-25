@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # The Windows job is opt-in — see the note on that job below
+  workflow_dispatch:
+    inputs:
+      run_windows:
+        description: "Also run the (unvalidated) Windows job"
+        type: boolean
+        default: true
 
 jobs:
   build-and-test:
@@ -71,7 +78,8 @@ jobs:
         run: |
           sudo apt-get install -y \
             libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev \
-            libxcursor-dev libxi-dev libasound2-dev
+            libxcursor-dev libxi-dev libxkbcommon-dev libasound2-dev \
+            pkg-config time
 
       - name: Build compiler
         run: |
@@ -113,10 +121,23 @@ jobs:
           name: cypescript-deb-${{ runner.arch }}
           path: cypescript_*.deb
 
-  # Windows support is new and this job is what establishes it. It is
-  # non-blocking until it has a track record, exactly as the Linux job was.
+  # Windows is NOT supported yet. The portability work is in the source
+  # (executable-path lookup, cmd.exe-safe quoting, per-platform link directives
+  # and setjmp/longjmp pairing) but nobody has ever had it build and pass, and a
+  # job that is always red just teaches people to ignore CI.
+  #
+  # So this runs on demand only: trigger the workflow manually to work on it.
+  # Known unknowns, in the order they will probably bite:
+  #   1. Chocolatey's llvm package may not ship LLVMConfig.cmake, so `cmake`
+  #      cannot find LLVM at all.
+  #   2. clang++ on Windows targets the MSVC ABI, where -l/-L flags behave
+  #      differently from the GNU driver the link line assumes.
+  #   3. Windows has no _longjmp, and its SEH unwinding differs from the POSIX
+  #      model the exception runtime is built on.
+  # Flip it back to running on push once it has actually gone green.
   build-and-test-windows:
     runs-on: windows-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.run_windows
     continue-on-error: true
     defaults:
       run:

@@ -37,6 +37,21 @@ install -m644 build/libcypescript.a  "$STAGE/usr/lib/libcypescript.a"
 install -m644 LICENSE                "$STAGE/usr/share/doc/cypescript/copyright"
 install -m644 README.md              "$STAGE/usr/share/doc/cypescript/README.md"
 
+# The game runtime is optional — include it only when it was actually built,
+# otherwise a .deb-installed cscript could not compile the game examples.
+if [[ -f build/libcypescript_game.a ]]; then
+    echo "==> Including the game runtime"
+    install -m644 build/libcypescript_game.a "$STAGE/usr/lib/libcypescript_game.a"
+    mkdir -p "$STAGE/usr/lib/cypescript"
+    install -m644 lib/game.csc "$STAGE/usr/lib/cypescript/game.csc"
+    # The vendored raylib, so `link "raylib";` resolves without a system package
+    if [[ -f build/libraylib.a ]]; then
+        install -m644 build/libraylib.a "$STAGE/usr/lib/libraylib.a"
+        install -m644 THIRD_PARTY.md \
+                "$STAGE/usr/share/doc/cypescript/THIRD_PARTY.md"
+    fi
+fi
+
 INSTALLED_SIZE="$(du -sk "$STAGE" | cut -f1)"
 cat > "$STAGE/DEBIAN/control" << EOF
 Package: cypescript

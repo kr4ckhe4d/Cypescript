@@ -158,45 +158,6 @@ if(CYPESCRIPT_GAME_AVAILABLE)
     endif()
 endif()
 
-# --- Platform link requirements for games ---
-# Baked into lib/game.csc at configure time: raylib's system dependencies differ
-# per OS and Cypescript has no conditional compilation.
-set(CYPESCRIPT_GAME_LINK_DIRECTIVES "link \"cypescript_game\";\nlink \"raylib\";")
-if(APPLE)
-    string(APPEND CYPESCRIPT_GAME_LINK_DIRECTIVES
-        "\nlink framework \"Cocoa\";"
-        "\nlink framework \"IOKit\";"
-        "\nlink framework \"CoreVideo\";"
-        "\nlink framework \"CoreAudio\";"
-        "\nlink framework \"OpenGL\";")
-    if(NOT CYPESCRIPT_VENDOR_RAYLIB)
-        # System raylib lives outside clang's default search path on macOS
-        set(CYPESCRIPT_GAME_LINK_DIRECTIVES
-            "link path \"/opt/homebrew/lib\";\nlink path \"/usr/local/lib\";\n${CYPESCRIPT_GAME_LINK_DIRECTIVES}")
-    endif()
-elseif(WIN32)
-    string(APPEND CYPESCRIPT_GAME_LINK_DIRECTIVES
-        "\nlink \"opengl32\";"
-        "\nlink \"gdi32\";"
-        "\nlink \"winmm\";"
-        "\nlink \"shell32\";")
-elseif(UNIX)
-    string(APPEND CYPESCRIPT_GAME_LINK_DIRECTIVES
-        "\nlink \"GL\";"
-        "\nlink \"m\";"
-        "\nlink \"pthread\";"
-        "\nlink \"dl\";"
-        "\nlink \"rt\";"
-        "\nlink \"X11\";")
-endif()
-
-# Generated into the build tree; cscript finds it next to its own binary.
-configure_file(
-    ${CMAKE_SOURCE_DIR}/lib/game.csc.in
-    ${CMAKE_BINARY_DIR}/lib/game.csc
-    @ONLY
-)
-
 # --- Our Compiler Executable ---
 add_executable(cscript
     src/main.cpp
@@ -279,7 +240,7 @@ endif()
 
 # Bundled Cypescript modules, importable by bare name: import { } from "game";
 # cscript locates this directory relative to its own binary (or CYPESCRIPT_HOME).
-install(DIRECTORY ${CMAKE_BINARY_DIR}/lib/
+install(DIRECTORY lib/
     DESTINATION lib/cypescript
     FILES_MATCHING PATTERN "*.csc"
 )

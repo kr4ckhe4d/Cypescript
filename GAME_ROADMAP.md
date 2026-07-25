@@ -407,9 +407,11 @@ globals. All now go through a single `variableStorage()` helper.
 - ✅ **`lib/game.csc` ships with the compiler**, installed to `<prefix>/lib/cypescript/`
   and importable by bare name (`import { } from "game";`). Resolution mirrors
   `findRuntimeLibrary`: `$CYPESCRIPT_HOME` → next to the binary → installed layout.
-- ✅ **Cross-platform link requirements** are generated into `lib/game.csc` at configure
-  time from `lib/game.csc.in`, because raylib's system dependencies differ per OS and
-  Cypescript has no conditional compilation.
+- ✅ **Cross-platform link requirements** are expressed in the source itself. `link`
+  directives take an optional platform qualifier (`link macos framework "Cocoa";`,
+  `link linux "GL";`, `link windows "opengl32";`) and `cscript` keeps only those matching
+  the host it is compiling on. `lib/game.csc` is therefore an ordinary committed file
+  rather than something generated at configure time.
 - ✅ **Asset paths resolve against the binary**, not the working directory. A game is
   launched by double-clicking, from a shell somewhere else, or from inside a `.app`, so
   `loadTexture("sprite.png")` searches: beside the binary → `assets/` → `../Resources/`
@@ -538,7 +540,7 @@ Tests: 24/24 language, 4/4 game. No regressions.
   runtime. Proven self-contained by unlinking the system raylib and rebuilding a game.
   [THIRD_PARTY.md](THIRD_PARTY.md) carries the zlib attribution.
 - **`lib/game.csc` ships with the compiler**; bare-name imports resolve from the install.
-  `lib/game.csc.in` + `configure_file` supplies per-OS link directives.
+  per-OS link directives are expressed with platform-qualified `link` statements.
 - **API renamed to TypeScript style** via a new optional `= "symbol"` clause on
   `declare function`, so `cyps_win_open` is now `openWindow` with no wrapper layer.
 - **Windows/Linux portability**: `GetModuleFileNameW`, cmd.exe-safe quoting,
