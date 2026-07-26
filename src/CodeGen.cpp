@@ -722,6 +722,10 @@ llvm::Value *CodeGen::visit(ExpressionNode *node)
     {
         return visit(unaryOpNode);
     }
+    else if (auto *updateNode = dynamic_cast<UpdateExpressionNode *>(node))
+    {
+        return visit(updateNode);
+    }
     else if (auto *arrLitNode = dynamic_cast<ArrayLiteralNode *>(node))
     {
         return visit(arrLitNode);
@@ -876,6 +880,100 @@ llvm::Value *CodeGen::visit(UnaryExpressionNode *node)
         default:
             throw std::runtime_error("Unknown unary operator");
     }
+}
+
+// `i++`, `++i`, `i--`, `--i` — in expression or statement position.
+//
+// The target is read once, stepped, and written back through the same address
+// or index that was used for the read, so `arr[next()]++` calls next() once.
+// Postfix yields the value before the step, prefix the value after.
+llvm::Value *CodeGen::visit(UpdateExpressionNode *node)
+{
+    // Steps a loaded value by one, in whatever type it was loaded as — so an
+    // i64 counter stays 64-bit instead of being truncated to i32.
+    auto step = [&](llvm::Value *current) -> llvm::Value * {
+        llvm::Type *type = current->getType();
+        if (type->isDoubleTy()) {
+            llvm::Value *one = llvm::ConstantFP::get(type, 1.0);
+            return node->isIncrement ? m_builder.CreateFAdd(current, one, "inctmp")
+                                     : m_builder.CreateFSub(current, one, "dectmp");
+        }
+        if (type->isIntegerTy() && !type->isIntegerTy(1)) {
+            llvm::Value *one = llvm::ConstantInt::get(type, 1);
+            return node->isIncrement ? m_builder.CreateAdd(current, one, "inctmp")
+                                     : m_builder.CreateSub(current, one, "dectmp");
+        }
+        throw std::runtime_error(std::string("Codegen Error: '") +
+                                 (node->isIncrement ? "++" : "--") +
+                                 "' requires a numeric target");
+    };
+
+    // A plain variable: load, step, store back into the same slot
+    if (auto *varExpr = dynamic_cast<VariableExpressionNode *>(node->target.get())) {
+        llvm::Type *storedType = nullptr;
+        llvm::Value *slot = variableStorage(varExpr->name, &storedType);
+        if (!slot) {
+            throw std::runtime_error("Codegen Error: Unknown variable name: " + varExpr->name);
+        }
+        llvm::Value *before = m_builder.CreateLoad(storedType, slot, varExpr->name + "_upd");
+        llvm::Value *after = step(before);
+        m_builder.CreateStore(after, slot);
+        return node->isPrefix ? after : before;
+    }
+
+    // An array or buffer element: evaluate the container and the index once
+    if (auto *access = dynamic_cast<ArrayAccessNode *>(node->target.get())) {
+        llvm::Value *arrayValue = visit(access->array.get());
+        llvm::Value *indexValue = visit(access->index.get());
+        if (!arrayValue || !indexValue) {
+            throw std::runtime_error("Codegen Error: Failed to generate element for '++'/'--'");
+        }
+
+        std::string containerType = arrayTypeOfExpression(access->array.get());
+        if (isBufferType(containerType)) {
+            std::string bufElem = bufferElementType(containerType);
+            llvm::Type *elemLLVM = getLLVMType(bufElem);
+            llvm::Value *address = bufferElementAddress(arrayValue, indexValue, bufElem);
+            llvm::Value *before = m_builder.CreateLoad(elemLLVM, address, "buf_upd");
+            llvm::Value *after = step(before);
+            m_builder.CreateStore(coerceValue(after, elemLLVM), address);
+            return node->isPrefix ? after : before;
+        }
+
+        std::string elemType = "i32";
+        if (containerType.length() > 2 && containerType.substr(containerType.length() - 2) == "[]") {
+            elemType = containerType.substr(0, containerType.length() - 2);
+        }
+        llvm::Value *before = emitArrayLoad(arrayValue, indexValue, elemType);
+        llvm::Value *after = step(before);
+        emitArrayStore(arrayValue, indexValue, elemType, after);
+        return node->isPrefix ? after : before;
+    }
+
+    // An object or class property: resolve the struct pointer once
+    if (auto *access = dynamic_cast<ObjectAccessNode *>(node->target.get())) {
+        llvm::Value *structPtr = nullptr;
+        const ObjectOptimizer::ObjectLayout *layout = nullptr;
+        if (!resolveObjectProperty(access->object.get(), access->property, structPtr, layout)) {
+            throw std::runtime_error("Codegen Error: '++'/'--' on a property is only supported "
+                                     "on native objects");
+        }
+        llvm::Value *before = objectOptimizer.generateDirectPropertyAccess(
+            m_builder, structPtr, access->property, *layout);
+        if (!before) {
+            throw std::runtime_error("Codegen Error: Failed to read property '" +
+                                     access->property + "' for '++'/'--'");
+        }
+        llvm::Value *after = step(before);
+        auto idxIt = layout->propertyIndices.find(access->property);
+        objectOptimizer.generateDirectPropertyStore(
+            m_builder, structPtr, access->property, *layout,
+            coerceValue(after, layout->properties[idxIt->second].second.type));
+        return node->isPrefix ? after : before;
+    }
+
+    throw std::runtime_error("Codegen Error: '++'/'--' needs a variable, element or property "
+                             "to step");
 }
 
 llvm::Value *CodeGen::visit(BinaryExpressionNode *node)
@@ -1379,6 +1477,40 @@ llvm::Value *CodeGen::emitArrayLoad(llvm::Value *arrayValue, llvm::Value *indexV
     return m_builder.CreateCall(getFunc, {arrayValue, index}, "compound_load");
 }
 
+// Stores one element into an already-evaluated array pointer and index. Shared
+// by plain assignment, compound assignment and `a[i]++`, all of which have to
+// pick the same runtime setter for the element type.
+void CodeGen::emitArrayStore(llvm::Value *arrayValue, llvm::Value *indexValue,
+                             const std::string &elemType, llvm::Value *value)
+{
+    llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+    llvm::Type *voidTy = llvm::Type::getVoidTy(m_context);
+    llvm::Type *i32Ty = llvm::Type::getInt32Ty(m_context);
+    llvm::Type *doubleTy = llvm::Type::getDoubleTy(m_context);
+
+    if (!arrayValue->getType()->isPointerTy()) {
+        throw std::runtime_error("Codegen Error: Array assignment requires a pointer type");
+    }
+
+    if (isPointerElementType(elemType)) {
+        llvm::FunctionCallee setFunc =
+            m_module->getOrInsertFunction("array_set_object", voidTy, charPtr, i32Ty, charPtr);
+        m_builder.CreateCall(setFunc, {arrayValue, indexValue, value});
+    } else if (elemType == "string") {
+        llvm::FunctionCallee setFunc =
+            m_module->getOrInsertFunction("array_set_string", voidTy, charPtr, i32Ty, charPtr);
+        m_builder.CreateCall(setFunc, {arrayValue, indexValue, value});
+    } else if (elemType == "f64") {
+        llvm::FunctionCallee setFunc =
+            m_module->getOrInsertFunction("array_set_f64", voidTy, charPtr, i32Ty, doubleTy);
+        m_builder.CreateCall(setFunc, {arrayValue, indexValue, coerceValue(value, doubleTy)});
+    } else {
+        llvm::FunctionCallee setFunc =
+            m_module->getOrInsertFunction("array_set_i32", voidTy, charPtr, i32Ty, i32Ty);
+        m_builder.CreateCall(setFunc, {arrayValue, indexValue, coerceValue(value, i32Ty)});
+    }
+}
+
 // Applies a binary operator to two already-generated values. Used by compound
 // assignment, which cannot go through visit(BinaryExpressionNode) because its
 // operands are values rather than AST nodes.
@@ -1484,34 +1616,7 @@ void CodeGen::visit(ArrayAssignmentStatementNode *node)
         throw std::runtime_error("Codegen Error: Array assignment requires a pointer type");
     }
 
-    // Use dynamic array functions
-    if (isPointerElementType(elemType)) {
-        llvm::FunctionCallee setFunc = m_module->getOrInsertFunction("array_set_object",
-            llvm::Type::getVoidTy(m_context), llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0), llvm::Type::getInt32Ty(m_context), llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
-        m_builder.CreateCall(setFunc, {arrayValue, indexValue, valueToAssign});
-    } else if (elemType == "string") {
-        llvm::FunctionCallee setFunc = m_module->getOrInsertFunction("array_set_string",
-            llvm::Type::getVoidTy(m_context),
-            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
-            llvm::Type::getInt32Ty(m_context),
-            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
-        m_builder.CreateCall(setFunc, {arrayValue, indexValue, valueToAssign});
-    } else if (elemType == "f64") {
-        llvm::FunctionCallee setFunc = m_module->getOrInsertFunction("array_set_f64",
-            llvm::Type::getVoidTy(m_context),
-            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
-            llvm::Type::getInt32Ty(m_context),
-            llvm::Type::getDoubleTy(m_context));
-        m_builder.CreateCall(setFunc, {arrayValue, indexValue,
-            coerceValue(valueToAssign, llvm::Type::getDoubleTy(m_context))});
-    } else {
-        llvm::FunctionCallee setFunc = m_module->getOrInsertFunction("array_set_i32",
-            llvm::Type::getVoidTy(m_context),
-            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
-            llvm::Type::getInt32Ty(m_context),
-            llvm::Type::getInt32Ty(m_context));
-        m_builder.CreateCall(setFunc, {arrayValue, indexValue, valueToAssign});
-    }
+    emitArrayStore(arrayValue, indexValue, elemType, valueToAssign);
 }
 
 void CodeGen::visit(ForStatementNode *node)
@@ -4495,6 +4600,8 @@ void CodeGen::collectFreeVarsExpr(ExpressionNode *expr, std::set<std::string> &b
         collectFreeVarsExpr(binOp->right.get(), bound, free);
     } else if (auto *unaryOp = dynamic_cast<UnaryExpressionNode*>(expr)) {
         collectFreeVarsExpr(unaryOp->operand.get(), bound, free);
+    } else if (auto *update = dynamic_cast<UpdateExpressionNode*>(expr)) {
+        collectFreeVarsExpr(update->target.get(), bound, free);
     } else if (auto *call = dynamic_cast<FunctionCallNode*>(expr)) {
         // A call target that is not a declared function may be a captured closure
         if (!declaredFunctions.count(call->functionName) && !bound.count(call->functionName)) {
@@ -4608,6 +4715,9 @@ llvm::Type *CodeGen::inferExpressionLLVMType(ExpressionNode *expr,
     if (auto *unaryOp = dynamic_cast<UnaryExpressionNode*>(expr)) {
         if (unaryOp->op == UnaryExpressionNode::NOT) return i32Ty;
         return inferExpressionLLVMType(unaryOp->operand.get(), paramTypes);
+    }
+    if (auto *update = dynamic_cast<UpdateExpressionNode*>(expr)) {
+        return inferExpressionLLVMType(update->target.get(), paramTypes);
     }
     if (auto *binOp = dynamic_cast<BinaryExpressionNode*>(expr)) {
         switch (binOp->op) {
@@ -5039,26 +5149,28 @@ llvm::Value *CodeGen::generateArrayCallbackMethod(MethodCallNode *node, llvm::Va
     return nullptr; // forEach
 }
 
-void CodeGen::visit(ObjectPropertyAssignmentNode *node)
+// Resolves `obj.prop` down to the struct pointer and the layout that describes
+// it, evaluating the object expression exactly once. Shared by property
+// assignment and `obj.prop++`.
+bool CodeGen::resolveObjectProperty(ExpressionNode *objectExpr, const std::string &property,
+                                    llvm::Value *&structPtr,
+                                    const ObjectOptimizer::ObjectLayout *&layout)
 {
-    std::string objectKey = getExpressionObjectKey(node->object.get());
-    if (objectKey.empty()) {
-        throw std::runtime_error("Codegen Error: Property assignment is only supported on native objects");
-    }
+    std::string objectKey = getExpressionObjectKey(objectExpr);
+    if (objectKey.empty()) return false;
+
     auto layoutIt = objectLayouts.find(objectKey);
     if (layoutIt == objectLayouts.end()) {
         throw std::runtime_error("Codegen Error: Unknown object layout for property assignment");
     }
-    const ObjectOptimizer::ObjectLayout& layout = layoutIt->second;
+    layout = &layoutIt->second;
 
-    auto idxIt = layout.propertyIndices.find(node->property);
-    if (idxIt == layout.propertyIndices.end()) {
-        throw std::runtime_error("Codegen Error: Property '" + node->property + "' not found for assignment");
+    if (layout->propertyIndices.find(property) == layout->propertyIndices.end()) {
+        throw std::runtime_error("Codegen Error: Property '" + property + "' not found for assignment");
     }
 
-    // Resolve the object pointer
     llvm::Value *objectPtr = nullptr;
-    if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(node->object.get())) {
+    if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(objectExpr)) {
         llvm::Value* storageSlot = variableStorage(varExpr->name);
         if (storageSlot != nullptr) {
             objectPtr = m_builder.CreateLoad(
@@ -5067,14 +5179,26 @@ void CodeGen::visit(ObjectPropertyAssignmentNode *node)
                 "obj_ptr_load");
         }
     } else {
-        objectPtr = visit(node->object.get());
+        objectPtr = visit(objectExpr);
     }
     if (!objectPtr) {
         throw std::runtime_error("Codegen Error: Failed to resolve object for property assignment");
     }
 
-    llvm::Value *structPtr = m_builder.CreateBitCast(
-        objectPtr, llvm::PointerType::get(layout.structType, 0), "struct_cast");
+    structPtr = m_builder.CreateBitCast(
+        objectPtr, llvm::PointerType::get(layout->structType, 0), "struct_cast");
+    return true;
+}
+
+void CodeGen::visit(ObjectPropertyAssignmentNode *node)
+{
+    llvm::Value *structPtr = nullptr;
+    const ObjectOptimizer::ObjectLayout *layoutPtr = nullptr;
+    if (!resolveObjectProperty(node->object.get(), node->property, structPtr, layoutPtr)) {
+        throw std::runtime_error("Codegen Error: Property assignment is only supported on native objects");
+    }
+    const ObjectOptimizer::ObjectLayout& layout = *layoutPtr;
+    auto idxIt = layout.propertyIndices.find(node->property);
 
     llvm::Value *value = visit(node->value.get());
     if (!value) {

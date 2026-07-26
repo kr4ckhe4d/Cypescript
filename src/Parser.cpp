@@ -276,28 +276,20 @@ std::unique_ptr<StatementNode> Parser::parseExpressionOrAssignmentStatement(bool
         auto value = parseExpression();
         stmt = makeAssignmentStatement(std::move(expr), std::move(value));
     } else if (next == TOK_PLUS_EQUAL || next == TOK_MINUS_EQUAL || next == TOK_STAR_EQUAL ||
-               next == TOK_SLASH_EQUAL || next == TOK_PERCENT_EQUAL ||
-               next == TOK_PLUS_PLUS || next == TOK_MINUS_MINUS) {
+               next == TOK_SLASH_EQUAL || next == TOK_PERCENT_EQUAL) {
         advance();
 
         BinaryExpressionNode::Operator op;
-        std::unique_ptr<ExpressionNode> rhs;
         switch (next) {
             case TOK_PLUS_EQUAL:    op = BinaryExpressionNode::ADD;      break;
             case TOK_MINUS_EQUAL:   op = BinaryExpressionNode::SUBTRACT; break;
             case TOK_STAR_EQUAL:    op = BinaryExpressionNode::MULTIPLY; break;
             case TOK_SLASH_EQUAL:   op = BinaryExpressionNode::DIVIDE;   break;
-            case TOK_PERCENT_EQUAL: op = BinaryExpressionNode::MODULO;   break;
-            case TOK_PLUS_PLUS:     op = BinaryExpressionNode::ADD;      break;
-            default:                op = BinaryExpressionNode::SUBTRACT; break;
+            default:                op = BinaryExpressionNode::MODULO;   break;
         }
-        if (next == TOK_PLUS_PLUS || next == TOK_MINUS_MINUS) {
-            rhs = std::make_unique<IntegerLiteralNode>(1);
-        } else {
-            rhs = parseExpression();
-        }
-
-        stmt = makeCompoundAssignmentStatement(std::move(expr), op, std::move(rhs), exprStart);
+        // `++`/`--` no longer arrive here: they are parsed as expressions, so a
+        // statement-level `i++;` is an UpdateExpressionNode with its value dropped.
+        stmt = makeCompoundAssignmentStatement(std::move(expr), op, parseExpression(), exprStart);
     } else {
         stmt = std::make_unique<ExpressionStatementNode>(std::move(expr));
     }
@@ -855,6 +847,15 @@ std::unique_ptr<ExpressionNode> Parser::parseUnaryExpression()
         else if (operatorType == TOK_TILDE) op = UnaryExpressionNode::BIT_NOT;
         return std::make_unique<UnaryExpressionNode>(op, parseUnaryExpression());
     }
+    if (peek().type == TOK_PLUS_PLUS || peek().type == TOK_MINUS_MINUS) {
+        Token opToken = peek();
+        advance();
+        auto update = std::make_unique<UpdateExpressionNode>(
+            parseUnaryExpression(), opToken.type == TOK_PLUS_PLUS, /*isPrefix=*/true);
+        update->line = opToken.line;
+        update->column = opToken.column;
+        return update;
+    }
     return parsePrimaryExpression();
 }
 
@@ -904,6 +905,17 @@ std::unique_ptr<ExpressionNode> Parser::parsePrimaryExpression()
         expr = parseArrayOrObjectAccess(std::move(expr));
         if (peek().type == TOK_BANG) { advance(); continue; }
         break;
+    }
+    // Postfix `++`/`--` binds to whatever the chain produced, so `grid[i].hits++`
+    // steps the property rather than the object.
+    if (peek().type == TOK_PLUS_PLUS || peek().type == TOK_MINUS_MINUS) {
+        Token opToken = peek();
+        advance();
+        auto update = std::make_unique<UpdateExpressionNode>(
+            std::move(expr), opToken.type == TOK_PLUS_PLUS, /*isPrefix=*/false);
+        update->line = opToken.line;
+        update->column = opToken.column;
+        expr = std::move(update);
     }
     return expr;
 }

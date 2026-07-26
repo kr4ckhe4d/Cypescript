@@ -245,9 +245,8 @@ The year is 2026</code></pre>
     <table>
       <thead><tr><th>TypeScript</th><th>Cypescript</th></tr></thead>
       <tbody>
-        <tr><td><code>x++</code> as an <em>expression</em> (<code>arr[i++]</code>)</td><td>statement-level <code>x++</code> only</td></tr>
         <tr><td>closures mutating captured primitives</td><td>capture an object instead (captures are by-value snapshots)</td></tr>
-        
+
         <tr><td><code>import</code> from npm packages</td><td>local <code>./file.csc</code> module imports only</td></tr>
         <tr><td><code>number</code> for hot integer loops</td><td>use <code>i32</code> for integer math (much faster)</td></tr>
       </tbody>
@@ -1594,16 +1593,31 @@ println(0b1010);         // 10</code></pre>
       <thead><tr><th>Form</th><th>Equivalent</th></tr></thead>
       <tbody>
         <tr><td><code>x += e</code>, <code>x -= e</code>, <code>x *= e</code>, <code>x /= e</code>, <code>x %= e</code></td><td><code>x = x op e</code></td></tr>
-        <tr><td><code>x++</code>, <code>x--</code></td><td><code>x = x + 1</code>, <code>x = x - 1</code></td></tr>
+        <tr><td><code>x++</code>, <code>x--</code></td><td>step by one, yielding the value <em>before</em> the step</td></tr>
+        <tr><td><code>++x</code>, <code>--x</code></td><td>step by one, yielding the value <em>after</em> the step</td></tr>
       </tbody>
     </table>
     <p>
       All forms work on variables, object properties (<code>obj.count += 1</code>),
       and array elements (<code>arr[i] *= 2</code>).
     </p>
+    <p>
+      <code>++</code> and <code>--</code> are expressions, so they can appear inside a
+      larger one — the classic index-and-step:
+    </p>
+    <div class="code-block">
+      <pre><code class="language-typescript">let s: i32 = 0;
+let d: i32 = 0;
+while (s &lt; 3) { dst[d++] = src[s++]; }   // two cursors, one statement
+
+let n: i32 = 3;
+while (n-- &gt; 0) { println(n); }          // 2, 1, 0</code></pre>
+    </div>
     <div class="notecard note">
-      <p><strong>Note:</strong> <code>x++</code> is a <em>statement</em>, not an
-      expression — <code>arr[i++]</code> is not supported.</p>
+      <p><strong>Evaluated once.</strong> <code>arr[next()]++</code> calls
+      <code>next()</code> a single time: the element is read and written through
+      the same index. The target must be numeric — <code>name++</code> on a string
+      is rejected at compile time.</p>
     </div>
 
     <h2 id="op-see">See also</h2>

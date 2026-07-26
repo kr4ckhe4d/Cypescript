@@ -238,6 +238,14 @@ private:
     // Loads one element from an already-evaluated array pointer and index
     llvm::Value *emitArrayLoad(llvm::Value *arrayValue, llvm::Value *indexValue,
                                const std::string &elemType);
+    // Stores one element into an already-evaluated array pointer and index
+    void emitArrayStore(llvm::Value *arrayValue, llvm::Value *indexValue,
+                        const std::string &elemType, llvm::Value *value);
+    // Resolves `obj.prop` to the struct pointer and layout, evaluating `obj` once.
+    // Returns false if the expression is not a known native object.
+    bool resolveObjectProperty(ExpressionNode *objectExpr, const std::string &property,
+                               llvm::Value *&structPtr,
+                               const ObjectOptimizer::ObjectLayout *&layout);
     // Applies a binary operator to two already-generated values (compound assignment)
     llvm::Value *emitBinaryOp(BinaryExpressionNode::Operator op,
                               llvm::Value *lhs, llvm::Value *rhs);
@@ -285,6 +293,7 @@ private:
     llvm::Value *visit(VariableExpressionNode *node); // New
     llvm::Value *visit(BinaryExpressionNode *node);   // For arithmetic operations
     llvm::Value *visit(UnaryExpressionNode *node);    // For unary operations
+    llvm::Value *visit(UpdateExpressionNode *node);   // For ++ and -- in any position
     llvm::Value *visit(ArrayLiteralNode *node);       // For array literals
     llvm::Value *visit(ObjectLiteralNode *node);      // For object literals
     llvm::Value *visit(ArrayAccessNode *node);        // For array access

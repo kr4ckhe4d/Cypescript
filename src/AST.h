@@ -324,6 +324,29 @@ public:
     }
 };
 
+// `i++`, `++i`, `i--`, `--i`. This is an expression, so it can appear inside a
+// larger one (`arr[i++]`, `while (n-- > 0)`); a statement-level `i++;` is the
+// same node with its value discarded. Postfix yields the value before the step,
+// prefix the value after, and either way the target is stepped exactly once.
+class UpdateExpressionNode : public ExpressionNode
+{
+public:
+    std::unique_ptr<ExpressionNode> target;
+    bool isIncrement;
+    bool isPrefix;
+
+    UpdateExpressionNode(std::unique_ptr<ExpressionNode> target, bool isIncrement, bool isPrefix)
+        : target(std::move(target)), isIncrement(isIncrement), isPrefix(isPrefix) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "UpdateExpressionNode: " << (isPrefix ? "prefix " : "postfix ")
+           << (isIncrement ? "++" : "--") << "\n";
+        if (target) target->printNode(os, indent + 1);
+    }
+};
+
 // --- Concrete Statement Node Types ---
 
 // If statement for control flow

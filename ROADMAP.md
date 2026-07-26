@@ -6,7 +6,7 @@ One place to see what is done, what is next, and what is deliberately not being 
 > `SHIPPING_BLOCKERS.md`, `progress.md`, `NATIVE_OBJECTS_ROADMAP.md` and
 > `OPTIMIZATION_ROADMAP.md`. Their full text is in git history.
 
-**Current state:** 63/63 language tests, 14/14 game tests, 23 examples, benchmarks at
+**Current state:** 66/66 language tests, 14/14 game tests, 23 examples, benchmarks at
 Rust parity (0.051s primes, 0.025s fib(35)). CI green on macOS and Linux.
 
 ---
@@ -16,9 +16,8 @@ Rust parity (0.051s primes, 0.025s fib(35)). CI green on macOS and Linux.
 | # | Item | Why it matters | Size |
 |---|---|---|---|
 | 1 | **Windows validation** | The only platform never verified. CI job exists, `workflow_dispatch`-only. Needs a Windows machine. | Unknown |
-| 2 | **`x++` as an expression** (`arr[i++]`) | Statement-level only today | Small |
-| 3 | **By-reference closure captures** | Captures are by-value snapshots; mutating a captured primitive doesn't propagate | Medium |
-| 4 | **Mixed-representation unions** | `string \| i32` needs a tagged value and `typeof` narrowing | Large |
+| 2 | **By-reference closure captures** | Captures are by-value snapshots; mutating a captured primitive doesn't propagate | Medium |
+| 3 | **Mixed-representation unions** | `string \| i32` needs a tagged value and `typeof` narrowing | Large |
 
 ### Windows — what is known
 
@@ -46,7 +45,7 @@ only rather than staying permanently red. In likely order of breakage:
 | Functions | Parameters, returns, generics, arrow functions, closures, function-type parameters |
 | Objects | Literals, interfaces with structural checking, methods with `this`, destructuring, JSON |
 | Classes | Fields, defaults, constructors, methods, **inheritance, virtual dispatch, `super`** |
-| Operators | Arithmetic, comparison, logical with short-circuit, **bitwise**, compound assignment |
+| Operators | Arithmetic, comparison, logical with short-circuit, **bitwise**, compound assignment, `++`/`--` as expressions |
 | Errors | `try`/`catch`/`finally`, `throw` |
 | Modules | `import`/`export` by path, plus bundled modules by bare name |
 | FFI | `declare function`, `link`, `link source`, `link include`, platform qualifiers |
@@ -122,7 +121,7 @@ These are decisions, not omissions.
 
 ## TypeScript compatibility
 
-Not supported: npm imports, `x++` as an expression, by-reference closure captures,
+Not supported: npm imports, by-reference closure captures,
 mixed-representation unions (`string | number`), strict null checks.
 
 Supported with a caveat: `number` is `f64` (use `i32` for integer math);

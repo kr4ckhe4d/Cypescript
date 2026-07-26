@@ -943,6 +943,24 @@ x--;      // 2
 counter.value += 10;
 ```
 
+`++` and `--` are expressions, not just statements — they yield a value, so the
+classic index-and-step forms work:
+
+```typescript
+let s: i32 = 0;
+let d: i32 = 0;
+while (s < 3) { dst[d++] = src[s++]; }   // two cursors, one statement
+
+let n: i32 = 3;
+while (n-- > 0) { println(n); }          // 2, 1, 0
+
+println(arr[k++]);                       // read, then step k
+```
+
+Postfix (`i++`) yields the value before the step, prefix (`++i`) the value
+after. The target is evaluated once either way, so `arr[next()]++` calls
+`next()` a single time.
+
 ### Interfaces
 
 ```typescript
@@ -1172,7 +1190,6 @@ Typical minute changes when porting a `.ts` file:
 
 | TypeScript | Cypescript |
 |---|---|
-| `x++` as an *expression* (`arr[i++]`) | statement-level `x++` only |
 | closures mutating captured primitives | capture an object instead (by-value snapshots) |
 | `import` from npm packages | only local `./file.csc` module imports, plus bundled ones |
 | union types mixing representations (`string \| number`) | same-representation unions only (`Shape \| null`, `i32 \| f64`) |
@@ -1849,7 +1866,7 @@ println("JSON: " + json_prettify(user));
 - [x] Variable declarations (`let`, `const`) with type annotations
 - [x] Variable assignments with type checking
 - [x] All arithmetic operators (`+`, `-`, `*`, `/`, `%`)
-- [x] Compound assignment (`+=`, `-=`, `*=`, `/=`, `%=`) and increment/decrement (`++`, `--`)
+- [x] Compound assignment (`+=`, `-=`, `*=`, `/=`, `%=`) and increment/decrement (`++`, `--`, prefix and postfix, usable as expressions)
 - [x] All comparison operators (`==`, `!=`, `<`, `<=`, `>`, `>=`)
 - [x] Logical operators (`&&`, `||`) with short-circuit evaluation
 - [x] Unary operators (`!`, `-`)

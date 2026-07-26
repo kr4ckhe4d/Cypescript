@@ -265,6 +265,9 @@ std::string SemanticAnalyzer::typeOf(ExpressionNode *expr)
         if (unary->op == UnaryExpressionNode::NOT) return "boolean";
         return typeOf(unary->operand.get());
     }
+    if (auto *update = dynamic_cast<UpdateExpressionNode*>(expr)) {
+        return typeOf(update->target.get());   // `i++` has the type of `i`
+    }
     if (auto *binary = dynamic_cast<BinaryExpressionNode*>(expr)) {
         switch (binary->op) {
             case BinaryExpressionNode::EQUAL:
@@ -450,6 +453,23 @@ void SemanticAnalyzer::analyzeExpression(ExpressionNode *expr)
         analyzeExpression(binOp->right.get());
     } else if (auto *unaryOp = dynamic_cast<UnaryExpressionNode*>(expr)) {
         analyzeExpression(unaryOp->operand.get());
+    } else if (auto *update = dynamic_cast<UpdateExpressionNode*>(expr)) {
+        // `i++` writes to its target, so it has to respect const the same way
+        // `i = i + 1` does — the statement-level check never sees it now that
+        // this is an expression.
+        if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(update->target.get())) {
+            const Binding *binding = lookup(varExpr->name);
+            if (binding && binding->isConst) {
+                fail(update, "Cannot reassign const variable '" + varExpr->name + "'");
+            }
+        }
+        std::string targetType = typeOf(update->target.get());
+        TypeCategory category = categoryOf(targetType);
+        if (category != TypeCategory::Unknown && category != TypeCategory::Numeric) {
+            fail(update, std::string("'") + (update->isIncrement ? "++" : "--") +
+                         "' requires a numeric operand, got '" + targetType + "'");
+        }
+        analyzeExpression(update->target.get());
     } else if (auto *call = dynamic_cast<FunctionCallNode*>(expr)) {
         auto fnIt = m_functions.find(call->functionName);
         if (fnIt != m_functions.end() &&
