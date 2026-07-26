@@ -14,6 +14,7 @@
 //   3. No exception may escape. Cypescript has no way to catch one, and
 //      unwinding through its frames is undefined — so the boundary swallows them.
 
+#include <cctype>
 #include <string>
 #include <map>
 #include <vector>

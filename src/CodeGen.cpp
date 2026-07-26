@@ -2142,7 +2142,15 @@ llvm::Value *CodeGen::visit(FunctionCallNode *node)
 
         if (argType->isPointerTy())
         {
-            // Assume it's a string pointer
+            // Assume it's a string pointer. A null one has to be substituted
+            // here rather than left to libc: glibc's puts() calls strlen() and
+            // segfaults on NULL, where Darwin's happens to print "(null)". A
+            // missing JSON key is a null string, so this is reachable from
+            // ordinary code — printing "null" makes it the same on both.
+            llvm::Value *isNull = m_builder.CreateIsNull(argValue, "isNullStr");
+            llvm::Value *nullText = m_builder.CreateGlobalString("null", ".null_str");
+            argValue = m_builder.CreateSelect(isNull, nullText, argValue, "strOrNull");
+
             if (addNewline) {
                 // Use puts for println (automatically adds newline)
                 llvm::FunctionCallee putsFunc = getOrDeclarePuts();
