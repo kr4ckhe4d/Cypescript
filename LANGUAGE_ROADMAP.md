@@ -15,8 +15,8 @@ where Cypescript accepts a program it should reject.
 |---|---|---|
 | 7.1 | Compound assignment evaluates its target once | ✅ **DONE** |
 | 7.2 | Frictionless C/C++ interop (`link source`) | ✅ **DONE** |
-| 7.3 | A real type checker | ⬜ **NEXT** |
-| 7.4 | `class extends` | ⬜ |
+| 7.3 | A real type checker | 🔶 **Core landed** — see below |
+| 7.4 | `class extends` | ⬜ **NEXT** |
 | 7.5 | Property access on call results (`f().prop`) | ⬜ |
 | 7.6 | Enums, 2D arrays, typed buffers | ⬜ |
 | 7.7 | Windows validation | ⬜ |
@@ -77,19 +77,72 @@ See `example/21_c_interop.csc` and `tests/test_c_interop.csc` (which links a `.c
 
 ---
 
-## 7.3 A real type checker ⬜ NEXT
+## 7.3 A real type checker 🔶 CORE LANDED
 
-**The single highest-value remaining piece.** Cypescript has TypeScript's syntax and
-almost none of its checking. The semantic pass covers scoping, arity and `const`; nothing
-verifies that a value matches its annotation:
+The headline bug is fixed:
 
 ```ts
 let s: string = "hi";
-let bad: i32 = s;      // compiles clean, prints -174948096
+let bad: i32 = s;
+// ✗ Semantic Error: Type mismatch in declaration of 'bad':
+//   expected 'i32', got 'string' at line 2, column 16
 ```
 
-That is a pointer truncated to `i32`. No error, no warning — garbage at runtime. For a
-language whose README says "statically-typed", this is the gap that matters most.
+It used to compile clean and print `-174948096` — a pointer truncated to `i32`.
+
+### What it checks
+
+Types are inferred for literals, annotated variables, class instances, calls with declared
+return types, arithmetic and comparison results, array literals and indexing, and class
+fields. Mismatches are reported, with positions, at four sites:
+
+| Site | Example |
+|---|---|
+| Declaration | `let bad: i32 = someString;` |
+| Assignment | `count = "nope";` |
+| Return | `function n(): i32 { return "three"; }` |
+| Call argument | `double("not a number")` |
+
+### The design decision that made it safe
+
+**The checker reports an error only when both sides are confidently known and definitely
+incompatible.** An unknown type — the empty string — silences the check rather than
+failing it.
+
+That is not timidity; it is what makes the checker adoptable. Cypescript has many places
+where a type genuinely is not known at this stage: generic parameters, `json` values,
+`Map`/`Set` contents, closures, destructured bindings, method call results. A stricter
+checker would reject programs that compile and run correctly today.
+
+Types are grouped into families — numeric, text, handle, void — and only *crossing*
+families is an error. Within a family codegen already coerces: `i32`↔`f64`, `boolean` as
+`i32`, and `string`/`ptr` both being `i8*`. So `let f: f64 = 5;` stays legal while
+`let n: i32 = "five";` does not.
+
+Validated in both directions: 17 legitimate patterns (widening, concatenation, template
+literals, `null` into handles, `json`, array-method results, closure parameters,
+destructuring, `for...of`, catch variables, FFI handles) are all still accepted, and the
+whole suite — 32 programs, 21 examples, both games — passes unchanged.
+
+### Negative tests
+
+The suite had **no negative tests at all**: nothing verified that errors were reported, so
+the entire semantic pass could have stopped working with every test still green.
+`tests/negative/` now holds programs that must be rejected, each with the message it must
+be rejected with, and `run_tests.sh` checks both. Confirmed to bite by making a negative
+test valid and watching it fail.
+
+### Still to do
+
+- **Property access on non-class objects.** `obj.missing` on an object literal or interface
+  still reaches codegen (*"Object properties not found for variable 'obj'"*, no position).
+  Class fields are checked; object literals and interfaces need their shapes tracked here.
+- **Class-to-class assignability.** All handles are currently interchangeable, so
+  `let r: Rock = someBullet;` is accepted. Needs the class hierarchy — which is 7.4's work
+  anyway.
+- **Narrowing.** `let n: i32 = someF64;` is allowed because codegen coerces it. TypeScript
+  would reject it; tightening this needs a survey of existing code first.
+- **Method call results** are unknown types, so nothing downstream of them is checked.
 
 Two related symptoms:
 

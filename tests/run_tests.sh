@@ -69,6 +69,47 @@ for test_file in "$SCRIPT_DIR"/test_*.csc; do
     fi
 done
 
+# --- Negative tests -----------------------------------------------------------
+# Programs that MUST be rejected, with the message they must be rejected with.
+# Without these nothing verifies that errors are actually reported — the whole
+# semantic pass could stop working and every positive test would still pass.
+if [[ -d "$SCRIPT_DIR/negative" ]]; then
+    echo ""
+    echo -e "${CYAN}Negative tests (must be rejected)${NC}"
+    echo "--------------------------------------------"
+    for neg_file in "$SCRIPT_DIR"/negative/*.csc; do
+        [[ -e "$neg_file" ]] || continue
+        neg_name=$(basename "$neg_file" .csc)
+        printf "  %-25s" "$neg_name"
+
+        expected=$(grep -m1 '^// EXPECT:' "$neg_file" | sed 's|^// EXPECT: *||')
+        # A rejected program exits non-zero, which `set -e` would treat as a
+        # script failure — the `if` makes the status observable instead.
+        if output=$("$COMPILER" -o "$SCRIPT_DIR/.neg_bin" "$neg_file" 2>&1); then
+            status=0
+        else
+            status=$?
+        fi
+        rm -f "$SCRIPT_DIR/.neg_bin"
+
+        if [[ $status -eq 0 ]]; then
+            echo -e "${RED}❌ FAIL (compiled, but should have been rejected)${NC}"
+            FAIL=$((FAIL + 1))
+            ERRORS="$ERRORS\n  - $neg_name (accepted an invalid program)"
+        elif [[ -n "$expected" ]] && ! grep -qF "$expected" <<< "$output"; then
+            echo -e "${RED}❌ FAIL (wrong message)${NC}"
+            echo "      expected to contain: $expected"
+            echo "      got: $(head -1 <<< "$output")"
+            FAIL=$((FAIL + 1))
+            ERRORS="$ERRORS\n  - $neg_name (wrong error message)"
+        else
+            echo -e "${GREEN}✅ PASS${NC}"
+            PASS=$((PASS + 1))
+        fi
+    done
+    echo ""
+fi
+
 echo "============================================"
 echo -e "  ${GREEN}Passed: $PASS${NC}  ${RED}Failed: $FAIL${NC}  Total: $((PASS + FAIL))"
 
