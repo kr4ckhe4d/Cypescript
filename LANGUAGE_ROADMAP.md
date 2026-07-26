@@ -16,8 +16,8 @@ where Cypescript accepts a program it should reject.
 | 7.1 | Compound assignment evaluates its target once | ✅ **DONE** |
 | 7.2 | Frictionless C/C++ interop (`link source`) | ✅ **DONE** |
 | 7.3 | A real type checker | 🔶 **Core landed** — see below |
-| 7.4 | `class extends` | ⬜ **NEXT** |
-| 7.5 | Property access on call results (`f().prop`) | ⬜ |
+| 7.4 | `class extends` | 🔶 **Inheritance landed; dispatch is static** |
+| 7.5 | Property access on call results (`f().prop`) | ⬜ **NEXT** |
 | 7.6 | Enums, 2D arrays, typed buffers | ⬜ |
 | 7.7 | Windows validation | ⬜ |
 
@@ -144,16 +144,77 @@ test valid and watching it fail.
   would reject it; tightening this needs a survey of existing code first.
 - **Method call results** are unknown types, so nothing downstream of them is checked.
 
-## 7.4 `class extends` ⬜
+## 7.4 `class extends` 🔶 INHERITANCE LANDED
 
 ```ts
-class Dog extends Animal { speak(): void { println("woof"); } }
-// Parse Error: Expected '{' after class name. Found EXTENDS
+class Animal {
+    name: string = "animal";
+    legs: i32 = 4;
+    describe(): void { println(`${this.name} has ${this.legs} legs`); }
+    speak(): void { println("..."); }
+}
+
+class Dog extends Animal {
+    speak(): void { println("woof"); }   // overrides
+}
+
+let d: Dog = new Dog();
+d.describe();     // animal has 4 legs   — inherited method, inherited fields
+d.speak();        // woof                — overridden
 ```
 
-Not parsed at all. Needs a layout that prefixes the parent's fields, method lookup that
-walks the chain, and assignability of a subclass to its parent — which is why it should
-follow the type checker rather than precede it.
+**How it works.** A subclass lays its ancestors' members out *first*, then its own, so a
+subclass and its parent share a struct prefix and identical offsets for the inherited
+fields. That means `new`, property access and method dispatch needed no changes at all —
+after flattening, a subclass is just a class with more members.
+
+The inherited members are non-owning pointers into the ancestors' own templates, resolved
+once in codegen's pass 0 (`resolveClassInheritance`) before layouts are built. Chains are
+arbitrarily deep, redeclaring a member overrides it, and a subclass with no constructor
+inherits its parent's. Unknown parents and inheritance cycles are rejected.
+
+The semantic pass folds each ancestor's fields into its subclasses, so a field's declared
+type is checked through the whole chain.
+
+### The limitation: dispatch is static, not virtual
+
+**There are no vtables.** The method chosen depends on the type the compiler knows at the
+call site, not on the object's runtime class:
+
+```ts
+class Base    { tag(): void { println("base"); } }
+class Derived extends Base { tag(): void { println("derived"); } }
+
+let d: Derived = new Derived();
+d.tag();                                  // derived  ✓
+
+let viaSlot: Base = new Derived();
+viaSlot.tag();                            // derived  — the declaration tracks the
+                                          //   initializer's concrete class
+
+let arr: Base[] = [];  arr.push(new Derived());
+let fromArray: Base = arr[0];
+fromArray.tag();                          // base     ✗ not virtual
+
+function callIt(b: Base): void { b.tag(); }
+callIt(new Derived());                    // base     ✗ not virtual
+```
+
+So `extends` buys **code reuse and overriding**, not polymorphism. It is genuinely useful
+when the concrete type is visible, and it is exactly wrong if you expect a `Shape[]` to
+dispatch to each element's own `area()`. `tests/test_inheritance.csc` pins this behaviour
+down deliberately so it cannot drift unnoticed.
+
+Real virtual dispatch needs a vtable pointer in the struct layout, built per class and
+stored at construction, with method calls going indirect when the static type has
+subclasses. That is a substantial change and it would put an indirect call in a path the
+benchmarks measure, so it is its own piece of work rather than a follow-on tweak.
+
+### Also still missing
+
+`super` — a subclass constructor cannot call its parent's. It can assign the inherited
+fields directly (`this.name = ...`), since they are in its layout, which covers most of
+what `super()` would do.
 
 ## 7.5 Property access on call results ⬜
 

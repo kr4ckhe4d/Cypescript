@@ -61,6 +61,9 @@ void SemanticAnalyzer::hoistDeclarations(const std::vector<std::unique_ptr<State
             m_functions[externDecl->functionName] = signature;
         } else if (auto *classDecl = dynamic_cast<ClassDeclarationNode*>(stmt.get())) {
             m_types.insert(classDecl->className);
+            if (!classDecl->parentClass.empty()) {
+                m_classParents[classDecl->className] = classDecl->parentClass;
+            }
             auto &fields = m_classFields[classDecl->className];
             for (const auto &prop : classDecl->objectTemplate->properties) {
                 if (!prop.method && !prop.declaredType.empty()) {
@@ -234,6 +237,28 @@ std::string SemanticAnalyzer::typeOf(ExpressionNode *expr)
 
     // Method calls, object literals, arrows: not modelled yet
     return "";
+}
+
+// A subclass can use everything its ancestors declare, so fold their fields in
+// once the whole file has been hoisted (a class may extend one declared later).
+static void foldInheritedFields(
+    const std::string &className,
+    const std::map<std::string, std::string> &parents,
+    std::map<std::string, std::map<std::string, std::string>> &fields,
+    std::set<std::string> &visiting)
+{
+    auto parentIt = parents.find(className);
+    if (parentIt == parents.end()) return;
+    if (!visiting.insert(className).second) return;   // cycle: leave it to codegen
+
+    foldInheritedFields(parentIt->second, parents, fields, visiting);
+
+    const auto &parentFields = fields[parentIt->second];
+    auto &ownFields = fields[className];
+    for (const auto &field : parentFields) {
+        ownFields.insert(field);   // a redeclared field keeps the subclass's type
+    }
+    visiting.erase(className);
 }
 
 void SemanticAnalyzer::analyzeExpression(ExpressionNode *expr)
@@ -487,6 +512,7 @@ void SemanticAnalyzer::analyze(ProgramNode *program)
     m_types.clear();
     m_globals.clear();
     m_classFields.clear();
+    m_classParents.clear();
     m_currentReturnType.clear();
     m_inFunction = false;
     m_loopDepth = 0;
@@ -495,6 +521,11 @@ void SemanticAnalyzer::analyze(ProgramNode *program)
 
     pushScope(); // global scope
     hoistDeclarations(program->statements);
+
+    for (const auto &entry : m_classParents) {
+        std::set<std::string> visiting;
+        foldInheritedFields(entry.first, m_classParents, m_classFields, visiting);
+    }
     analyzeStatementList(program->statements);
     popScope();
 }

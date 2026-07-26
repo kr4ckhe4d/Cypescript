@@ -276,6 +276,12 @@ private:
 
     // Computes a class's struct layout from declared field types, before codegen
     void registerClassLayout(ClassDeclarationNode *cls);
+    // Walks `extends` and fills in inheritedProperties, parent-first. Detects
+    // unknown parents and inheritance cycles.
+    void resolveClassInheritance(ClassDeclarationNode *cls, std::set<std::string> &visiting);
+    // Which class an object template belongs to, so inherited members can be
+    // found when instantiating it
+    std::map<const ObjectLiteralNode *, ClassDeclarationNode *> templateOwner;
 
     // Truthy check helper
     llvm::Value *ensureI1(llvm::Value *val);

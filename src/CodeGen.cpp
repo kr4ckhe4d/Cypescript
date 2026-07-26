@@ -293,6 +293,15 @@ void CodeGen::visit(ProgramNode *node)
         }
     }
 
+    // Resolve `extends` first: a subclass lays its parent's members out ahead of
+    // its own, so layouts must be built after the chain is known.
+    templateOwner.clear();
+    for (auto &entry : classes) {
+        std::set<std::string> visiting;
+        resolveClassInheritance(entry.second, visiting);
+        templateOwner[entry.second->objectTemplate.get()] = entry.second;
+    }
+
     // Class struct layouts are computed from declared field types before any
     // code is generated, so a class-typed value knows its layout no matter
     // where it came from
@@ -2483,6 +2492,52 @@ std::string CodeGen::getExpressionObjectKey(ExpressionNode* expr) {
 // generating any code. Runs in pass 0 so that property access on a class-typed
 // value works even before the class has been instantiated anywhere — which is
 // what makes `function make(): Vec` and `Vec[]` usable.
+// Resolves `class B extends A` by collecting A's members ahead of B's own. The
+// pointers are non-owning; the nodes stay in their declaring class's template.
+void CodeGen::resolveClassInheritance(ClassDeclarationNode *cls, std::set<std::string> &visiting)
+{
+    if (!cls || cls->parentClass.empty()) return;
+    if (!cls->inheritedProperties.empty()) return;   // already resolved
+
+    if (visiting.count(cls->className)) {
+        throw std::runtime_error("Codegen Error: Inheritance cycle involving class '" +
+                                 cls->className + "'");
+    }
+    auto parentIt = classes.find(cls->parentClass);
+    if (parentIt == classes.end()) {
+        throw std::runtime_error("Codegen Error: Class '" + cls->className +
+                                 "' extends unknown class '" + cls->parentClass + "'");
+    }
+
+    visiting.insert(cls->className);
+    ClassDeclarationNode *parent = parentIt->second;
+    resolveClassInheritance(parent, visiting);       // grandparents first
+    visiting.erase(cls->className);
+
+    // Parent's members come first so the child's struct starts with the parent's
+    auto isOwnMember = [&](const std::string &key) {
+        for (const auto &prop : cls->objectTemplate->properties) {
+            if (prop.key == key) return true;
+        }
+        return false;
+    };
+
+    for (const auto *inherited : parent->inheritedProperties) {
+        if (!isOwnMember(inherited->key)) cls->inheritedProperties.push_back(inherited);
+    }
+    for (const auto &prop : parent->objectTemplate->properties) {
+        // A member the child redeclares overrides the parent's
+        if (!isOwnMember(prop.key)) cls->inheritedProperties.push_back(&prop);
+    }
+
+    // A subclass with no constructor of its own uses its parent's
+    if (!cls->hasConstructor) {
+        for (const auto *inherited : cls->inheritedProperties) {
+            if (inherited->key == "constructor") { cls->hasConstructor = true; break; }
+        }
+    }
+}
+
 void CodeGen::registerClassLayout(ClassDeclarationNode *cls)
 {
     if (!cls || !cls->objectTemplate) return;
@@ -2490,8 +2545,15 @@ void CodeGen::registerClassLayout(ClassDeclarationNode *cls)
     std::string objectKey = "opt_obj_" + std::to_string(reinterpret_cast<uintptr_t>(tmpl));
     if (objectLayouts.count(objectKey)) return;
 
+    // Inherited members are laid out first, so a subclass and its parent share a
+    // struct prefix and the same property offsets.
+    std::vector<const ObjectLiteralNode::Property *> members;
+    for (const auto *inherited : cls->inheritedProperties) members.push_back(inherited);
+    for (const auto &prop : tmpl->properties) members.push_back(&prop);
+
     std::vector<std::pair<std::string, std::string>> propertyInfo;
-    for (const auto &prop : tmpl->properties) {
+    for (const auto *member : members) {
+        const auto &prop = *member;
         if (prop.method) {
             objectMethods[objectKey][prop.key] = prop.method.get();
             continue;
@@ -2533,11 +2595,23 @@ llvm::Value *CodeGen::createOptimizedObjectWithProperties(ObjectLiteralNode *nod
     // Generate unique object key that matches property access
     std::string objectKey = "opt_obj_" + std::to_string(reinterpret_cast<uintptr_t>(node));
 
+    // A class template also carries whatever it inherited, laid out first so the
+    // subclass shares a struct prefix with its parent.
+    std::vector<const ObjectLiteralNode::Property *> members;
+    auto ownerIt = templateOwner.find(node);
+    if (ownerIt != templateOwner.end()) {
+        for (const auto *inherited : ownerIt->second->inheritedProperties) {
+            members.push_back(inherited);
+        }
+    }
+    for (const auto &prop : node->properties) members.push_back(&prop);
+
     // Extract property information for layout creation
     std::vector<std::pair<std::string, std::string>> propertyInfo;
     std::vector<llvm::Value*> propertyValues;
 
-    for (const auto& prop : node->properties) {
+    for (const auto* memberPtr : members) {
+        const auto& prop = *memberPtr;
         std::string propertyType;
         llvm::Value* propValue = nullptr;
 

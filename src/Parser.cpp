@@ -388,6 +388,10 @@ std::unique_ptr<StatementNode> Parser::parseClassDeclaration()
     consume(TOK_CLASS, "Expected 'class'");
     const Token &nameToken = consume(TOK_IDENTIFIER, "Expected class name");
     auto classNode = std::make_unique<ClassDeclarationNode>(nameToken.value);
+    if (peek().type == TOK_EXTENDS) {
+        advance();
+        classNode->parentClass = consume(TOK_IDENTIFIER, "Expected parent class name").value;
+    }
     consume(TOK_LBRACE, "Expected '{' after class name");
 
     while (peek().type != TOK_RBRACE && !isAtEnd()) {

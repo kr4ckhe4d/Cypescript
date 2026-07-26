@@ -1131,8 +1131,15 @@ class ClassDeclarationNode : public StatementNode
 {
 public:
     std::string className;
+    std::string parentClass;                           // from `extends`, empty if none
     std::unique_ptr<ObjectLiteralNode> objectTemplate; // fields (with defaults) + methods
     bool hasConstructor = false;
+
+    // Members inherited from the chain, resolved once at registration. These are
+    // NON-OWNING pointers into the ancestors' own templates — a subclass lays
+    // its parent's fields out first, so the two share a struct prefix and a
+    // parent-typed slot can hold a child.
+    std::vector<const ObjectLiteralNode::Property*> inheritedProperties;
 
     explicit ClassDeclarationNode(std::string name)
         : className(std::move(name)), objectTemplate(std::make_unique<ObjectLiteralNode>()) {}
@@ -1140,7 +1147,9 @@ public:
     void printNode(llvm::raw_ostream &os, int indent = 0) const override
     {
         printIndent(os, indent);
-        os << "ClassDeclarationNode: " << className << "\n";
+        os << "ClassDeclarationNode: " << className;
+        if (!parentClass.empty()) os << " extends " << parentClass;
+        os << "\n";
         if (objectTemplate) objectTemplate->printNode(os, indent + 1);
     }
 };

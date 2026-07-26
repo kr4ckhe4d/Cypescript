@@ -51,6 +51,8 @@ private:
     std::map<std::string, Binding> m_globals;
     // Field name -> declared type, per class, for checking property access
     std::map<std::string, std::map<std::string, std::string>> m_classFields;
+    // Class name -> parent class name, from `extends`
+    std::map<std::string, std::string> m_classParents;
     int m_loopDepth = 0;
     int m_switchDepth = 0;
     bool m_inMethod = false;
