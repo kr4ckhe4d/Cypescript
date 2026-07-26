@@ -5,12 +5,16 @@
 #include "Token.h"
 #include "AST.h" // Include our AST node definitions
 #include <vector>
+#include <map>
 #include <memory> // For unique_ptr
 
 class Parser
 {
 private:
     const std::vector<Token> &m_tokens; // Reference to the token vector from Lexer
+    // Enum members seen so far, so `Color.Red` can be folded to its value.
+    // Enums must therefore be declared before use, like a C enum.
+    std::map<std::string, std::map<std::string, long long>> m_enums;
     size_t m_currentPos = 0;            // Current position in the token vector
 
     // Helper methods (private)
@@ -41,6 +45,7 @@ private:
     std::unique_ptr<StatementNode> parseSwitchStatement();          // For switch/case
     std::unique_ptr<StatementNode> parseInterfaceDeclaration();     // For interface declarations
     std::unique_ptr<StatementNode> parseClassDeclaration();         // For class declarations
+    std::unique_ptr<StatementNode> parseEnumDeclaration();          // For enum declarations
     std::unique_ptr<StatementNode> parseTryStatement();             // For try/catch/finally
     std::unique_ptr<StatementNode> parseThrowStatement();           // For throw
     std::unique_ptr<StatementNode> parseDestructuringDeclaration(); // For let { a, b } = obj

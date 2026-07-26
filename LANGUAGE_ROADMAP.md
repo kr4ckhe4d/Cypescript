@@ -15,11 +15,11 @@ where Cypescript accepts a program it should reject.
 |---|---|---|
 | 7.1 | Compound assignment evaluates its target once | ✅ **DONE** |
 | 7.2 | Frictionless C/C++ interop (`link source`) | ✅ **DONE** |
-| 7.3 | A real type checker | 🔶 **Core landed** — see below |
+| 7.3 | A real type checker | ✅ **DONE** |
 | 7.4 | `class extends` — inheritance, virtual dispatch, `super` | ✅ **DONE** |
 | 7.5 | Property access on call results (`f().prop`) | ✅ **DONE** |
-| 7.6 | Enums, 2D arrays, typed buffers | ⬜ **NEXT** |
-| 7.7 | Windows validation | ⬜ |
+| 7.6 | Enums and nested arrays | ✅ **DONE** (typed buffers deferred) |
+| 7.7 | Windows validation | ⬜ **Needs a Windows machine** |
 
 ---
 
@@ -77,7 +77,7 @@ See `example/21_c_interop.csc` and `tests/test_c_interop.csc` (which links a `.c
 
 ---
 
-## 7.3 A real type checker 🔶 CORE LANDED
+## 7.3 A real type checker ✅ DONE
 
 The headline bug is fixed:
 
@@ -132,17 +132,38 @@ the entire semantic pass could have stopped working with every test still green.
 be rejected with, and `run_tests.sh` checks both. Confirmed to bite by making a negative
 test valid and watching it fail.
 
+### Class assignability and method results
+
+Once `extends` gave the checker a class hierarchy, two of its blind spots closed:
+
+**Classes are no longer interchangeable.** A subclass fits its ancestor's slot; nothing
+else does:
+
+```ts
+let ok:  Shape  = new Square();   // accepted — Square extends Shape
+let bad: Square = new Shape();    // rejected — a parent is not a subclass
+let no:  Rock   = new Bullet();   // rejected — unrelated classes
+```
+
+Interfaces stay permissive on purpose: conformance is checked structurally in codegen, and
+a class may satisfy one without naming it.
+
+**A class method's declared return type is known**, so the value flowing out of a call is
+checked — including through inheritance:
+
+```ts
+class User { name(): string { return "x"; } }
+class Admin extends User { }
+let n: i32 = new Admin().name();   // rejected: expected 'i32', got 'string'
+```
+
 ### Still to do
 
-- **Property access on non-class objects.** `obj.missing` on an object literal or interface
-  still reaches codegen (*"Object properties not found for variable 'obj'"*, no position).
-  Class fields are checked; object literals and interfaces need their shapes tracked here.
-- **Class-to-class assignability.** All handles are currently interchangeable, so
-  `let r: Rock = someBullet;` is accepted. Needs the class hierarchy — which is 7.4's work
-  anyway.
+- **Object literal and interface shapes.** `obj.missing` on an object literal still reaches
+  codegen (*"Object properties not found"*, no position). Class members are checked; object
+  literals would need their shapes tracked here too.
 - **Narrowing.** `let n: i32 = someF64;` is allowed because codegen coerces it. TypeScript
   would reject it; tightening this needs a survey of existing code first.
-- **Method call results** are unknown types, so nothing downstream of them is checked.
 
 ## 7.4 `class extends` 🔶 INHERITANCE LANDED
 
@@ -285,11 +306,46 @@ return type — both from Phase 3.
 `!` interleaving, and — closing a loop from 7.1 — `pick(c).hits += 5`, which needs *both*
 this and the evaluate-the-target-once fix to be right. It reports one call, not two.
 
-## 7.6 Enums, 2D arrays, typed buffers ⬜
+## 7.6 Enums and nested arrays ✅ DONE
 
-Carried over from the game roadmap; none are blocking. Enums would replace magic integers
-for key codes and entity kinds. Typed fixed-size buffers with inlined GEP load/store
-(rather than a call per element) are the tilemap and pixel-work performance path.
+### Enums
+
+```ts
+enum Color  { Red, Green, Blue }                 // 0, 1, 2
+enum Key    { Left = 263, Right = 262 }
+enum Status { Ok = 0, Warn = 10, Error, Fatal }  // 10, 11, 12 — continues
+enum Offset { Behind = -1, Here, Ahead }
+```
+
+**Members are folded to integers by the parser**, so `Color.Red` is literally `0` by the
+time codegen sees it — an enum costs nothing at runtime and needed no codegen support
+beyond treating the enum's name as a type meaning `i32`. They work in comparisons,
+`switch`, arithmetic, arrays and parameters. `Color.Purple` is a parse error naming the
+enum and the member.
+
+Because folding happens during parsing, an enum must be declared before it is used —
+the same rule a C enum has.
+
+### Nested arrays
+
+`i32[][]` is an array whose elements are array handles, so it shares the object-array
+runtime that stores elements verbatim rather than copying them.
+
+The subtler half was that an element's type was only resolved when the array was a plain
+*variable*, so `grid[0][1]` fell back to `i32` and read a pointer array as integers.
+`arrayTypeOfExpression` now resolves an array's static type through the whole access chain,
+which fixed both the element type and — via the same generalisation in
+`getExpressionObjectKey` — `cells[0][0].v` on a nested array of objects.
+
+Works with `i32`, `f64`, `string` and class element types, through indexing, assignment,
+compound assignment and `for...of`.
+
+### Typed fixed-size buffers — deferred
+
+Inlined GEP load/store instead of a call per element remains the tilemap and pixel-work
+performance path. It is a genuine optimisation rather than a capability, nothing depends
+on it, and it deserves to be measured rather than assumed — so it is not being rushed in
+alongside the correctness work.
 
 ## 7.7 Windows validation ⬜
 

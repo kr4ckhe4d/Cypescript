@@ -47,6 +47,7 @@ enum TokenType {
     TOK_FINALLY,        // finally
     TOK_THROW,          // throw
     TOK_CLASS,          // class
+    TOK_ENUM,           // enum
 
     // Type keywords
     TOK_TYPE_NUMBER,    // number
@@ -146,6 +147,7 @@ inline const char* tokenTypeToString(TokenType type) {
         case TOK_FINALLY: return "FINALLY";
         case TOK_THROW: return "THROW";
         case TOK_CLASS: return "CLASS";
+        case TOK_ENUM: return "ENUM";
         
         // Type keywords
         case TOK_TYPE_NUMBER: return "TYPE_NUMBER";

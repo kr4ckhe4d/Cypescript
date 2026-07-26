@@ -683,6 +683,35 @@ public:
     }
 };
 
+// enum Color { Red, Green = 5, Blue }
+// Members are i32 constants: auto-numbered from 0, or from the last explicit
+// value. `Color.Red` reads as a plain integer, so an enum costs nothing at
+// runtime — it exists to stop key codes and entity kinds being magic numbers.
+class EnumDeclarationNode : public StatementNode
+{
+public:
+    struct Member {
+        std::string name;
+        long long value;
+        Member(std::string n, long long v) : name(std::move(n)), value(v) {}
+    };
+
+    std::string enumName;
+    std::vector<Member> members;
+
+    explicit EnumDeclarationNode(std::string name) : enumName(std::move(name)) {}
+
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "EnumDeclarationNode: " << enumName << "\n";
+        for (const auto &member : members) {
+            printIndent(os, indent + 1);
+            os << member.name << " = " << member.value << "\n";
+        }
+    }
+};
+
 // Linker directive: link "raylib"; link framework "Cocoa"; link path "/usr/local/lib";
 // An optional platform qualifier restricts it to one OS, which is what lets a
 // single source file describe libraries that differ per platform:

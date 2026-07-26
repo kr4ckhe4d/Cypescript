@@ -107,6 +107,16 @@ private:
     // must not go through the string vector, which copies its elements.
     bool isObjectTypeName(const std::string &typeName);
 
+    // True for an array element that is stored as a raw pointer: a class
+    // instance, an opaque handle, or a nested array (`i32[][]` holds `i32[]`).
+    // These share the object-array runtime, which stores elements verbatim.
+    bool isPointerElementType(const std::string &elemType);
+
+    // Static type of an expression that yields an array, so `grid[0][1]` knows
+    // its inner element type. Resolving only variables meant a nested access
+    // fell back to i32 and read a pointer array as integers.
+    std::string arrayTypeOfExpression(ExpressionNode *expr);
+
     // True for a pointer that isn't text (class instance, `ptr`, `null`), which
     // must be compared by address rather than with strcmp
     bool isNonStringPointer(ExpressionNode *expr);
@@ -139,6 +149,10 @@ private:
     // Consulted before the built-in stdlib table, so a program can bind any C
     // symbol without the compiler knowing anything about it.
     std::map<std::string, const ExternDeclarationNode*> externFunctions;
+
+    // Enum names. Members are folded to integers by the parser, so an enum only
+    // needs to exist here as a type name meaning i32.
+    std::set<std::string> enumTypes;
 
     // Class registry: `new ClassName(...)` instantiates the class's object
     // template and calls its constructor (nodes owned by the AST)

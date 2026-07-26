@@ -65,11 +65,16 @@ void SemanticAnalyzer::hoistDeclarations(const std::vector<std::unique_ptr<State
                 m_classParents[classDecl->className] = classDecl->parentClass;
             }
             auto &fields = m_classFields[classDecl->className];
+            auto &methods = m_classMethods[classDecl->className];
             for (const auto &prop : classDecl->objectTemplate->properties) {
-                if (!prop.method && !prop.declaredType.empty()) {
+                if (prop.method) {
+                    if (prop.key != "constructor") methods[prop.key] = prop.method->returnType;
+                } else if (!prop.declaredType.empty()) {
                     fields[prop.key] = prop.declaredType;
                 }
             }
+        } else if (auto *enumDecl = dynamic_cast<EnumDeclarationNode*>(stmt.get())) {
+            m_enumTypes.insert(enumDecl->enumName);
         } else if (auto *interfaceDecl = dynamic_cast<InterfaceDeclarationNode*>(stmt.get())) {
             m_types.insert(interfaceDecl->interfaceName);
         } else if (auto *varDecl = dynamic_cast<VariableDeclarationNode*>(stmt.get())) {
@@ -108,6 +113,7 @@ SemanticAnalyzer::TypeCategory SemanticAnalyzer::categoryOf(const std::string &t
         return TypeCategory::Unknown;
     }
 
+    if (m_enumTypes.count(type)) return TypeCategory::Numeric;
     if (type == "i32" || type == "i64" || type == "i8" || type == "u8" ||
         type == "f32" || type == "f64" || type == "number" || type == "boolean") {
         return TypeCategory::Numeric;
@@ -120,6 +126,20 @@ SemanticAnalyzer::TypeCategory SemanticAnalyzer::categoryOf(const std::string &t
 
     // ptr, object, class and interface names, arrays, Map/Set, closures
     return TypeCategory::Handle;
+}
+
+bool SemanticAnalyzer::isClassOrSubclassOf(const std::string &candidate,
+                                           const std::string &base) const
+{
+    std::string current = candidate;
+    std::set<std::string> seen;   // a cycle is codegen's error to report, not ours
+    while (!current.empty() && seen.insert(current).second) {
+        if (current == base) return true;
+        auto parentIt = m_classParents.find(current);
+        if (parentIt == m_classParents.end()) break;
+        current = parentIt->second;
+    }
+    return false;
 }
 
 bool SemanticAnalyzer::isAssignable(const std::string &target, const std::string &source) const
@@ -136,6 +156,15 @@ bool SemanticAnalyzer::isAssignable(const std::string &target, const std::string
     TypeCategory ct = categoryOf(target);
     TypeCategory cs = categoryOf(source);
     if (ct == TypeCategory::Unknown || cs == TypeCategory::Unknown) return true;
+
+    // Two known classes: a subclass fits its ancestor's slot, nothing else does.
+    // Interfaces stay permissive — conformance is checked structurally in codegen,
+    // and a class may satisfy one without naming it.
+    bool targetIsClass = m_classFields.count(target) > 0 || m_classMethods.count(target) > 0;
+    bool sourceIsClass = m_classFields.count(source) > 0 || m_classMethods.count(source) > 0;
+    if (targetIsClass && sourceIsClass) {
+        return isClassOrSubclassOf(source, target);
+    }
 
     // Within a family codegen already coerces: i32<->f64, boolean as i32, and
     // string/ptr are both i8*. Only crossing families is a real mistake.
@@ -235,28 +264,39 @@ std::string SemanticAnalyzer::typeOf(ExpressionNode *expr)
         return "";
     }
 
-    // Method calls, object literals, arrows: not modelled yet
+    if (auto *methodCall = dynamic_cast<MethodCallNode*>(expr)) {
+        // Only class methods; array/Map/Set methods are the runtime's, not ours
+        std::string objectType = typeOf(methodCall->object.get());
+        auto classIt = m_classMethods.find(objectType);
+        if (classIt != m_classMethods.end()) {
+            auto methodIt = classIt->second.find(methodCall->methodName);
+            if (methodIt != classIt->second.end()) return methodIt->second;
+        }
+        return "";
+    }
+
+    // Object literals and arrows: not modelled yet
     return "";
 }
 
 // A subclass can use everything its ancestors declare, so fold their fields in
 // once the whole file has been hoisted (a class may extend one declared later).
-static void foldInheritedFields(
+static void foldInheritedMembers(
     const std::string &className,
     const std::map<std::string, std::string> &parents,
-    std::map<std::string, std::map<std::string, std::string>> &fields,
+    std::map<std::string, std::map<std::string, std::string>> &members,
     std::set<std::string> &visiting)
 {
     auto parentIt = parents.find(className);
     if (parentIt == parents.end()) return;
     if (!visiting.insert(className).second) return;   // cycle: leave it to codegen
 
-    foldInheritedFields(parentIt->second, parents, fields, visiting);
+    foldInheritedMembers(parentIt->second, parents, members, visiting);
 
-    const auto &parentFields = fields[parentIt->second];
-    auto &ownFields = fields[className];
-    for (const auto &field : parentFields) {
-        ownFields.insert(field);   // a redeclared field keeps the subclass's type
+    const auto &parentMembers = members[parentIt->second];
+    auto &ownMembers = members[className];
+    for (const auto &member : parentMembers) {
+        ownMembers.insert(member);   // a redeclared member keeps the subclass's
     }
     visiting.erase(className);
 }
@@ -523,9 +563,11 @@ void SemanticAnalyzer::analyze(ProgramNode *program)
     m_scopes.clear();
     m_functions.clear();
     m_types.clear();
+    m_enumTypes.clear();
     m_globals.clear();
     m_classFields.clear();
     m_classParents.clear();
+    m_classMethods.clear();
     m_currentReturnType.clear();
     m_inFunction = false;
     m_loopDepth = 0;
@@ -536,8 +578,10 @@ void SemanticAnalyzer::analyze(ProgramNode *program)
     hoistDeclarations(program->statements);
 
     for (const auto &entry : m_classParents) {
-        std::set<std::string> visiting;
-        foldInheritedFields(entry.first, m_classParents, m_classFields, visiting);
+        std::set<std::string> fieldVisiting;
+        foldInheritedMembers(entry.first, m_classParents, m_classFields, fieldVisiting);
+        std::set<std::string> methodVisiting;
+        foldInheritedMembers(entry.first, m_classParents, m_classMethods, methodVisiting);
     }
     analyzeStatementList(program->statements);
     popScope();

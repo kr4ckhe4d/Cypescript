@@ -67,6 +67,8 @@ const Token &Parser::consume(TokenType expectedType, const std::string &errorMes
     throw std::runtime_error(errorMsg);
 }
 
+static long long parseIntegerLiteralValue(const std::string &text);
+
 // --- Parsing Methods for Grammar Rules ---
 
 std::unique_ptr<ProgramNode> Parser::parseProgram()
@@ -135,6 +137,10 @@ std::unique_ptr<StatementNode> Parser::parseStatementInner()
     else if (peek().type == TOK_CLASS)
     {
         return parseClassDeclaration();
+    }
+    else if (peek().type == TOK_ENUM)
+    {
+        return parseEnumDeclaration();
     }
     else if (peek().type == TOK_RETURN)
     {
@@ -426,6 +432,38 @@ std::unique_ptr<StatementNode> Parser::parseClassDeclaration()
     }
     consume(TOK_RBRACE, "Expected '}' after class body");
     return classNode;
+}
+
+// enum Color { Red, Green = 5, Blue }
+// Values auto-increment from 0, or from the last explicit value.
+std::unique_ptr<StatementNode> Parser::parseEnumDeclaration()
+{
+    consume(TOK_ENUM, "Expected 'enum'");
+    const Token &nameToken = consume(TOK_IDENTIFIER, "Expected enum name");
+    auto enumNode = std::make_unique<EnumDeclarationNode>(nameToken.value);
+    consume(TOK_LBRACE, "Expected '{' after enum name");
+
+    long long nextValue = 0;
+    while (peek().type != TOK_RBRACE && !isAtEnd()) {
+        const Token &memberToken = consume(TOK_IDENTIFIER, "Expected enum member name");
+        if (peek().type == TOK_EQUAL) {
+            advance();
+            bool negative = false;
+            if (peek().type == TOK_MINUS) { advance(); negative = true; }
+            const Token &valueToken = consume(TOK_INT_LITERAL,
+                "Enum members must be integer constants");
+            long long value = parseIntegerLiteralValue(valueToken.value);
+            nextValue = negative ? -value : value;
+        }
+        enumNode->members.emplace_back(memberToken.value, nextValue);
+        nextValue++;
+        if (peek().type == TOK_COMMA) advance();
+    }
+    consume(TOK_RBRACE, "Expected '}' after enum body");
+
+    auto &table = m_enums[enumNode->enumName];
+    for (const auto &member : enumNode->members) table[member.name] = member.value;
+    return enumNode;
 }
 
 std::unique_ptr<StatementNode> Parser::parseTryStatement()
@@ -1037,6 +1075,25 @@ std::unique_ptr<ExpressionNode> Parser::parseVariableExpression()
             callNode->arguments.push_back(std::move(joined));
         }
         return callNode;
+    }
+
+    // An enum member is a compile-time integer: Color.Red becomes 0, so an enum
+    // costs nothing at runtime and needs no codegen support at all.
+    if (peek().type == TOK_DOT) {
+        auto enumIt = m_enums.find(varToken.value);
+        if (enumIt != m_enums.end() && peek(1).type == TOK_IDENTIFIER) {
+            auto memberIt = enumIt->second.find(peek(1).value);
+            if (memberIt != enumIt->second.end()) {
+                advance();  // '.'
+                advance();  // member
+                auto literal = std::make_unique<IntegerLiteralNode>(memberIt->second);
+                literal->line = varToken.line;
+                literal->column = varToken.column;
+                return literal;
+            }
+            throw std::runtime_error("Parse Error: Enum '" + varToken.value +
+                "' has no member '" + peek(1).value + "'" + tokenPosition(peek(1)));
+        }
     }
 
     // `super(...)` calls the parent constructor; `super.m(...)` calls the

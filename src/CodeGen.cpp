@@ -176,6 +176,11 @@ llvm::Type *CodeGen::getLLVMType(const std::string &typeName)
         // compiler deliberately knows nothing about what it points at.
         return llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
     }
+    else if (enumTypes.count(typeName))
+    {
+        // Enum members are compile-time integers
+        return llvm::Type::getInt32Ty(m_context);
+    }
     else if (typeName == "boolean")
     {
         // Booleans are represented as i32 throughout (literals, printing, C interop)
@@ -269,6 +274,7 @@ void CodeGen::visit(ProgramNode *node)
 
     classes.clear();
     externFunctions.clear();
+    enumTypes.clear();
     globalValues.clear();
     atModuleLevel = false;
 
@@ -290,6 +296,10 @@ void CodeGen::visit(ProgramNode *node)
         else if (auto *externNode = dynamic_cast<ExternDeclarationNode *>(stmt.get()))
         {
             externFunctions[externNode->functionName] = externNode;
+        }
+        else if (auto *enumNode = dynamic_cast<EnumDeclarationNode *>(stmt.get()))
+        {
+            enumTypes.insert(enumNode->enumName);
         }
     }
 
@@ -334,6 +344,7 @@ void CodeGen::visit(ProgramNode *node)
             !dynamic_cast<InterfaceDeclarationNode *>(stmt.get()) &&
             !dynamic_cast<ClassDeclarationNode *>(stmt.get()) &&
             !dynamic_cast<ExternDeclarationNode *>(stmt.get()) &&
+            !dynamic_cast<EnumDeclarationNode *>(stmt.get()) &&
             !dynamic_cast<LinkDirectiveNode *>(stmt.get()))
         {
             mainStatements.push_back(stmt.get());
@@ -468,6 +479,7 @@ void CodeGen::visit(StatementNode *node)
         visit(throwNode);
     }
     else if (dynamic_cast<ExternDeclarationNode *>(node) ||
+             dynamic_cast<EnumDeclarationNode *>(node) ||
              dynamic_cast<LinkDirectiveNode *>(node))
     {
         // Declarations only: externs are registered in pass 0 and emitted lazily
@@ -1325,7 +1337,7 @@ llvm::Value *CodeGen::emitArrayLoad(llvm::Value *arrayValue, llvm::Value *indexV
     llvm::Value *index = coerceValue(indexValue, i32Ty);
 
     llvm::FunctionCallee getFunc;
-    if (isObjectTypeName(elemType)) {
+    if (isPointerElementType(elemType)) {
         getFunc = m_module->getOrInsertFunction("array_get_object", charPtr, charPtr, i32Ty);
     } else if (elemType == "string") {
         getFunc = m_module->getOrInsertFunction("array_get_string", charPtr, charPtr, i32Ty);
@@ -1405,18 +1417,13 @@ void CodeGen::visit(ArrayAssignmentStatementNode *node)
         throw std::runtime_error("Codegen Error: Array index must be an integer");
     }
 
-    // Determine element type by looking up the variable type
+    // Element type from the array expression's static type, which also covers a
+    // nested access like grid[0][1]
     std::string elemType = "i32"; // default
-
-    // Try to get the variable name from the array expression
-    if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(node->array.get())) {
-        auto typeIt = variableTypes.find(varExpr->name);
-        if (typeIt != variableTypes.end()) {
-            std::string varType = typeIt->second;
-            // Extract element type from array type (e.g., "string[]" -> "string")
-            if (varType.length() > 2 && varType.substr(varType.length() - 2) == "[]") {
-                elemType = varType.substr(0, varType.length() - 2);
-            }
+    {
+        std::string arrayType = arrayTypeOfExpression(node->array.get());
+        if (arrayType.length() > 2 && arrayType.substr(arrayType.length() - 2) == "[]") {
+            elemType = arrayType.substr(0, arrayType.length() - 2);
         }
     }
 
@@ -1433,7 +1440,7 @@ void CodeGen::visit(ArrayAssignmentStatementNode *node)
     }
 
     // Use dynamic array functions
-    if (isObjectTypeName(elemType)) {
+    if (isPointerElementType(elemType)) {
         llvm::FunctionCallee setFunc = m_module->getOrInsertFunction("array_set_object",
             llvm::Type::getVoidTy(m_context), llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0), llvm::Type::getInt32Ty(m_context), llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
         m_builder.CreateCall(setFunc, {arrayValue, indexValue, valueToAssign});
@@ -1576,7 +1583,7 @@ void CodeGen::visit(ForOfStatementNode *node)
 
     // Load current element from dynamic array
     llvm::Value *element;
-    if (isObjectTypeName(elemType)) {
+    if (isPointerElementType(elemType)) {
         llvm::FunctionCallee getFunc = m_module->getOrInsertFunction("array_get_object",
             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0), llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0), llvm::Type::getInt32Ty(m_context));
         element = m_builder.CreateCall(getFunc, {arrPtr, currentIndex}, "iter_element");
@@ -2185,7 +2192,7 @@ llvm::Value *CodeGen::visit(ArrayLiteralNode *node)
     
     llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
     llvm::FunctionCallee createFunc;
-    if (isObjectTypeName(elemType)) {
+    if (isPointerElementType(elemType)) {
         createFunc = m_module->getOrInsertFunction("array_create_object", charPtr);
     } else if (elemType == "string") {
         createFunc = m_module->getOrInsertFunction("array_create_string", charPtr);
@@ -2244,23 +2251,18 @@ llvm::Value *CodeGen::visit(ArrayAccessNode *node)
         throw std::runtime_error("Codegen Error: Array index must be an integer");
     }
     
-    // Determine element type by looking up the variable type
+    // Element type from the array expression's static type, which also covers a
+    // nested access like grid[0][1]
     std::string elemType = "i32"; // default
-    
-    // Try to get the variable name from the array expression
-    if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(node->array.get())) {
-        auto typeIt = variableTypes.find(varExpr->name);
-        if (typeIt != variableTypes.end()) {
-            std::string varType = typeIt->second;
-            // Extract element type from array type (e.g., "string[]" -> "string")
-            if (varType.length() > 2 && varType.substr(varType.length() - 2) == "[]") {
-                elemType = varType.substr(0, varType.length() - 2);
-            }
+    {
+        std::string arrayType = arrayTypeOfExpression(node->array.get());
+        if (arrayType.length() > 2 && arrayType.substr(arrayType.length() - 2) == "[]") {
+            elemType = arrayType.substr(0, arrayType.length() - 2);
         }
     }
     
     // Call the appropriate C++ dynamic array function
-    if (isObjectTypeName(elemType)) {
+    if (isPointerElementType(elemType)) {
         llvm::FunctionCallee getFunc = m_module->getOrInsertFunction("array_get_object",
             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0), llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0), llvm::Type::getInt32Ty(m_context));
         return m_builder.CreateCall(getFunc, {arrayValue, indexValue}, "array_element");
@@ -2399,6 +2401,34 @@ bool CodeGen::isObjectTypeName(const std::string &typeName) {
     return classes.count(typeName) > 0 || interfaces.count(typeName) > 0;
 }
 
+std::string CodeGen::arrayTypeOfExpression(ExpressionNode *expr) {
+    if (!expr) return "";
+    if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(expr)) {
+        auto typeIt = variableTypes.find(varExpr->name);
+        return typeIt != variableTypes.end() ? typeIt->second : "";
+    }
+    if (auto *arrAccess = dynamic_cast<ArrayAccessNode*>(expr)) {
+        // The element type of the outer array is this expression's own type
+        std::string outer = arrayTypeOfExpression(arrAccess->array.get());
+        if (outer.size() > 2 && outer.compare(outer.size() - 2, 2, "[]") == 0) {
+            return outer.substr(0, outer.size() - 2);
+        }
+        return "";
+    }
+    if (auto *call = dynamic_cast<FunctionCallNode*>(expr)) {
+        auto retIt = functionReturnTypes.find(call->functionName);
+        return retIt != functionReturnTypes.end() ? retIt->second : "";
+    }
+    return "";
+}
+
+bool CodeGen::isPointerElementType(const std::string &elemType) {
+    if (isObjectTypeName(elemType)) return true;
+    if (elemType == "ptr") return true;
+    // A nested array: the outer array's elements are array handles
+    return elemType.size() > 2 && elemType.compare(elemType.size() - 2, 2, "[]") == 0;
+}
+
 // True when an expression is a pointer that is NOT text: a class instance, an
 // opaque `ptr` from C, or `null`. Equality on these must compare addresses;
 // strcmp would read them as strings.
@@ -2467,15 +2497,11 @@ std::string CodeGen::getExpressionObjectKey(ExpressionNode* expr) {
         auto retIt = functionReturnTypes.find(call->functionName);
         if (retIt != functionReturnTypes.end()) return objectKeyForTypeName(retIt->second);
     } else if (auto* arrAccess = dynamic_cast<ArrayAccessNode*>(expr)) {
-        // Element of an object array: rocks[i].x
-        if (auto* arrVar = dynamic_cast<VariableExpressionNode*>(arrAccess->array.get())) {
-            auto typeIt = variableTypes.find(arrVar->name);
-            if (typeIt != variableTypes.end()) {
-                const std::string &arrType = typeIt->second;
-                if (arrType.size() > 2 && arrType.substr(arrType.size() - 2) == "[]") {
-                    return objectKeyForTypeName(arrType.substr(0, arrType.size() - 2));
-                }
-            }
+        // Element of an object array: rocks[i].x, and cells[0][0].v through a
+        // nested one — the array's static type is resolved through the chain
+        std::string arrType = arrayTypeOfExpression(arrAccess->array.get());
+        if (arrType.size() > 2 && arrType.compare(arrType.size() - 2, 2, "[]") == 0) {
+            return objectKeyForTypeName(arrType.substr(0, arrType.size() - 2));
         }
     } else if (auto* objAccess = dynamic_cast<ObjectAccessNode*>(expr)) {
         std::string parentKey = getExpressionObjectKey(objAccess->object.get());
@@ -3225,7 +3251,7 @@ llvm::Value *CodeGen::visit(MethodCallNode *node)
             if (node->arguments.size() != 1) throw std::runtime_error("push() expects 1 argument");
             llvm::Value *argValue = visit(node->arguments[0].get());
 
-            if (isObjectTypeName(elemType)) {
+            if (isPointerElementType(elemType)) {
                 llvm::FunctionCallee pushFunc = m_module->getOrInsertFunction("array_push_object",
                     llvm::Type::getVoidTy(m_context), llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0), llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
                 return m_builder.CreateCall(pushFunc, {objectValue, argValue});
@@ -3269,7 +3295,7 @@ llvm::Value *CodeGen::visit(MethodCallNode *node)
             if (node->arguments.size() != 0) throw std::runtime_error("shift/pop expects 0 arguments");
 
             std::string runtimeName = (node->methodName == "pop") ? "array_pop" : "array_shift";
-            if (isObjectTypeName(elemType)) {
+            if (isPointerElementType(elemType)) {
                 llvm::FunctionCallee popFunc = m_module->getOrInsertFunction(runtimeName + "_object",
                     llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
                     llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));

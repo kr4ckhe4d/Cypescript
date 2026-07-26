@@ -46,6 +46,7 @@ private:
     std::vector<std::map<std::string, Binding>> m_scopes;
     std::map<std::string, FunctionSignature> m_functions; // user + declared foreign
     std::set<std::string> m_types;             // class/interface names (not values)
+    std::set<std::string> m_enumTypes;         // enum names, which mean i32
     // Module-level variables. Unlike enclosing locals these stay visible inside
     // function bodies, matching the globals CodeGen promotes for the same names.
     std::map<std::string, Binding> m_globals;
@@ -53,6 +54,8 @@ private:
     std::map<std::string, std::map<std::string, std::string>> m_classFields;
     // Class name -> parent class name, from `extends`
     std::map<std::string, std::string> m_classParents;
+    // Class name -> method name -> declared return type
+    std::map<std::string, std::map<std::string, std::string>> m_classMethods;
     int m_loopDepth = 0;
     int m_switchDepth = 0;
     bool m_inMethod = false;
@@ -73,6 +76,8 @@ private:
     TypeCategory categoryOf(const std::string &type) const;
     // Would assigning a `source`-typed value to a `target`-typed slot be wrong?
     bool isAssignable(const std::string &target, const std::string &source) const;
+    // Is `candidate` the same class as `base`, or a subclass of it?
+    bool isClassOrSubclassOf(const std::string &candidate, const std::string &base) const;
     // Reports a mismatch at `node` unless the two types are compatible
     void checkAssignable(const ASTNode *node, const std::string &target,
                          const std::string &source, const std::string &context);
