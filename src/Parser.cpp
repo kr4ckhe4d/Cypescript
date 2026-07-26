@@ -217,20 +217,52 @@ std::unique_ptr<StatementNode> Parser::makeAssignmentStatement(std::unique_ptr<E
     throw std::runtime_error("Parse Error: Invalid assignment target");
 }
 
+// Builds `target op= value`. For an array element or an object property the
+// operator is carried on the assignment node, so codegen evaluates the target
+// once and does a load-modify-store. Desugaring these to `a[i] = a[i] + v`
+// used to evaluate the index twice — with a side-effecting index that both
+// stepped it twice and read from a different slot than it wrote to.
+//
+// A plain variable target has nothing to evaluate twice, so it keeps the
+// simpler desugared form, which reuses the ordinary assignment path.
+std::unique_ptr<StatementNode> Parser::makeCompoundAssignmentStatement(
+    std::unique_ptr<ExpressionNode> target, BinaryExpressionNode::Operator op,
+    std::unique_ptr<ExpressionNode> rhs, size_t targetStart)
+{
+    if (dynamic_cast<ArrayAccessNode*>(target.get())) {
+        auto *access = static_cast<ArrayAccessNode*>(target.release());
+        std::unique_ptr<ArrayAccessNode> owned(access);
+        auto node = std::make_unique<ArrayAssignmentStatementNode>(
+            std::move(owned->array), std::move(owned->index), std::move(rhs));
+        node->isCompound = true;
+        node->compoundOp = op;
+        return node;
+    }
+    if (dynamic_cast<ObjectAccessNode*>(target.get())) {
+        auto *access = static_cast<ObjectAccessNode*>(target.release());
+        std::unique_ptr<ObjectAccessNode> owned(access);
+        auto node = std::make_unique<ObjectPropertyAssignmentNode>(
+            std::move(owned->object), owned->property, std::move(rhs));
+        node->isCompound = true;
+        node->compoundOp = op;
+        return node;
+    }
+
+    // Plain variable: re-read the target tokens for the left operand
+    size_t save = m_currentPos;
+    m_currentPos = targetStart;
+    auto readCopy = parseExpression();
+    m_currentPos = save;
+
+    auto value = std::make_unique<BinaryExpressionNode>(op, std::move(readCopy), std::move(rhs));
+    return makeAssignmentStatement(std::move(target), std::move(value));
+}
+
 std::unique_ptr<StatementNode> Parser::parseExpressionOrAssignmentStatement(bool consumeSemicolon)
 {
     size_t exprStart = m_currentPos;
     auto expr = parseExpression();
     TokenType next = peek().type;
-
-    auto reparseTarget = [&]() {
-        // Re-parse the target tokens to produce a second copy of the lhs expression
-        size_t save = m_currentPos;
-        m_currentPos = exprStart;
-        auto clone = parseExpression();
-        m_currentPos = save;
-        return clone;
-    };
 
     std::unique_ptr<StatementNode> stmt;
     if (next == TOK_EQUAL) {
@@ -238,25 +270,28 @@ std::unique_ptr<StatementNode> Parser::parseExpressionOrAssignmentStatement(bool
         auto value = parseExpression();
         stmt = makeAssignmentStatement(std::move(expr), std::move(value));
     } else if (next == TOK_PLUS_EQUAL || next == TOK_MINUS_EQUAL || next == TOK_STAR_EQUAL ||
-               next == TOK_SLASH_EQUAL || next == TOK_PERCENT_EQUAL) {
+               next == TOK_SLASH_EQUAL || next == TOK_PERCENT_EQUAL ||
+               next == TOK_PLUS_PLUS || next == TOK_MINUS_MINUS) {
         advance();
-        auto rhs = parseExpression();
+
         BinaryExpressionNode::Operator op;
+        std::unique_ptr<ExpressionNode> rhs;
         switch (next) {
-            case TOK_PLUS_EQUAL: op = BinaryExpressionNode::ADD; break;
-            case TOK_MINUS_EQUAL: op = BinaryExpressionNode::SUBTRACT; break;
-            case TOK_STAR_EQUAL: op = BinaryExpressionNode::MULTIPLY; break;
-            case TOK_SLASH_EQUAL: op = BinaryExpressionNode::DIVIDE; break;
-            default: op = BinaryExpressionNode::MODULO; break;
+            case TOK_PLUS_EQUAL:    op = BinaryExpressionNode::ADD;      break;
+            case TOK_MINUS_EQUAL:   op = BinaryExpressionNode::SUBTRACT; break;
+            case TOK_STAR_EQUAL:    op = BinaryExpressionNode::MULTIPLY; break;
+            case TOK_SLASH_EQUAL:   op = BinaryExpressionNode::DIVIDE;   break;
+            case TOK_PERCENT_EQUAL: op = BinaryExpressionNode::MODULO;   break;
+            case TOK_PLUS_PLUS:     op = BinaryExpressionNode::ADD;      break;
+            default:                op = BinaryExpressionNode::SUBTRACT; break;
         }
-        auto value = std::make_unique<BinaryExpressionNode>(op, reparseTarget(), std::move(rhs));
-        stmt = makeAssignmentStatement(std::move(expr), std::move(value));
-    } else if (next == TOK_PLUS_PLUS || next == TOK_MINUS_MINUS) {
-        advance();
-        auto op = (next == TOK_PLUS_PLUS) ? BinaryExpressionNode::ADD : BinaryExpressionNode::SUBTRACT;
-        auto value = std::make_unique<BinaryExpressionNode>(op, reparseTarget(),
-                                                            std::make_unique<IntegerLiteralNode>(1));
-        stmt = makeAssignmentStatement(std::move(expr), std::move(value));
+        if (next == TOK_PLUS_PLUS || next == TOK_MINUS_MINUS) {
+            rhs = std::make_unique<IntegerLiteralNode>(1);
+        } else {
+            rhs = parseExpression();
+        }
+
+        stmt = makeCompoundAssignmentStatement(std::move(expr), op, std::move(rhs), exprStart);
     } else {
         stmt = std::make_unique<ExpressionStatementNode>(std::move(expr));
     }
@@ -1238,7 +1273,7 @@ bool Parser::isLinkDirectiveAhead() const
     if (peek(1).type != TOK_IDENTIFIER) return false;
 
     auto isQualifier = [](const std::string &word) {
-        return word == "framework" || word == "path" ||
+        return word == "framework" || word == "path" || word == "source" ||
                word == "macos" || word == "linux" || word == "windows";
     };
     if (!isQualifier(peek(1).value)) return false;
@@ -1284,6 +1319,7 @@ std::unique_ptr<StatementNode> Parser::parseExternDeclaration()
 
 // link "raylib";              link framework "Cocoa";     link path "/opt/homebrew/lib";
 // link linux "GL";            link macos framework "IOKit";
+// link source "mylib.c";      link linux source "posix_bits.c";
 std::unique_ptr<StatementNode> Parser::parseLinkDirective()
 {
     advance(); // "link"
@@ -1296,6 +1332,7 @@ std::unique_ptr<StatementNode> Parser::parseLinkDirective()
         const std::string &word = peek().value;
         if (word == "framework")      kind = LinkDirectiveNode::Kind::Framework;
         else if (word == "path")      kind = LinkDirectiveNode::Kind::SearchPath;
+        else if (word == "source")    kind = LinkDirectiveNode::Kind::Source;
         else if (word == "macos")     platform = LinkDirectiveNode::Platform::MacOS;
         else if (word == "linux")     platform = LinkDirectiveNode::Platform::Linux;
         else if (word == "windows")   platform = LinkDirectiveNode::Platform::Windows;

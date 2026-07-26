@@ -56,6 +56,10 @@ private:
     // Builds the correct assignment statement node for the given target expression
     std::unique_ptr<StatementNode> makeAssignmentStatement(std::unique_ptr<ExpressionNode> target,
                                                            std::unique_ptr<ExpressionNode> value);
+    // Builds `target op= value`, keeping the target's subexpressions evaluated once
+    std::unique_ptr<StatementNode> makeCompoundAssignmentStatement(
+        std::unique_ptr<ExpressionNode> target, BinaryExpressionNode::Operator op,
+        std::unique_ptr<ExpressionNode> rhs, size_t targetStart);
     // Parses "(params): returnType { body }" after a function name/key
     std::unique_ptr<FunctionDeclarationNode> parseFunctionRest(const std::string& name);
     // Arrow functions: x => expr, (a, b) => expr, (a: i32): i32 => { ... }

@@ -6,6 +6,7 @@
 #include <memory>
 #include <filesystem>
 #include <chrono>
+#include <cctype>
 
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/FileSystem.h"
@@ -293,9 +294,13 @@ std::string shellQuote(const std::string& arg) {
 #endif
 }
 
-// Turns the program's own `link ...;` directives into clang++ flags, skipping
-// any that are qualified for a different platform.
-std::vector<std::string> collectLinkFlags(const ProgramNode* astRoot) {
+// Turns the program's own `link ...;` directives into clang++ arguments, skipping
+// any that are qualified for a different platform. `link source "x.c";` yields a
+// path, so the C file is compiled together with the program — no separate build
+// step, no library to produce first.
+std::vector<std::string> collectLinkFlags(const ProgramNode* astRoot,
+                                          const fs::path& sourceDir = fs::path(),
+                                          std::vector<std::string>* nativeSources = nullptr) {
     std::vector<std::string> flags;
     if (!astRoot) return flags;
 
@@ -325,6 +330,23 @@ std::vector<std::string> collectLinkFlags(const ProgramNode* astRoot) {
             case LinkDirectiveNode::Kind::SearchPath:
                 flags.push_back("-L" + link->value);
                 break;
+            case LinkDirectiveNode::Kind::Source: {
+                // Relative to the program being compiled, so a project keeps its
+                // native sources beside its .csc files; falls back to the cwd.
+                fs::path candidate = link->value;
+                if (candidate.is_relative() && !sourceDir.empty()) {
+                    fs::path beside = sourceDir / candidate;
+                    if (fs::exists(beside)) candidate = beside;
+                }
+                if (!fs::exists(candidate)) {
+                    throw std::runtime_error(
+                        "link source: file not found: " + link->value +
+                        (sourceDir.empty() ? "" : " (looked in " + sourceDir.string() +
+                                                  " and the working directory)"));
+                }
+                if (nativeSources) nativeSources->push_back(candidate.string());
+                break;
+            }
         }
     }
     return flags;
@@ -406,6 +428,36 @@ fs::path createBundle(const fs::path& executable, const fs::path& sourceFile,
         llvm::outs() << "Bundled assets from " << assets.string() << "\n";
     }
     return bundle;
+}
+
+// Compiles one C/C++/Objective-C file to an object file. Each source gets its
+// own invocation because a single clang++ command cannot give a .c file C rules
+// and a .cpp file C++17 at the same time — mixing them is how `link source` used
+// to fail on ordinary C like `char *p = malloc(n);`.
+std::string compileNativeSource(const std::string& source, bool verbose) {
+    fs::path path(source);
+    std::string extension = path.extension().string();
+    for (char& c : extension) c = static_cast<char>(std::tolower(c));
+
+    bool isCxx = (extension == ".cpp" || extension == ".cc" ||
+                  extension == ".cxx" || extension == ".mm");
+    std::string driver = isCxx ? "clang++" : "clang";
+    std::string standard = isCxx ? " -std=c++17" : " -std=c11";
+
+    fs::path object = fs::temp_directory_path() /
+                      (path.stem().string() + "_" +
+                       std::to_string(std::hash<std::string>{}(source)) + ".o");
+
+    std::string command = driver + " -O2 -c " + shellQuote(source) +
+                          standard + " -o " + shellQuote(object.string());
+    if (verbose) {
+        llvm::outs() << "Compiling native source: " << Colors::CYAN << command
+                     << Colors::RESET << "\n";
+    }
+    if (std::system(command.c_str()) != 0) {
+        throw std::runtime_error("Failed to compile native source: " + source);
+    }
+    return object.string();
 }
 
 class Timer {
@@ -718,7 +770,19 @@ int main(int argc, char** argv) {
 
             // Libraries the program asked for itself via `link "raylib";`, followed
             // by anything passed on the command line (which therefore wins).
-            std::vector<std::string> sourceLinkFlags = collectLinkFlags(astRoot.get());
+            std::vector<std::string> nativeSources;
+            std::vector<std::string> sourceLinkFlags =
+                collectLinkFlags(astRoot.get(), fs::path(opts.inputFile).parent_path(),
+                                 &nativeSources);
+
+            // `link source "x.c";` — compile each one first, then link the objects
+            std::vector<std::string> nativeObjects;
+            for (const std::string& source : nativeSources) {
+                nativeObjects.push_back(compileNativeSource(source, opts.verbose));
+            }
+            for (const std::string& object : nativeObjects) {
+                compileCmd += " " + shellQuote(object);
+            }
             if (!sourceLinkFlags.empty() || !opts.linkFlags.empty()) {
                 // Our own lib/ dir, so `link "cypescript_game";` resolves without
                 // the program needing to know where cscript was installed.
@@ -748,6 +812,13 @@ int main(int argc, char** argv) {
             }
             
             int result = std::system(compileCmd.c_str());
+
+            // The objects were only ever scratch space for this link
+            for (const std::string& object : nativeObjects) {
+                std::error_code ec;
+                fs::remove(object, ec);
+            }
+
             if (result != 0) {
                 printError("Failed to compile executable");
                 return 1;

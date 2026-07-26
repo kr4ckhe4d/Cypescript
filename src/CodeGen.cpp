@@ -1303,6 +1303,70 @@ void CodeGen::visit(AssignmentStatementNode *node)
     m_builder.CreateStore(value, varAlloca);
 }
 
+// Loads one element from an already-evaluated array pointer and index.
+llvm::Value *CodeGen::emitArrayLoad(llvm::Value *arrayValue, llvm::Value *indexValue,
+                                    const std::string &elemType)
+{
+    llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+    llvm::Type *i32Ty = llvm::Type::getInt32Ty(m_context);
+    llvm::Value *index = coerceValue(indexValue, i32Ty);
+
+    llvm::FunctionCallee getFunc;
+    if (isObjectTypeName(elemType)) {
+        getFunc = m_module->getOrInsertFunction("array_get_object", charPtr, charPtr, i32Ty);
+    } else if (elemType == "string") {
+        getFunc = m_module->getOrInsertFunction("array_get_string", charPtr, charPtr, i32Ty);
+    } else if (elemType == "f64") {
+        getFunc = m_module->getOrInsertFunction("array_get_f64",
+            llvm::Type::getDoubleTy(m_context), charPtr, i32Ty);
+    } else {
+        getFunc = m_module->getOrInsertFunction("array_get_i32", i32Ty, charPtr, i32Ty);
+    }
+    return m_builder.CreateCall(getFunc, {arrayValue, index}, "compound_load");
+}
+
+// Applies a binary operator to two already-generated values. Used by compound
+// assignment, which cannot go through visit(BinaryExpressionNode) because its
+// operands are values rather than AST nodes.
+llvm::Value *CodeGen::emitBinaryOp(BinaryExpressionNode::Operator op,
+                                   llvm::Value *lhs, llvm::Value *rhs)
+{
+    // String concatenation, matching `+` on strings elsewhere
+    if (op == BinaryExpressionNode::ADD &&
+        (lhs->getType()->isPointerTy() || rhs->getType()->isPointerTy())) {
+        llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+        llvm::FunctionCallee concatFunc =
+            m_module->getOrInsertFunction("string_concat", charPtr, charPtr, charPtr);
+        return m_builder.CreateCall(concatFunc, {toStringValue(lhs), toStringValue(rhs)}, "concat");
+    }
+
+    if (lhs->getType()->isDoubleTy() || rhs->getType()->isDoubleTy()) {
+        llvm::Type *doubleTy = llvm::Type::getDoubleTy(m_context);
+        lhs = coerceValue(lhs, doubleTy);
+        rhs = coerceValue(rhs, doubleTy);
+        switch (op) {
+            case BinaryExpressionNode::ADD:      return m_builder.CreateFAdd(lhs, rhs, "faddtmp");
+            case BinaryExpressionNode::SUBTRACT: return m_builder.CreateFSub(lhs, rhs, "fsubtmp");
+            case BinaryExpressionNode::MULTIPLY: return m_builder.CreateFMul(lhs, rhs, "fmultmp");
+            case BinaryExpressionNode::DIVIDE:   return m_builder.CreateFDiv(lhs, rhs, "fdivtmp");
+            case BinaryExpressionNode::MODULO:   return m_builder.CreateFRem(lhs, rhs, "fremtmp");
+            default: throw std::runtime_error("Codegen Error: unsupported compound operator");
+        }
+    }
+
+    llvm::Type *i32Ty = llvm::Type::getInt32Ty(m_context);
+    lhs = coerceValue(lhs, i32Ty);
+    rhs = coerceValue(rhs, i32Ty);
+    switch (op) {
+        case BinaryExpressionNode::ADD:      return m_builder.CreateAdd(lhs, rhs, "addtmp");
+        case BinaryExpressionNode::SUBTRACT: return m_builder.CreateSub(lhs, rhs, "subtmp");
+        case BinaryExpressionNode::MULTIPLY: return m_builder.CreateMul(lhs, rhs, "multmp");
+        case BinaryExpressionNode::DIVIDE:   return m_builder.CreateSDiv(lhs, rhs, "divtmp");
+        case BinaryExpressionNode::MODULO:   return m_builder.CreateSRem(lhs, rhs, "remtmp");
+        default: throw std::runtime_error("Codegen Error: unsupported compound operator");
+    }
+}
+
 void CodeGen::visit(ArrayAssignmentStatementNode *node)
 {
     // Generate code for the array expression (should be a variable)
@@ -1322,15 +1386,15 @@ void CodeGen::visit(ArrayAssignmentStatementNode *node)
     if (!valueToAssign) {
         throw std::runtime_error("Codegen Error: Failed to generate value for array assignment");
     }
-    
+
     // Ensure index is an integer
     if (!indexValue->getType()->isIntegerTy()) {
         throw std::runtime_error("Codegen Error: Array index must be an integer");
     }
-    
+
     // Determine element type by looking up the variable type
     std::string elemType = "i32"; // default
-    
+
     // Try to get the variable name from the array expression
     if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(node->array.get())) {
         auto typeIt = variableTypes.find(varExpr->name);
@@ -1342,7 +1406,14 @@ void CodeGen::visit(ArrayAssignmentStatementNode *node)
             }
         }
     }
-    
+
+    // `a[i] += v`: read the current element through the array and index we have
+    // already computed, so neither is evaluated a second time.
+    if (node->isCompound) {
+        llvm::Value *current = emitArrayLoad(arrayValue, indexValue, elemType);
+        valueToAssign = emitBinaryOp(node->compoundOp, current, valueToAssign);
+    }
+
     // Check if arrayValue is a pointer type
     if (!arrayValue->getType()->isPointerTy()) {
         throw std::runtime_error("Codegen Error: Array assignment requires a pointer type");
@@ -4476,6 +4547,18 @@ void CodeGen::visit(ObjectPropertyAssignmentNode *node)
     llvm::Value *value = visit(node->value.get());
     if (!value) {
         throw std::runtime_error("Codegen Error: Failed to generate value for property assignment");
+    }
+
+    // `obj.prop += v`: read through the struct pointer we already have, so the
+    // object expression is not evaluated a second time.
+    if (node->isCompound) {
+        llvm::Value *current = objectOptimizer.generateDirectPropertyAccess(
+            m_builder, structPtr, node->property, layout);
+        if (!current) {
+            throw std::runtime_error("Codegen Error: Failed to read property '" +
+                                     node->property + "' for compound assignment");
+        }
+        value = emitBinaryOp(node->compoundOp, current, value);
     }
     value = coerceValue(value, layout.properties[idxIt->second].second.type);
 

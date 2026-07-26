@@ -202,6 +202,12 @@ private:
     llvm::Value *toStringValue(llvm::Value *val);
     // Coerces a value to the target type (i1<->i32, i32<->f64)
     llvm::Value *coerceValue(llvm::Value *val, llvm::Type *targetType);
+    // Loads one element from an already-evaluated array pointer and index
+    llvm::Value *emitArrayLoad(llvm::Value *arrayValue, llvm::Value *indexValue,
+                               const std::string &elemType);
+    // Applies a binary operator to two already-generated values (compound assignment)
+    llvm::Value *emitBinaryOp(BinaryExpressionNode::Operator op,
+                              llvm::Value *lhs, llvm::Value *rhs);
     // Declares _setjmp with the returns_twice attribute
     llvm::FunctionCallee getOrDeclareSetjmp();
     // Emits a branch to `target` and re-anchors the builder in a dead block

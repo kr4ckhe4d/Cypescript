@@ -100,11 +100,39 @@ let block: ptr = malloc(64);
 free(block);
 ```
 
-Bind a C-style API under a name that reads well, and ask for the library from source:
+### Your own C, with no build step
+
+Point at a C or C++ file and `cscript` compiles it with your program. No library
+to build first, no headers to write, no makefile, no wrapper script:
+
+```ts
+link source "native/stats.c";        // path is relative to this .csc file
+
+declare function stats_sum(values: ptr, count: i32): i32;
+declare function acc_new(): ptr;     // opaque handles need no type on our side
+```
+
+```bash
+cscript -r myprogram.csc             # that's the whole workflow
+```
+
+Each source is compiled with the driver its language needs — a `.c` file gets C
+rules, a `.cpp` file gets C++17 — so ordinary C like `char *p = malloc(n);` just
+works. `.m` and `.mm` are handled too. See [example/21_c_interop.csc](example/21_c_interop.csc).
+
+Bind a C-style API under a name that reads well, and ask for a system library:
 
 ```ts
 link "raylib";
 declare function drawCircle(x: f64, y: f64, r: f64, color: i32): void = "cyps_circle";
+```
+
+Link directives can be platform-qualified, so one file describes every OS:
+
+```ts
+link macos framework "Cocoa";
+link linux "GL";
+link windows "opengl32";
 ```
 
 ---

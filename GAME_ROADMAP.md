@@ -23,6 +23,9 @@ Started 2026-07-25 against `main` @ `06e8d87` (v1.0.0).
 `example/game/02_asteroids.csc` is written in idiomatic Cypescript, runs at 60 fps with
 flat memory, and `cscript --bundle` turns it into a double-clickable `.app`.
 
+Work continues in **[LANGUAGE_ROADMAP.md](LANGUAGE_ROADMAP.md)** (Phase 7 onward), which
+shifts focus from capability to safety — chiefly a real type checker.
+
 **Milestones reached:** M1 (a window opened from Cypescript), M2 (a playable
 60 fps Breakout), and M3 (Asteroids with real entity objects — spawned by
 functions, stored in `Rock[]`/`Bullet[]`, split on impact, removed when they die).

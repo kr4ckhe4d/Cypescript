@@ -407,7 +407,12 @@ public:
     std::unique_ptr<ExpressionNode> array;
     std::unique_ptr<ExpressionNode> index;
     std::unique_ptr<ExpressionNode> value;
-    
+    // For `a[i] += v`: the operator, with `value` holding only the right-hand
+    // side. Carrying it here rather than desugaring to `a[i] = a[i] + v` is what
+    // keeps the array and index expressions evaluated exactly once.
+    bool isCompound = false;
+    BinaryExpressionNode::Operator compoundOp = BinaryExpressionNode::ADD;
+
     ArrayAssignmentStatementNode(std::unique_ptr<ExpressionNode> arr, 
                                 std::unique_ptr<ExpressionNode> idx, 
                                 std::unique_ptr<ExpressionNode> val)
@@ -670,11 +675,13 @@ public:
 //     link macos framework "Cocoa";
 //     link linux "GL";
 //     link windows "opengl32";
+// `link source "mylib.c";` compiles a C/C++ file alongside the program, so using
+// your own native code needs no separate build step or library.
 // Collected by the driver and turned into flags on the final clang++ invocation.
 class LinkDirectiveNode : public StatementNode
 {
 public:
-    enum class Kind { Library, Framework, SearchPath };
+    enum class Kind { Library, Framework, SearchPath, Source };
     enum class Platform { Any, MacOS, Linux, Windows };
 
     Kind kind;
@@ -688,7 +695,8 @@ public:
     {
         printIndent(os, indent);
         const char *kindName = kind == Kind::Library ? "library"
-                             : kind == Kind::Framework ? "framework" : "path";
+                             : kind == Kind::Framework ? "framework"
+                             : kind == Kind::Source ? "source" : "path";
         const char *platformName = platform == Platform::Any ? ""
                                  : platform == Platform::MacOS ? "macos "
                                  : platform == Platform::Linux ? "linux " : "windows ";
@@ -703,6 +711,9 @@ public:
     std::unique_ptr<ExpressionNode> object;
     std::string property;
     std::unique_ptr<ExpressionNode> value;
+    // For `obj.prop += v` — see ArrayAssignmentStatementNode for why
+    bool isCompound = false;
+    BinaryExpressionNode::Operator compoundOp = BinaryExpressionNode::ADD;
 
     ObjectPropertyAssignmentNode(std::unique_ptr<ExpressionNode> obj, std::string prop,
                                  std::unique_ptr<ExpressionNode> val)
