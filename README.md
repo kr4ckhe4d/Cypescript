@@ -107,6 +107,7 @@ to build first, no headers to write, no makefile, no wrapper script:
 
 ```ts
 link source "native/stats.c";        // path is relative to this .csc file
+link include "vendor/include";       // headers that C file needs
 
 declare function stats_sum(values: ptr, count: i32): i32;
 declare function acc_new(): ptr;     // opaque handles need no type on our side
@@ -305,6 +306,69 @@ try {
     println("done");
 }
 ```
+
+**Enums**, so key codes and entity kinds stop being magic numbers — members fold to
+integers at parse time, so they cost nothing at runtime:
+
+```ts
+enum Status { Ok = 0, Warn = 10, Error, Fatal }   // 10, 11, 12 — continues
+
+let s: Status = Status.Error;
+switch (s) {
+    case Status.Fatal: println("fatal"); break;
+    default:           println("fine");
+}
+```
+
+**Classes with inheritance and virtual dispatch** — the method that runs follows the
+object's runtime class, not the type at the call site:
+
+```ts
+class Shape  { area(): f64 { return 0.0; } }
+class Circle extends Shape {
+    r: f64 = 1.0;
+    constructor(r: f64) { super(); this.r = r; }
+    area(): f64 { return Math.PI * this.r * this.r; }
+}
+
+let shapes: Shape[] = [];
+shapes.push(new Circle(2.0));
+for (const s of shapes) { println(s.area()); }   // 12.5664
+```
+
+**`Buffer<T>` for hot loops** — a fixed-size block indexed inline rather than through the
+runtime, which also lets LLVM vectorise:
+
+```ts
+let tiles = new Buffer<i32>(width * height);
+tiles[0] = 42;
+tiles[5] += 1;
+```
+
+Over 1.6 billion element updates: **0.07s vs 2.60s** for the equivalent `i32[]` loop.
+`T[]` is still the growable list; a buffer is fixed-size and *not* bounds-checked.
+
+**Union types and `implements`** — a class can declare what it satisfies, and a nullable
+handle is a real type:
+
+```ts
+interface Drawable { x: f64; draw(): void; }
+
+class Sprite implements Drawable {     // verified, not just documentation
+    x: f64 = 0.0;
+    draw(): void { println("drawing"); }
+}
+
+function find(key: string): Node | null {
+    return null;
+}
+
+let found: Node | null = find("a");
+if (found != null) { println(found.value); }
+```
+
+Union members must share a machine representation — `Shape | null` and `i32 | f64` work,
+`string | i32` is rejected with an explanation rather than silently reinterpreted.
 
 **Bitwise operators, hex literals and sized numeric types** for packing and C interop:
 
@@ -1111,8 +1175,8 @@ Typical minute changes when porting a `.ts` file:
 | `x++` as an *expression* (`arr[i++]`) | statement-level `x++` only |
 | closures mutating captured primitives | capture an object instead (by-value snapshots) |
 | `import` from npm packages | only local `./file.csc` module imports, plus bundled ones |
-| union types (`string \| number`) | not implemented |
-| `implements` on a class | interfaces are checked structurally, not declared |
+| union types mixing representations (`string \| number`) | same-representation unions only (`Shape \| null`, `i32 \| f64`) |
+| strict null checks | `null` fits any handle; `T \| null` states intent |
 | `number` for integer loops (slow) | use `i32` for integer math (fast) |
 
 See `example/18_bfs_graph.csc` vs `example/18_bfs_graph.ts` — the BFS algorithm

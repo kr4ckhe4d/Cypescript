@@ -122,6 +122,14 @@ private:
     // elements. Indexing compiles to a GEP and a load/store rather than a call
     // into the runtime, which is what the tilemap and pixel paths need.
     // Layout: [0..8) length, [16..) data — 16 keeps f64 elements aligned.
+    // --- Unions ---
+    // A union is only representable when its members share a representation:
+    // pointer-like members become a pointer, numeric members the widest numeric.
+    // Mixing the two has no single LLVM type and is rejected rather than
+    // silently reinterpreted.
+    static bool isUnionType(const std::string &typeName);
+    static std::vector<std::string> unionMembers(const std::string &typeName);
+
     static bool isBufferType(const std::string &typeName);
     static std::string bufferElementType(const std::string &typeName);
     // Address of element `index` within a buffer

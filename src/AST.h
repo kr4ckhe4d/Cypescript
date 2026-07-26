@@ -1175,6 +1175,10 @@ class ClassDeclarationNode : public StatementNode
 public:
     std::string className;
     std::string parentClass;                           // from `extends`, empty if none
+    // From `implements A, B` — checked by the semantic pass. Interfaces stay
+    // structural, so this declares an intent that is verified rather than
+    // changing how conformance works.
+    std::vector<std::string> implementsInterfaces;
     std::unique_ptr<ObjectLiteralNode> objectTemplate; // fields (with defaults) + methods
     bool hasConstructor = false;
 
@@ -1192,6 +1196,9 @@ public:
         printIndent(os, indent);
         os << "ClassDeclarationNode: " << className;
         if (!parentClass.empty()) os << " extends " << parentClass;
+        for (size_t i = 0; i < implementsInterfaces.size(); ++i) {
+            os << (i == 0 ? " implements " : ", ") << implementsInterfaces[i];
+        }
         os << "\n";
         if (objectTemplate) objectTemplate->printNode(os, indent + 1);
     }

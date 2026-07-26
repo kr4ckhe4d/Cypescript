@@ -145,6 +145,35 @@ void CodeGen::branchAndSealBlock(llvm::BasicBlock *target, const std::string& de
 
 llvm::Type *CodeGen::getLLVMType(const std::string &typeName)
 {
+    if (isUnionType(typeName)) {
+        // Every member must agree on a representation. `null` is compatible with
+        // any pointer, so it does not constrain the choice.
+        bool anyPointer = false, anyNumeric = false, anyDouble = false;
+        for (const auto &member : unionMembers(typeName)) {
+            if (member == "null") continue;
+            llvm::Type *memberType = getLLVMType(member);
+            if (memberType->isPointerTy()) anyPointer = true;
+            else if (memberType->isDoubleTy() || memberType->isFloatTy()) {
+                anyNumeric = true; anyDouble = true;
+            } else if (memberType->isIntegerTy()) anyNumeric = true;
+            else {
+                throw std::runtime_error("Codegen Error: type '" + member +
+                    "' cannot appear in a union");
+            }
+        }
+        if (anyPointer && anyNumeric) {
+            throw std::runtime_error(
+                "Codegen Error: union '" + typeName + "' mixes pointer and numeric "
+                "members, which have no shared representation. Unions are limited to "
+                "members that share one — e.g. 'Shape | null' or 'i32 | f64'.");
+        }
+        if (anyPointer || (!anyPointer && !anyNumeric)) {
+            return llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+        }
+        return anyDouble ? llvm::Type::getDoubleTy(m_context)
+                         : llvm::Type::getInt32Ty(m_context);
+    }
+
     if (typeName == "string" || typeName == "json")
     {
         // In LLVM 20+, use PointerType::get instead of getInt8PtrTy
@@ -2448,6 +2477,23 @@ std::string CodeGen::arrayTypeOfExpression(ExpressionNode *expr) {
     return "";
 }
 
+bool CodeGen::isUnionType(const std::string &typeName) {
+    return typeName.find('|') != std::string::npos;
+}
+
+std::vector<std::string> CodeGen::unionMembers(const std::string &typeName) {
+    std::vector<std::string> members;
+    size_t start = 0;
+    while (true) {
+        size_t bar = typeName.find('|', start);
+        members.push_back(typeName.substr(start, bar == std::string::npos
+                                                 ? std::string::npos : bar - start));
+        if (bar == std::string::npos) break;
+        start = bar + 1;
+    }
+    return members;
+}
+
 bool CodeGen::isBufferType(const std::string &typeName) {
     return typeName.rfind("Buffer<", 0) == 0 && typeName.back() == '>';
 }
@@ -2515,6 +2561,18 @@ bool CodeGen::isNonStringPointer(ExpressionNode *expr) {
 }
 
 std::string CodeGen::objectKeyForTypeName(const std::string &typeName) {
+    // `Node | null` is a Node as far as layout goes. More generally, a union with
+    // exactly one non-null member resolves to that member.
+    if (isUnionType(typeName)) {
+        std::string only;
+        for (const auto &member : unionMembers(typeName)) {
+            if (member == "null") continue;
+            if (!only.empty()) return "";   // genuinely ambiguous
+            only = member;
+        }
+        return only.empty() ? "" : objectKeyForTypeName(only);
+    }
+
     auto classIt = classes.find(typeName);
     if (classIt != classes.end() && classIt->second->objectTemplate) {
         return "opt_obj_" +
@@ -3170,11 +3228,16 @@ llvm::Value *CodeGen::visit(MethodCallNode *node)
 
         std::string parentKey = objectKeyForTypeName(currentIt->second->parentClass);
         auto parentMethods = objectMethods.find(parentKey);
-        if (parentMethods == objectMethods.end() ||
-            !parentMethods->second.count(node->methodName)) {
+        bool parentHasIt = parentMethods != objectMethods.end() &&
+                           parentMethods->second.count(node->methodName) > 0;
+        if (!parentHasIt) {
+            // `super()` against a parent with no constructor is a no-op, as it
+            // is in TypeScript — the parent's field defaults are already in the
+            // subclass's layout. Any other missing member is a real error.
+            if (node->methodName == "constructor") return nullptr;
             throw std::runtime_error("Codegen Error: Parent class '" +
                 currentIt->second->parentClass + "' has no method '" +
-                (node->methodName == "constructor" ? "constructor" : node->methodName) + "'");
+                node->methodName + "'");
         }
 
         // `this` is whatever the enclosing method received. The parent's body is

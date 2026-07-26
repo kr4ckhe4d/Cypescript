@@ -140,6 +140,25 @@ SemanticAnalyzer::TypeCategory SemanticAnalyzer::categoryOf(const std::string &t
     return TypeCategory::Handle;
 }
 
+bool SemanticAnalyzer::isUnionType(const std::string &typeName)
+{
+    return typeName.find('|') != std::string::npos;
+}
+
+std::vector<std::string> SemanticAnalyzer::unionMembers(const std::string &typeName)
+{
+    std::vector<std::string> members;
+    size_t start = 0;
+    while (true) {
+        size_t bar = typeName.find('|', start);
+        members.push_back(typeName.substr(start, bar == std::string::npos
+                                                 ? std::string::npos : bar - start));
+        if (bar == std::string::npos) break;
+        start = bar + 1;
+    }
+    return members;
+}
+
 bool SemanticAnalyzer::isClassOrSubclassOf(const std::string &candidate,
                                            const std::string &base) const
 {
@@ -158,6 +177,25 @@ bool SemanticAnalyzer::isAssignable(const std::string &target, const std::string
 {
     if (target.empty() || source.empty()) return true;   // unknown: stay quiet
     if (target == source) return true;
+
+    // A union accepts anything that fits one of its members...
+    if (isUnionType(target)) {
+        for (const auto &member : unionMembers(target)) {
+            if (isAssignable(member, source)) return true;
+        }
+        return false;
+    }
+    // ...and fits a target only if every one of its members does
+    if (isUnionType(source)) {
+        for (const auto &member : unionMembers(source)) {
+            if (!isAssignable(target, member)) return false;
+        }
+        return true;
+    }
+
+    // `null` as a *target* only accepts null. Without this it looked like a
+    // plain handle, so `A | null = new B()` was accepted via the null member.
+    if (target == "null") return source == "null";
 
     // null fits anywhere a pointer does
     if (source == "null") {
@@ -354,6 +392,47 @@ const std::map<std::string, std::string> *SemanticAnalyzer::membersOf(Expression
     return nullptr;   // classes are checked via m_classFields/m_classMethods below
 }
 
+// `class C implements I` states an intent; this is where it is verified.
+// Interfaces remain structural — a class may still satisfy one without naming
+// it — but naming one and not satisfying it is now an error rather than a
+// surprise at the first assignment.
+void SemanticAnalyzer::checkImplementsClauses(
+    const std::vector<std::unique_ptr<StatementNode>> &statements)
+{
+    for (const auto &stmt : statements) {
+        auto *classDecl = dynamic_cast<ClassDeclarationNode*>(stmt.get());
+        if (!classDecl || classDecl->implementsInterfaces.empty()) continue;
+
+        const auto &fields = m_classFields[classDecl->className];
+        const auto &methods = m_classMethods[classDecl->className];
+
+        for (const auto &interfaceName : classDecl->implementsInterfaces) {
+            auto interfaceIt = m_interfaceMembers.find(interfaceName);
+            if (interfaceIt == m_interfaceMembers.end()) {
+                fail(classDecl, "Class '" + classDecl->className +
+                                "' implements unknown interface '" + interfaceName + "'");
+            }
+            for (const auto &member : interfaceIt->second) {
+                auto fieldIt = fields.find(member.first);
+                bool hasField = fieldIt != fields.end();
+                bool hasMethod = methods.count(member.first) > 0;
+                if (!hasField && !hasMethod) {
+                    fail(classDecl, "Class '" + classDecl->className +
+                                    "' does not implement '" + member.first +
+                                    "' required by interface '" + interfaceName + "'");
+                }
+                // Types only have to agree when both are actually known
+                if (hasField && !isAssignable(member.second, fieldIt->second)) {
+                    fail(classDecl, "Class '" + classDecl->className + "' declares '" +
+                                    member.first + "' as '" + fieldIt->second +
+                                    "', but interface '" + interfaceName +
+                                    "' requires '" + member.second + "'");
+                }
+            }
+        }
+    }
+}
+
 void SemanticAnalyzer::analyzeExpression(ExpressionNode *expr)
 {
     if (!expr) return;
@@ -414,6 +493,16 @@ void SemanticAnalyzer::analyzeExpression(ExpressionNode *expr)
         // `.length` is valid on arrays and strings, never a declared member
         if (objAccess->property != "length") {
             std::string objectType = typeOf(objAccess->object.get());
+            // A union with one non-null member reads as that member
+            if (isUnionType(objectType)) {
+                std::string only;
+                for (const auto &member : unionMembers(objectType)) {
+                    if (member == "null") continue;
+                    if (!only.empty()) { only.clear(); break; }
+                    only = member;
+                }
+                objectType = only;
+            }
             if (m_classNames.count(objectType)) {
                 auto classFieldsIt = m_classFields.find(objectType);
                 auto classMethodsIt = m_classMethods.find(objectType);
@@ -675,6 +764,7 @@ void SemanticAnalyzer::analyze(ProgramNode *program)
             foldInheritedMembers(entry.first, m_classParents, m_interfaceMembers, memberVisiting);
         }
     }
+    checkImplementsClauses(program->statements);
     analyzeStatementList(program->statements);
     popScope();
 }

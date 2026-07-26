@@ -89,11 +89,18 @@ private:
     bool isAssignable(const std::string &target, const std::string &source) const;
     // Is `candidate` the same class as `base`, or a subclass of it?
     bool isClassOrSubclassOf(const std::string &candidate, const std::string &base) const;
+    // Union helpers: "A|B" is satisfied by anything fitting one member, and
+    // satisfies a target only if every member does
+    static bool isUnionType(const std::string &typeName);
+    static std::vector<std::string> unionMembers(const std::string &typeName);
     // Reports a mismatch at `node` unless the two types are compatible
     void checkAssignable(const ASTNode *node, const std::string &target,
                          const std::string &source, const std::string &context);
     // Element type of an array type ("i32[]" -> "i32"), or "" if not an array
     static std::string elementTypeOf(const std::string &arrayType);
+
+    // Verifies a class declares everything the interfaces it names require
+    void checkImplementsClauses(const std::vector<std::unique_ptr<StatementNode>> &statements);
 
     void hoistDeclarations(const std::vector<std::unique_ptr<StatementNode>> &statements);
     void analyzeStatement(StatementNode *stmt);

@@ -398,6 +398,16 @@ std::unique_ptr<StatementNode> Parser::parseClassDeclaration()
         advance();
         classNode->parentClass = consume(TOK_IDENTIFIER, "Expected parent class name").value;
     }
+    // `implements` is contextual, so it stays usable as an ordinary identifier
+    if (peek().type == TOK_IDENTIFIER && peek().value == "implements") {
+        advance();
+        do {
+            classNode->implementsInterfaces.push_back(
+                consume(TOK_IDENTIFIER, "Expected interface name after 'implements'").value);
+            if (peek().type == TOK_COMMA) advance();
+            else break;
+        } while (!isAtEnd());
+    }
     consume(TOK_LBRACE, "Expected '{' after class name");
 
     while (peek().type != TOK_RBRACE && !isAtEnd()) {
@@ -1233,6 +1243,13 @@ std::string Parser::parseType() {
         consume(TOK_GREATER, "Expected '>'"); typeName += ">";
     }
     while (peek().type == TOK_LBRACKET) { advance(); consume(TOK_RBRACKET, "Expected ']'"); typeName += "[]"; }
+
+    // Union: A | B | C, canonicalised as "A|B|C". `|` is unambiguous here,
+    // since a type position can never contain a bitwise-or expression.
+    while (peek().type == TOK_PIPE) {
+        advance();
+        typeName += "|" + parseType();
+    }
     return typeName;
 }
 

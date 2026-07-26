@@ -6,7 +6,7 @@ One place to see what is done, what is next, and what is deliberately not being 
 > `SHIPPING_BLOCKERS.md`, `progress.md`, `NATIVE_OBJECTS_ROADMAP.md` and
 > `OPTIMIZATION_ROADMAP.md`. Their full text is in git history.
 
-**Current state:** 58/58 language tests, 14/14 game tests, 23 examples, benchmarks at
+**Current state:** 63/63 language tests, 14/14 game tests, 23 examples, benchmarks at
 Rust parity (0.051s primes, 0.025s fib(35)). CI green on macOS and Linux.
 
 ---
@@ -16,10 +16,9 @@ Rust parity (0.051s primes, 0.025s fib(35)). CI green on macOS and Linux.
 | # | Item | Why it matters | Size |
 |---|---|---|---|
 | 1 | **Windows validation** | The only platform never verified. CI job exists, `workflow_dispatch`-only. Needs a Windows machine. | Unknown |
-| 2 | **Union types** (`string \| number`) | The largest remaining TypeScript gap | Large |
-| 3 | **`implements` on a class** | Interfaces are structural only; a class cannot declare conformance | Medium |
-| 4 | **`x++` as an expression** (`arr[i++]`) | Statement-level only today | Small |
-| 5 | **By-reference closure captures** | Captures are by-value snapshots; mutating a captured primitive doesn't propagate | Medium |
+| 2 | **`x++` as an expression** (`arr[i++]`) | Statement-level only today | Small |
+| 3 | **By-reference closure captures** | Captures are by-value snapshots; mutating a captured primitive doesn't propagate | Medium |
+| 4 | **Mixed-representation unions** | `string \| i32` needs a tagged value and `typeof` narrowing | Large |
 
 ### Windows — what is known
 
@@ -52,6 +51,7 @@ only rather than staying permanently red. In likely order of breakage:
 | Modules | `import`/`export` by path, plus bundled modules by bare name |
 | FFI | `declare function`, `link`, `link source`, `link include`, platform qualifiers |
 | Buffers | `Buffer<T>` — fixed-size, indexed inline with no runtime call |
+| Unions | `T \| null` and other same-representation unions; `implements` on a class |
 | Checking | Scoping, arity, `const`, **types** at declarations/assignments/returns/arguments, and **property names** against classes, interfaces and object literals |
 
 ### Games (Phases 1–6, all complete)
@@ -101,8 +101,8 @@ These are decisions, not omissions.
   the no-pause performance story that the benchmarks exist to protect.
 - **No automatic free on removal.** Taking an entity out of an array does not free it —
   other references may still point at it. Pool and reuse instead.
-- **Interfaces stay structural.** Conformance is checked by shape, not declared. A class may
-  satisfy an interface without naming it.
+- **Interfaces stay structural.** Conformance is checked by shape. `implements` declares an
+  intent that is *verified*, but a class may still satisfy an interface without naming one.
 - **The compiler never learns about graphics.** See the games section.
 
 ---
@@ -112,6 +112,9 @@ These are decisions, not omissions.
 | Limitation | Detail |
 |---|---|
 | No narrowing check | `let n: i32 = someF64;` is allowed because codegen coerces it. TypeScript would reject it; tightening needs a survey of existing code |
+| Unions need a shared representation | `Shape \| null` and `i32 \| f64` work; `string \| i32` is rejected with an explanation. A mixed union needs a tagged value and `typeof` narrowing |
+| `null` fits any handle | There is no strict-null mode, so `let c: C = null;` is legal and `T \| null` is about intent rather than enforcement |
+| Buffers are not bounds-checked | `T[]` returns 0 out of range; a `Buffer<T>` reads or writes past its allocation. Part of why it is faster |
 | Fixed try-nesting depth | The exception runtime allows 64 nested `try` blocks |
 | Generic functions over scalars | `id<i32>(5)` fails LLVM verification; generics work with pointer-shaped types |
 | `Map`/`Set` values | Only pointer-shaped values; `Map<string, i32>` fails |
@@ -119,8 +122,8 @@ These are decisions, not omissions.
 
 ## TypeScript compatibility
 
-Not supported: union types, npm imports, `x++` as an expression, by-reference closure
-captures, `implements` on a class.
+Not supported: npm imports, `x++` as an expression, by-reference closure captures,
+mixed-representation unions (`string | number`), strict null checks.
 
 Supported with a caveat: `number` is `f64` (use `i32` for integer math);
 objects are structs, so property access is one instruction rather than a hash lookup.
