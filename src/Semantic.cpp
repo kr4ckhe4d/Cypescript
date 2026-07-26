@@ -61,6 +61,7 @@ void SemanticAnalyzer::hoistDeclarations(const std::vector<std::unique_ptr<State
             m_functions[externDecl->functionName] = signature;
         } else if (auto *classDecl = dynamic_cast<ClassDeclarationNode*>(stmt.get())) {
             m_types.insert(classDecl->className);
+            m_classNames.insert(classDecl->className);
             if (!classDecl->parentClass.empty()) {
                 m_classParents[classDecl->className] = classDecl->parentClass;
             }
@@ -77,6 +78,13 @@ void SemanticAnalyzer::hoistDeclarations(const std::vector<std::unique_ptr<State
             m_enumTypes.insert(enumDecl->enumName);
         } else if (auto *interfaceDecl = dynamic_cast<InterfaceDeclarationNode*>(stmt.get())) {
             m_types.insert(interfaceDecl->interfaceName);
+            auto &members = m_interfaceMembers[interfaceDecl->interfaceName];
+            for (const auto &member : interfaceDecl->members) {
+                members[member.name] = member.type;
+            }
+            if (!interfaceDecl->parentInterface.empty()) {
+                m_classParents[interfaceDecl->interfaceName] = interfaceDecl->parentInterface;
+            }
         } else if (auto *varDecl = dynamic_cast<VariableDeclarationNode*>(stmt.get())) {
             // Module-level variables are visible inside function bodies
             m_globals[varDecl->variableName] =
@@ -98,6 +106,10 @@ std::string SemanticAnalyzer::elementTypeOf(const std::string &arrayType)
 {
     if (arrayType.size() > 2 && arrayType.compare(arrayType.size() - 2, 2, "[]") == 0) {
         return arrayType.substr(0, arrayType.size() - 2);
+    }
+    // Buffer<T> indexes to T, same as T[] does
+    if (arrayType.rfind("Buffer<", 0) == 0 && arrayType.back() == '>') {
+        return arrayType.substr(7, arrayType.size() - 8);
     }
     return "";
 }
@@ -201,6 +213,9 @@ std::string SemanticAnalyzer::typeOf(ExpressionNode *expr)
     if (auto *newExpr = dynamic_cast<NewExpressionNode*>(expr)) {
         // Map/Set and other generics stay unknown; a class instance is its class
         if (m_types.count(newExpr->className)) return newExpr->className;
+        if (newExpr->className == "Buffer" && !newExpr->genericTypes.empty()) {
+            return "Buffer<" + newExpr->genericTypes[0] + ">";
+        }
         return "";
     }
     if (auto *call = dynamic_cast<FunctionCallNode*>(expr)) {
@@ -301,6 +316,44 @@ static void foldInheritedMembers(
     visiting.erase(className);
 }
 
+
+void SemanticAnalyzer::recordLiteralShape(ObjectLiteralNode *literal)
+{
+    if (!literal) return;
+    auto &shape = m_literalShapes[literal];
+    for (const auto &prop : literal->properties) {
+        if (prop.method) {
+            shape[prop.key] = prop.method->returnType.empty() ? "" : "";  // method: type unknown here
+        } else {
+            shape[prop.key] = typeOf(prop.value.get());
+        }
+    }
+}
+
+const std::map<std::string, std::string> *SemanticAnalyzer::membersOf(ExpressionNode *expr)
+{
+    if (!expr) return nullptr;
+
+    // A variable initialized from an object literal keeps that literal's shape
+    if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(expr)) {
+        auto shapeIt = m_variableShapes.find(varExpr->name);
+        if (shapeIt != m_variableShapes.end()) {
+            auto literalIt = m_literalShapes.find(shapeIt->second);
+            if (literalIt != m_literalShapes.end()) return &literalIt->second;
+        }
+    }
+    if (auto *literal = dynamic_cast<ObjectLiteralNode*>(expr)) {
+        auto literalIt = m_literalShapes.find(literal);
+        if (literalIt != m_literalShapes.end()) return &literalIt->second;
+    }
+
+    std::string type = typeOf(expr);
+    if (type.empty()) return nullptr;
+    auto interfaceIt = m_interfaceMembers.find(type);
+    if (interfaceIt != m_interfaceMembers.end()) return &interfaceIt->second;
+    return nullptr;   // classes are checked via m_classFields/m_classMethods below
+}
+
 void SemanticAnalyzer::analyzeExpression(ExpressionNode *expr)
 {
     if (!expr) return;
@@ -357,9 +410,31 @@ void SemanticAnalyzer::analyzeExpression(ExpressionNode *expr)
         analyzeExpression(arrAccess->index.get());
     } else if (auto *objAccess = dynamic_cast<ObjectAccessNode*>(expr)) {
         analyzeExpression(objAccess->object.get());
+
+        // `.length` is valid on arrays and strings, never a declared member
+        if (objAccess->property != "length") {
+            std::string objectType = typeOf(objAccess->object.get());
+            if (m_classNames.count(objectType)) {
+                auto classFieldsIt = m_classFields.find(objectType);
+                auto classMethodsIt = m_classMethods.find(objectType);
+                bool isField = classFieldsIt != m_classFields.end() &&
+                               classFieldsIt->second.count(objAccess->property) > 0;
+                bool isMethod = classMethodsIt != m_classMethods.end() &&
+                                classMethodsIt->second.count(objAccess->property) > 0;
+                if (!isField && !isMethod) {
+                    fail(objAccess, "Class '" + objectType + "' has no member '" +
+                                    objAccess->property + "'");
+                }
+            } else if (const auto *members = membersOf(objAccess->object.get())) {
+                if (!members->count(objAccess->property)) {
+                    fail(objAccess, "Object has no property '" + objAccess->property + "'");
+                }
+            }
+        }
     } else if (auto *arrLit = dynamic_cast<ArrayLiteralNode*>(expr)) {
         for (const auto &element : arrLit->elements) analyzeExpression(element.get());
     } else if (auto *objLit = dynamic_cast<ObjectLiteralNode*>(expr)) {
+        recordLiteralShape(objLit);
         for (const auto &prop : objLit->properties) {
             if (prop.method) {
                 analyzeFunctionBody(prop.method->parameters, prop.method->bodyStatements, true,
@@ -435,6 +510,13 @@ void SemanticAnalyzer::analyzeStatement(StatementNode *stmt)
         // Without an annotation the initializer's type is the variable's type
         declare(varDecl->variableName, varDecl->isConst,
                 declaredType.empty() ? initializerType : declaredType);
+
+        // Remember which literal shaped this variable, so `o.missing` is caught
+        if (auto *literal = dynamic_cast<ObjectLiteralNode*>(varDecl->initializer.get())) {
+            m_variableShapes[varDecl->variableName] = literal;
+        } else {
+            m_variableShapes.erase(varDecl->variableName);
+        }
     } else if (auto *destruct = dynamic_cast<DestructuringDeclarationNode*>(stmt)) {
         analyzeExpression(destruct->initializer.get());
         for (const auto &name : destruct->bindings) declare(name, destruct->isConst, "");
@@ -564,10 +646,14 @@ void SemanticAnalyzer::analyze(ProgramNode *program)
     m_functions.clear();
     m_types.clear();
     m_enumTypes.clear();
+    m_classNames.clear();
     m_globals.clear();
     m_classFields.clear();
     m_classParents.clear();
     m_classMethods.clear();
+    m_interfaceMembers.clear();
+    m_literalShapes.clear();
+    m_variableShapes.clear();
     m_currentReturnType.clear();
     m_inFunction = false;
     m_loopDepth = 0;
@@ -578,10 +664,16 @@ void SemanticAnalyzer::analyze(ProgramNode *program)
     hoistDeclarations(program->statements);
 
     for (const auto &entry : m_classParents) {
-        std::set<std::string> fieldVisiting;
-        foldInheritedMembers(entry.first, m_classParents, m_classFields, fieldVisiting);
-        std::set<std::string> methodVisiting;
-        foldInheritedMembers(entry.first, m_classParents, m_classMethods, methodVisiting);
+        if (m_classNames.count(entry.first)) {
+            std::set<std::string> fieldVisiting;
+            foldInheritedMembers(entry.first, m_classParents, m_classFields, fieldVisiting);
+            std::set<std::string> methodVisiting;
+            foldInheritedMembers(entry.first, m_classParents, m_classMethods, methodVisiting);
+        } else {
+            // An interface extending another gains its members
+            std::set<std::string> memberVisiting;
+            foldInheritedMembers(entry.first, m_classParents, m_interfaceMembers, memberVisiting);
+        }
     }
     analyzeStatementList(program->statements);
     popScope();

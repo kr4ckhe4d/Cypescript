@@ -1427,6 +1427,22 @@ void CodeGen::visit(ArrayAssignmentStatementNode *node)
         }
     }
 
+    // A buffer stores inline
+    {
+        std::string containerType = arrayTypeOfExpression(node->array.get());
+        if (isBufferType(containerType)) {
+            std::string bufElem = bufferElementType(containerType);
+            llvm::Value *address = bufferElementAddress(arrayValue, indexValue, bufElem);
+            if (node->isCompound) {
+                llvm::Value *current =
+                    m_builder.CreateLoad(getLLVMType(bufElem), address, "buf_load");
+                valueToAssign = emitBinaryOp(node->compoundOp, current, valueToAssign);
+            }
+            m_builder.CreateStore(coerceValue(valueToAssign, getLLVMType(bufElem)), address);
+            return;
+        }
+    }
+
     // `a[i] += v`: read the current element through the array and index we have
     // already computed, so neither is evaluated a second time.
     if (node->isCompound) {
@@ -2261,6 +2277,16 @@ llvm::Value *CodeGen::visit(ArrayAccessNode *node)
         }
     }
     
+    // A buffer indexes inline: no call, just an address and a load
+    {
+        std::string containerType = arrayTypeOfExpression(node->array.get());
+        if (isBufferType(containerType)) {
+            std::string bufElem = bufferElementType(containerType);
+            llvm::Value *address = bufferElementAddress(arrayValue, indexValue, bufElem);
+            return m_builder.CreateLoad(getLLVMType(bufElem), address, "buf_load");
+        }
+    }
+
     // Call the appropriate C++ dynamic array function
     if (isPointerElementType(elemType)) {
         llvm::FunctionCallee getFunc = m_module->getOrInsertFunction("array_get_object",
@@ -2420,6 +2446,28 @@ std::string CodeGen::arrayTypeOfExpression(ExpressionNode *expr) {
         return retIt != functionReturnTypes.end() ? retIt->second : "";
     }
     return "";
+}
+
+bool CodeGen::isBufferType(const std::string &typeName) {
+    return typeName.rfind("Buffer<", 0) == 0 && typeName.back() == '>';
+}
+
+std::string CodeGen::bufferElementType(const std::string &typeName) {
+    if (!isBufferType(typeName)) return "";
+    return typeName.substr(7, typeName.size() - 8);
+}
+
+llvm::Value *CodeGen::bufferElementAddress(llvm::Value *bufferPtr, llvm::Value *index,
+                                           const std::string &elemType) {
+    llvm::Type *i8Ty = llvm::Type::getInt8Ty(m_context);
+    llvm::Type *i64Ty = llvm::Type::getInt64Ty(m_context);
+    llvm::Type *valueType = getLLVMType(elemType);
+
+    // Data begins after the 16-byte header
+    llvm::Value *data = m_builder.CreateGEP(
+        i8Ty, bufferPtr, llvm::ConstantInt::get(i64Ty, 16), "buf_data");
+    llvm::Value *offset = coerceValue(index, i64Ty);
+    return m_builder.CreateGEP(valueType, data, offset, "buf_elem");
 }
 
 bool CodeGen::isPointerElementType(const std::string &elemType) {
@@ -2902,6 +2950,13 @@ llvm::Value *CodeGen::visit(ObjectAccessNode *node)
 {
     // Check if this is array.length access
     if (node->property == "length") {
+        std::string containerType = arrayTypeOfExpression(node->object.get());
+        if (isBufferType(containerType)) {
+            llvm::Value *bufferPtr = visit(node->object.get());
+            llvm::Value *length = m_builder.CreateLoad(
+                llvm::Type::getInt64Ty(m_context), bufferPtr, "buf_len");
+            return coerceValue(length, llvm::Type::getInt32Ty(m_context));
+        }
         // Check if the base is a variable that refers to an array
         if (auto *varExpr = dynamic_cast<VariableExpressionNode*>(node->object.get())) {
             // Look up the variable type
@@ -3439,6 +3494,32 @@ llvm::Value *CodeGen::visit(NewExpressionNode *node)
             m_builder.CreateCall(ctor, args);
         }
         return rawPtr;
+    }
+
+    // Buffer<T>(n): one allocation, an i64 length then n elements
+    if (node->className == "Buffer") {
+        std::string elemType = node->genericTypes.empty() ? "i32" : node->genericTypes[0];
+        llvm::Type *i8Ty = llvm::Type::getInt8Ty(m_context);
+        llvm::Type *i64Ty = llvm::Type::getInt64Ty(m_context);
+        llvm::Type *charPtr = llvm::PointerType::get(i8Ty, 0);
+
+        llvm::Value *count = node->arguments.empty()
+            ? llvm::ConstantInt::get(i64Ty, 0)
+            : coerceValue(visit(node->arguments[0].get()), i64Ty);
+
+        uint64_t elemSize = m_module->getDataLayout().getTypeAllocSize(getLLVMType(elemType));
+        llvm::Value *bytes = m_builder.CreateAdd(
+            m_builder.CreateMul(count, llvm::ConstantInt::get(i64Ty, elemSize), "buf_bytes"),
+            llvm::ConstantInt::get(i64Ty, 16), "buf_total");
+
+        // calloc so a fresh buffer reads as zeroes, like a zero-filled array
+        llvm::FunctionCallee callocFn = m_module->getOrInsertFunction(
+            "calloc", charPtr, i64Ty, i64Ty);
+        llvm::Value *raw = m_builder.CreateCall(
+            callocFn, {llvm::ConstantInt::get(i64Ty, 1), bytes}, "buffer");
+
+        m_builder.CreateStore(count, raw);   // length lives in the header
+        return raw;
     }
 
     if (node->className == "Set") {

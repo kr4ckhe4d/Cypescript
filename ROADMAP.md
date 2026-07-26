@@ -6,7 +6,7 @@ One place to see what is done, what is next, and what is deliberately not being 
 > `SHIPPING_BLOCKERS.md`, `progress.md`, `NATIVE_OBJECTS_ROADMAP.md` and
 > `OPTIMIZATION_ROADMAP.md`. Their full text is in git history.
 
-**Current state:** 53/53 language tests, 14/14 game tests, 23 examples, benchmarks at
+**Current state:** 58/58 language tests, 14/14 game tests, 23 examples, benchmarks at
 Rust parity (0.051s primes, 0.025s fib(35)). CI green on macOS and Linux.
 
 ---
@@ -51,7 +51,8 @@ only rather than staying permanently red. In likely order of breakage:
 | Errors | `try`/`catch`/`finally`, `throw` |
 | Modules | `import`/`export` by path, plus bundled modules by bare name |
 | FFI | `declare function`, `link`, `link source`, `link include`, platform qualifiers |
-| Checking | Scoping, arity, `const`, and **types** at declarations, assignments, returns, arguments |
+| Buffers | `Buffer<T>` — fixed-size, indexed inline with no runtime call |
+| Checking | Scoping, arity, `const`, **types** at declarations/assignments/returns/arguments, and **property names** against classes, interfaces and object literals |
 
 ### Games (Phases 1–6, all complete)
 
@@ -79,8 +80,10 @@ A native arcade game is writable in idiomatic Cypescript:
 | 7.3 | Type checker | Declarations, assignments, returns, call arguments, class members, class assignability |
 | 7.4 | `class extends` | Inheritance, overriding, virtual dispatch, `super` |
 | 7.5 | Postfix chaining | `.prop`, `[i]`, `.method()` after any expression |
-| 7.6 | Enums, nested arrays | Enum members fold to integers at parse time, so they cost nothing at runtime |
+| 7.6 | Enums, nested arrays, typed buffers | Enums fold to integers at parse time; `Buffer<T>` indexes inline, 37x faster than an array |
 | 7.7 | Windows | **Not done** — see Next |
+
+**Phase 7 is complete except Windows.**
 
 ### Shipping
 
@@ -108,9 +111,7 @@ These are decisions, not omissions.
 
 | Limitation | Detail |
 |---|---|
-| Object literal shapes unchecked | `obj.missing` on a literal reaches codegen without a position. Class members *are* checked |
-| No narrowing check | `let n: i32 = someF64;` is allowed because codegen coerces it |
-| Typed fixed-size buffers | Array element access is an out-of-line call. Inlined GEP load/store is the tilemap and pixel-work path — an optimisation, deliberately not rushed in beside correctness work |
+| No narrowing check | `let n: i32 = someF64;` is allowed because codegen coerces it. TypeScript would reject it; tightening needs a survey of existing code |
 | Fixed try-nesting depth | The exception runtime allows 64 nested `try` blocks |
 | Generic functions over scalars | `id<i32>(5)` fails LLVM verification; generics work with pointer-shaped types |
 | `Map`/`Set` values | Only pointer-shaped values; `Map<string, i32>` fails |
@@ -134,6 +135,20 @@ Best-of-3 on Apple Silicon, all at `-O2`:
 |---|---|---|---|---|
 | Primes < 1M | **0.051s** | 0.051s | 0.150s | 1.78s |
 | `fib(35)` | **0.025s** | 0.025s | 0.126s | 0.634s |
+
+### `Buffer<T>` vs `T[]`
+
+1.6 billion element updates, identical output from both, best of 3:
+
+| | Time |
+|---|---|
+| `Buffer<i32>` | **0.07s** |
+| `i32[]` | 2.60s |
+
+**37x.** An array element costs a call into the runtime; a buffer element is an address
+and a load. The bigger half of the win is second-order — LLVM can vectorise a loop over
+plain memory, and cannot see through an opaque call at all. Use `T[]` when you want a
+growable list, `Buffer<T>` for a fixed-size block you index in a hot loop.
 
 `benchmarks/cross/run_cross_benchmarks.sh 3` — always best-of-3, a single run is too noisy
 to conclude from. **This is a regression gate**: two changes that could have cost it were

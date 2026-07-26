@@ -47,6 +47,10 @@ private:
     std::map<std::string, FunctionSignature> m_functions; // user + declared foreign
     std::set<std::string> m_types;             // class/interface names (not values)
     std::set<std::string> m_enumTypes;         // enum names, which mean i32
+    // Class names specifically. Testing membership of m_classFields would be
+    // wrong: folding inherited members inserts empty entries via operator[],
+    // which made interfaces look like member-less classes.
+    std::set<std::string> m_classNames;
     // Module-level variables. Unlike enclosing locals these stay visible inside
     // function bodies, matching the globals CodeGen promotes for the same names.
     std::map<std::string, Binding> m_globals;
@@ -56,6 +60,13 @@ private:
     std::map<std::string, std::string> m_classParents;
     // Class name -> method name -> declared return type
     std::map<std::string, std::map<std::string, std::string>> m_classMethods;
+    // Interface name -> member name -> declared type
+    std::map<std::string, std::map<std::string, std::string>> m_interfaceMembers;
+    // Shapes of object literals, keyed by the literal's node, so a variable
+    // initialized from one knows which properties it actually has
+    std::map<const ObjectLiteralNode *, std::map<std::string, std::string>> m_literalShapes;
+    // Variable name -> the literal it was initialized from
+    std::map<std::string, const ObjectLiteralNode *> m_variableShapes;
     int m_loopDepth = 0;
     int m_switchDepth = 0;
     bool m_inMethod = false;
@@ -88,6 +99,11 @@ private:
     void analyzeStatement(StatementNode *stmt);
     void analyzeStatementList(const std::vector<std::unique_ptr<StatementNode>> &statements);
     void analyzeExpression(ExpressionNode *expr);
+    // Records an object literal's property names and types
+    void recordLiteralShape(ObjectLiteralNode *literal);
+    // Members of a class, interface or object-literal-shaped value; null if the
+    // expression's shape is not known, in which case nothing is checked
+    const std::map<std::string, std::string> *membersOf(ExpressionNode *expr);
     void analyzeFunctionBody(const std::vector<FunctionDeclarationNode::Parameter> &params,
                              const std::vector<std::unique_ptr<StatementNode>> &body,
                              bool isMethod, const std::string &returnType = "",

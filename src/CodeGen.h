@@ -117,6 +117,17 @@ private:
     // fell back to i32 and read a pointer array as integers.
     std::string arrayTypeOfExpression(ExpressionNode *expr);
 
+    // --- Typed buffers ---
+    // `Buffer<T>` is a flat, fixed-size block: an i64 length followed by the
+    // elements. Indexing compiles to a GEP and a load/store rather than a call
+    // into the runtime, which is what the tilemap and pixel paths need.
+    // Layout: [0..8) length, [16..) data — 16 keeps f64 elements aligned.
+    static bool isBufferType(const std::string &typeName);
+    static std::string bufferElementType(const std::string &typeName);
+    // Address of element `index` within a buffer
+    llvm::Value *bufferElementAddress(llvm::Value *bufferPtr, llvm::Value *index,
+                                      const std::string &elemType);
+
     // True for a pointer that isn't text (class instance, `ptr`, `null`), which
     // must be compared by address rather than with strcmp
     bool isNonStringPointer(ExpressionNode *expr);
