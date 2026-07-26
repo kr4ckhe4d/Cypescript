@@ -300,6 +300,16 @@ void SemanticAnalyzer::analyzeExpression(ExpressionNode *expr)
             }
         }
     } else if (auto *method = dynamic_cast<MethodCallNode*>(expr)) {
+        if (dynamic_cast<SuperExpressionNode*>(method->object.get())) {
+            if (!m_inMethod || m_currentClass.empty()) {
+                fail(method, "'super' can only be used inside a class method");
+            }
+            auto parentIt = m_classParents.find(m_currentClass);
+            if (parentIt == m_classParents.end()) {
+                fail(method, "'super' used in class '" + m_currentClass +
+                             "', which does not extend anything");
+            }
+        }
         analyzeExpression(method->object.get());
         for (const auto &arg : method->arguments) analyzeExpression(arg.get());
     } else if (auto *arrAccess = dynamic_cast<ArrayAccessNode*>(expr)) {
@@ -338,7 +348,7 @@ void SemanticAnalyzer::analyzeExpression(ExpressionNode *expr)
 void SemanticAnalyzer::analyzeFunctionBody(
     const std::vector<FunctionDeclarationNode::Parameter> &params,
     const std::vector<std::unique_ptr<StatementNode>> &body, bool isMethod,
-    const std::string &returnType)
+    const std::string &returnType, const std::string &className)
 {
     // Function/method bodies do NOT see enclosing local scopes
     std::vector<std::map<std::string, Binding>> savedScopes;
@@ -355,6 +365,8 @@ void SemanticAnalyzer::analyzeFunctionBody(
     m_switchDepth = 0;
     m_currentReturnType = returnType;
     m_inFunction = true;
+    std::string savedClass = m_currentClass;
+    m_currentClass = className;
 
     for (const auto &param : params) declare(param.name, false, param.type);
     analyzeStatementList(body);
@@ -364,6 +376,7 @@ void SemanticAnalyzer::analyzeFunctionBody(
     m_switchDepth = savedSwitchDepth;
     m_currentReturnType = savedReturnType;
     m_inFunction = savedInFunction;
+    m_currentClass = savedClass;
     m_scopes.swap(savedScopes);
 }
 
@@ -490,7 +503,7 @@ void SemanticAnalyzer::analyzeStatement(StatementNode *stmt)
         for (const auto &prop : classDecl->objectTemplate->properties) {
             if (prop.method) {
                 analyzeFunctionBody(prop.method->parameters, prop.method->bodyStatements, true,
-                                    prop.method->returnType);
+                                    prop.method->returnType, classDecl->className);
             } else {
                 analyzeExpression(prop.value.get());
             }

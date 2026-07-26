@@ -1039,6 +1039,31 @@ std::unique_ptr<ExpressionNode> Parser::parseVariableExpression()
         return callNode;
     }
 
+    // `super(...)` calls the parent constructor; `super.m(...)` calls the
+    // parent's implementation. Contextual, so `super` elsewhere is still a name.
+    if (varToken.value == "super" && (peek().type == TOK_LPAREN || peek().type == TOK_DOT)) {
+        auto superBase = std::make_unique<SuperExpressionNode>();
+        superBase->line = varToken.line;
+        superBase->column = varToken.column;
+
+        if (peek().type == TOK_LPAREN) {
+            // super(args) — the parent's constructor
+            auto call = std::make_unique<MethodCallNode>(std::move(superBase), "constructor");
+            call->line = varToken.line;
+            call->column = varToken.column;
+            advance();
+            while (peek().type != TOK_RPAREN && !isAtEnd()) {
+                call->arguments.push_back(parseExpression());
+                if (peek().type == TOK_COMMA) advance();
+                else break;
+            }
+            consume(TOK_RPAREN, "Expected ')' after super(");
+            return call;
+        }
+        // super.method(...) — chained by the caller
+        return superBase;
+    }
+
     // TypeScript compatibility: Math.* maps to the native math stdlib
     if (varToken.value == "Math" && peek().type == TOK_DOT) {
         advance();

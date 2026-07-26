@@ -56,6 +56,8 @@ private:
     int m_loopDepth = 0;
     int m_switchDepth = 0;
     bool m_inMethod = false;
+    // Class whose method is being analyzed, so `super` can be validated
+    std::string m_currentClass;
     // Declared return type of the function being analyzed ("" outside one)
     std::string m_currentReturnType;
     bool m_inFunction = false;
@@ -83,7 +85,8 @@ private:
     void analyzeExpression(ExpressionNode *expr);
     void analyzeFunctionBody(const std::vector<FunctionDeclarationNode::Parameter> &params,
                              const std::vector<std::unique_ptr<StatementNode>> &body,
-                             bool isMethod, const std::string &returnType = "");
+                             bool isMethod, const std::string &returnType = "",
+                             const std::string &className = "");
 
     [[noreturn]] void fail(const ASTNode *node, const std::string &message) const;
 };

@@ -269,6 +269,20 @@ private:
     }
 };
 
+// `super` used as the base of a call: `super(...)` in a constructor, or
+// `super.method(...)` to reach the implementation an override replaced. It only
+// ever appears as a MethodCallNode's object, and the call it produces is always
+// direct — dispatching it virtually would call the override again.
+class SuperExpressionNode : public ExpressionNode
+{
+public:
+    void printNode(llvm::raw_ostream &os, int indent = 0) const override
+    {
+        printIndent(os, indent);
+        os << "SuperExpressionNode\n";
+    }
+};
+
 // `null` / `undefined` — a null pointer. Mostly used for optional `ptr` handles
 // coming back from C (an unloaded texture, a sound that failed to load).
 class NullLiteralNode : public ExpressionNode

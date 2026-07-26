@@ -3072,6 +3072,63 @@ llvm::Value *CodeGen::visit(MethodCallNode *node)
                 "obj_ptr_load"
             );
         }
+    } else if (dynamic_cast<SuperExpressionNode*>(node->object.get())) {
+        // `super.m(...)` / `super(...)`: call the parent's implementation directly.
+        // Dispatching this virtually would re-enter the override that is asking
+        // for it, so this is deliberately never a vtable call.
+        if (currentThisObjectKey.empty()) {
+            throw std::runtime_error("Codegen Error: 'super' can only be used inside a method");
+        }
+        std::string currentClass = classNameForObjectKey(currentThisObjectKey);
+        auto currentIt = classes.find(currentClass);
+        if (currentIt == classes.end() || currentIt->second->parentClass.empty()) {
+            throw std::runtime_error("Codegen Error: 'super' used in class '" +
+                (currentClass.empty() ? std::string("<object literal>") : currentClass) +
+                "', which has no parent class");
+        }
+
+        std::string parentKey = objectKeyForTypeName(currentIt->second->parentClass);
+        auto parentMethods = objectMethods.find(parentKey);
+        if (parentMethods == objectMethods.end() ||
+            !parentMethods->second.count(node->methodName)) {
+            throw std::runtime_error("Codegen Error: Parent class '" +
+                currentIt->second->parentClass + "' has no method '" +
+                (node->methodName == "constructor" ? "constructor" : node->methodName) + "'");
+        }
+
+        // `this` is whatever the enclosing method received. The parent's body is
+        // generated against the parent's layout, which is a prefix of ours, so
+        // reading the inherited fields through it lands on the same offsets.
+        llvm::Value *thisValue = nullptr;
+        llvm::Type *thisType = nullptr;
+        if (llvm::Value *slot = variableStorage("this", &thisType)) {
+            thisValue = m_builder.CreateLoad(thisType, slot, "this_for_super");
+        }
+        if (!thisValue) {
+            throw std::runtime_error("Codegen Error: 'super' has no enclosing 'this'");
+        }
+
+        llvm::Function *parentFn = getOrCreateMethodFunction(parentKey, node->methodName);
+        std::vector<llvm::Value*> superArgs;
+        superArgs.push_back(thisValue);
+        size_t superIndex = 1;
+        for (const auto& arg : node->arguments) {
+            llvm::Value *argValue = visit(arg.get());
+            if (!argValue) {
+                throw std::runtime_error("Codegen Error: Failed to generate super() argument");
+            }
+            if (superIndex < parentFn->arg_size()) {
+                argValue = coerceValue(argValue, parentFn->getFunctionType()->getParamType(superIndex));
+            }
+            superArgs.push_back(argValue);
+            superIndex++;
+        }
+
+        if (parentFn->getReturnType()->isVoidTy()) {
+            m_builder.CreateCall(parentFn, superArgs);
+            return nullptr;
+        }
+        return m_builder.CreateCall(parentFn, superArgs, "super_call");
     } else {
         objectValue = visit(node->object.get());
     }

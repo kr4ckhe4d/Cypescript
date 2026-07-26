@@ -16,7 +16,7 @@ where Cypescript accepts a program it should reject.
 | 7.1 | Compound assignment evaluates its target once | ✅ **DONE** |
 | 7.2 | Frictionless C/C++ interop (`link source`) | ✅ **DONE** |
 | 7.3 | A real type checker | 🔶 **Core landed** — see below |
-| 7.4 | `class extends`, with virtual dispatch | ✅ **DONE** |
+| 7.4 | `class extends` — inheritance, virtual dispatch, `super` | ✅ **DONE** |
 | 7.5 | Property access on call results (`f().prop`) | ✅ **DONE** |
 | 7.6 | Enums, 2D arrays, typed buffers | ⬜ **NEXT** |
 | 7.7 | Windows validation | ⬜ |
@@ -224,11 +224,41 @@ template with no properties took the `{}` fast path. It was harmless only while 
 dereferenced it — storing a vtable into it crashed immediately. A class template now always
 gets a real allocation.
 
+### `super`
+
+```ts
+class Dog extends Animal {
+    constructor(name: string, tricks: i32) {
+        super(name);            // the parent constructor
+        this.tricks = tricks;
+    }
+    speak(): void {
+        super.speak();          // the implementation this override replaced
+        println(`...and knows ${this.tricks} tricks`);
+    }
+}
+```
+
+Both forms are **always direct calls** — dispatching them virtually would re-enter the
+override that asked for them. `super` is contextual, so it remains usable as an ordinary
+identifier anywhere it is not followed by `(` or `.`.
+
+The parent's body is generated against the parent's layout, and `this` is passed through
+unchanged. That is safe precisely because of the prefix property: a subclass's inherited
+fields sit at the same offsets they do in the parent, so the parent's code reading them
+through its own layout lands in the right place.
+
+Chains work at every level — `A ← B ← C` with each constructor calling `super()` and each
+`who()` calling `super.who()` produces `A>B>C` for both — and the outermost call is still
+virtual, so a `C` reached through an `A`-typed slot runs `C`'s override first.
+
+Misuse is caught by the semantic pass with a position: `super` outside a class method, and
+`super` in a class that extends nothing.
+
 ### Still missing
 
-`super` — a subclass constructor cannot call its parent's, nor can an override call the
-implementation it replaced. It can assign inherited fields directly (`this.name = ...`),
-since they are in its layout, which covers most of what `super()` would do.
+Nothing structural. Interfaces are still checked structurally rather than nominally, and
+a class cannot declare that it implements one.
 
 ## 7.5 Property access on call results ✅ DONE
 
