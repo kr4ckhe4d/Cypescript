@@ -118,7 +118,13 @@ cscript -r myprogram.csc             # that's the whole workflow
 
 Each source is compiled with the driver its language needs — a `.c` file gets C
 rules, a `.cpp` file gets C++17 — so ordinary C like `char *p = malloc(n);` just
-works. `.m` and `.mm` are handled too. See [example/21_c_interop.csc](example/21_c_interop.csc).
+works. `.m` and `.mm` are handled too, and a `.c` and a `.cpp` can go into the same
+program.
+
+See [example/21_c_interop.csc](example/21_c_interop.csc) for C, and
+[example/23_cpp_interop.csc](example/23_cpp_interop.csc) for C++ — the latter uses
+`std::map` and RAII behind an `extern "C"` boundary, which is where reaching for C++
+over C actually pays.
 
 Bind a C-style API under a name that reads well, and ask for a system library:
 
@@ -1097,13 +1103,16 @@ Typical minute changes when porting a `.ts` file:
 
 - Classes with fields, constructors, and methods (`class Point { ... }`, `new Point(3, 4)`)
 - Function-type parameters (`function apply(f: (i32) => i32, x: i32)`)
+- Class inheritance (`extends`) with virtual dispatch and `super`
+- Enums, nested arrays (`i32[][]`), bitwise operators
 
 | TypeScript | Cypescript |
 |---|---|
 | `x++` as an *expression* (`arr[i++]`) | statement-level `x++` only |
 | closures mutating captured primitives | capture an object instead (by-value snapshots) |
-| `class A extends B` | flat classes only (no inheritance yet) |
-| `import` from npm packages | only local `./file.csc` module imports |
+| `import` from npm packages | only local `./file.csc` module imports, plus bundled ones |
+| union types (`string \| number`) | not implemented |
+| `implements` on a class | interfaces are checked structurally, not declared |
 | `number` for integer loops (slow) | use `i32` for integer math (fast) |
 
 See `example/18_bfs_graph.csc` vs `example/18_bfs_graph.ts` — the BFS algorithm
@@ -1767,6 +1776,11 @@ println("JSON: " + json_prettify(user));
 ## Language Features Status
 
 ### ✅ Implemented Features
+- [x] Class inheritance (`extends`) with method overriding, virtual dispatch and `super`
+- [x] Enums with auto-numbered and explicit values
+- [x] Nested arrays (`i32[][]`)
+- [x] Type checking at declarations, assignments, returns and call arguments
+- [x] Foreign function interface (`declare function`, `link`, `link source`)
 - [x] Lexical analysis with comprehensive token support
 - [x] Variable declarations (`let`, `const`) with type annotations
 - [x] Variable assignments with type checking

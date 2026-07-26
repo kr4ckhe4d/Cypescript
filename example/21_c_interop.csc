@@ -38,3 +38,6 @@ declare function labs(x: i64): i64;
 println(labs(0 - 7));               // 7
 
 println("C interop needs no build system");
+
+// For C++ — std::vector, std::map, RAII — see 23_cpp_interop.csc. Each source
+// is compiled with the driver its language needs, so the two can be mixed.

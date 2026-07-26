@@ -165,7 +165,7 @@ let n: i32 = new Admin().name();   // rejected: expected 'i32', got 'string'
 - **Narrowing.** `let n: i32 = someF64;` is allowed because codegen coerces it. TypeScript
   would reject it; tightening this needs a survey of existing code first.
 
-## 7.4 `class extends` 🔶 INHERITANCE LANDED
+## 7.4 `class extends` ✅ DONE
 
 ```ts
 class Animal {

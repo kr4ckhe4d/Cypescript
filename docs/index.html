@@ -246,7 +246,7 @@ The year is 2026</code></pre>
       <tbody>
         <tr><td><code>x++</code> as an <em>expression</em> (<code>arr[i++]</code>)</td><td>statement-level <code>x++</code> only</td></tr>
         <tr><td>closures mutating captured primitives</td><td>capture an object instead (captures are by-value snapshots)</td></tr>
-        <tr><td><code>class A extends B</code></td><td>flat classes only (no inheritance yet)</td></tr>
+        
         <tr><td><code>import</code> from npm packages</td><td>local <code>./file.csc</code> module imports only</td></tr>
         <tr><td><code>number</code> for hot integer loops</td><td>use <code>i32</code> for integer math (much faster)</td></tr>
       </tbody>
@@ -578,9 +578,10 @@ println(assetPath("levels/01.txt"));</code></pre>
     <div class="notecard note">
       <p>
         There is no automatic memory reclamation: heap objects live until the
-        program exits unless you pool and reuse them. Class inheritance
-        (<code>extends</code>) and union types are not implemented. See
-        <code>GAME_ROADMAP.md</code> in the repository for what is planned.
+        program exits unless you pool and reuse them. Union types are not
+        implemented, and a class cannot declare that it <code>implements</code>
+        an interface — conformance is checked structurally. See
+        <code>LANGUAGE_ROADMAP.md</code> in the repository for what is planned.
       </p>
     </div>
 

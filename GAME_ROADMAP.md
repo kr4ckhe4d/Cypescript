@@ -76,13 +76,13 @@ let a: E[] = []; a.push(new E(7.0));
 let first = a[0];    ✗ Cannot access property 'x' on variable 'first' of type 'i32'
 ```
 
-→ ⬜ **Still open. This is Phase 3 and it is the main remaining work.**
+→ ✅ **FIXED in Phase 3** — objects are heap-allocated and identity travels with the type.
 
 **B4 — Type set too narrow for a C ABI.** Only `i32`, `f64`, `boolean`, `i8*`, `void`.
 → ✅ **FIXED in Phase 1** (`f32`, `i64`, `i8`/`u8`, and an opaque `ptr`).
 
 **B5 — Memory is leak-until-exit.** The stdlib `new`s strings and never frees them.
-→ ⬜ **Still open (Phase 4). Now measured** — see the numbers below.
+→ ✅ **FIXED in Phase 4** — a frame arena for strings and entity pooling; memory is flat.
 
 ---
 
@@ -383,10 +383,11 @@ Every gap that writing Breakout exposed is now closed, before starting Phase 3.
 4. ✅ **Hex/binary/octal literals.** `0xFF` parsed as `0` because `std::stoll` defaults to
    base 10 and stopped at the `x`. Now `0xFF`, `0b1010` and `0755` all work.
 5. ✅ **`null` as an expression**, for optional `ptr` handles.
-6. ⬜ **Enums** — deferred; key codes work fine as `const`s now that globals are visible.
+6. ✅ **Enums** — landed later in Phase 7.6.
 7. ⬜ **Typed fixed-size buffers** with inlined GEP load/store instead of a call per element
+   — still deferred; it is an optimisation, not a capability
    — the tilemap/pixel performance path.
-8. ⬜ **2D arrays** (`i32[][]`) for tilemaps.
+8. ✅ **2D arrays** (`i32[][]`) — landed in Phase 7.6.
 
 A bug found while testing the globals work: seven codegen sites resolved variables through
 `namedValues` directly (array `.length`, object access, JSON paths), so they could not see

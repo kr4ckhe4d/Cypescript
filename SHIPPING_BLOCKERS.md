@@ -48,7 +48,13 @@ Decide minimum supported LLVM version (currently built against LLVM 22).
 *where*. Single biggest developer-experience gap.
 **Fix:** track line/col in `Lexer`, carry through `Token` into parser/codegen errors.
 
-### 7. Memory model is "leak until exit"
+### 7. Memory model — 🔶 ADDRESSED for game loops (2026-07-25)
+Frame-scoped strings (opt-in via `enableFrameStrings()`) plus entity pooling give
+flat memory: both bundled games hold steady RSS from 2,000 to 300,000 frames, and
+`tests/run_game_tests.sh` asserts it. Heap objects still live until exit unless
+pooled — there is no automatic reclamation, by design. Original note follows.
+
+#### Original
 - stdlib allocates strings/arrays with `new` and never frees (by design for scripts)
 - objects are stack-allocated (`alloca`) → returning an object from the function
   that created it dangles
@@ -84,8 +90,11 @@ extend it (double maintenance) or drop the in-browser execution in favor of
 ✅ Now supported: arrow functions & closures (by-value captures), callback array
 methods (`.map/.filter/.reduce/.find/.forEach`), classes (fields/constructors/
 methods, no inheritance), function-type parameters, f64 arrays.
-Still not supported: `class extends`, union types, npm imports, `x++` as an
-expression, by-reference closure captures.
+Still not supported: union types, npm imports, `x++` as an expression,
+by-reference closure captures, `implements` on a class.
+Since added: `class extends` with virtual dispatch and `super`, enums, nested
+arrays, bitwise operators, and a type checker covering declarations,
+assignments, returns and call arguments.
 Publish the compatibility table (now in README) as part of the docs.
 
 ## Suggested attack order (updated 2026-07-08)
@@ -100,9 +109,10 @@ Homebrew formula template, VSCode grammar refresh, try/return fix.
 **Remaining (post-1.0):**
 1. **Memory model** — document script-lifetime memory; arena or refcounted
    heap objects afterwards (ongoing)
-2. **Full type checker** — the semantic pass covers scoping/arity/const; property
-   and type mismatches still surface at codegen without positions
-3. **Language**: class inheritance (`extends`), union types, by-reference captures
+2. **Full type checker** — ✅ largely done (2026-07-25): declarations, assignments,
+   returns, call arguments and class members are checked with positions. Object
+   literal shapes and narrowing remain.
+3. **Language**: ✅ class inheritance done; union types and by-reference captures remain
 
 **Done 2026-07-08:** LICENSE (MIT), semantic analysis pass, VSCode extension
 1.1.0 (grammar + snippets, packaged), playground labeled core-subset-only,
