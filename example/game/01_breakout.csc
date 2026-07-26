@@ -9,10 +9,11 @@
 //
 // Controls: LEFT/RIGHT or A/D to move, SPACE to launch, R to restart, ESC to quit.
 //
-// NOTE ON STYLE: entities are held in parallel arrays (struct-of-arrays) rather
-// than an array of objects, because objects cannot yet live in arrays or escape
-// the function that created them. That is the Phase 3 work in GAME_ROADMAP.md;
-// this file is deliberately written against what the language can do today.
+// NOTE ON STYLE: entities are held in parallel arrays (struct-of-arrays). That
+// was the only option when this was written — objects could not live in arrays
+// then. It is kept as-is because a fixed entity count genuinely suits
+// struct-of-arrays, and 02_asteroids.csc shows the object-oriented style that
+// replaced it.
 
 import { } from "game";
 

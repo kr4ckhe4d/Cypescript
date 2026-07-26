@@ -361,7 +361,7 @@ plus the two games. Run any of them with `cscript -r example/09_objects.csc`.
 - **Foreign function interface**: `declare function` binds any C symbol, `link "raylib";`
   controls the linker — see [FFI](#foreign-function-interface-ffi)
 - **Native games**: window, sprites, input and audio via the optional game runtime —
-  see [example/game/](example/game/) and [GAME_ROADMAP.md](GAME_ROADMAP.md)
+  see [example/game/](example/game/) and [ROADMAP.md](ROADMAP.md)
 - **VSCode Extension** with syntax highlighting and IntelliSense
 
 ## Foreign Function Interface (FFI)
@@ -454,7 +454,7 @@ elsewhere. Assets are taken from `assets/` beside the source (override with
 packaged game runs from anywhere.
 
 See [example/game/](example/game/) for a complete Breakout, and
-[GAME_ROADMAP.md](GAME_ROADMAP.md) for what is and isn't supported yet.
+[ROADMAP.md](ROADMAP.md) for what is and isn't supported yet.
 
 ## Quick Start
 

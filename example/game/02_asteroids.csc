@@ -2,14 +2,14 @@
 //
 // Where Breakout (01) had to keep entities in parallel arrays, this game uses
 // real objects: classes with methods, stored in `Rock[]` and `Bullet[]`.
-// That is Phase 3 of GAME_ROADMAP.md — objects live on the heap, so they
+// That is Phase 3 of ROADMAP.md — objects live on the heap, so they
 // outlive the function that created them.
 //
 // Entities are POOLED: every rock and bullet is allocated once at start-up and
 // then reused, with an `active` flag standing in for spawn and despawn. Nothing
 // frees a heap object when it leaves an array, so a game that allocated per
 // spawn would grow without bound. Pooling is the standard arcade answer and it
-// keeps memory genuinely flat — see GAME_ROADMAP.md Phase 4.
+// keeps memory genuinely flat — see ROADMAP.md Phase 4.
 //
 //   Run:      cscript -r example/game/02_asteroids.csc
 //   Headless: CYPS_HEADLESS=1 CYPS_FRAMES=600 cscript -r example/game/02_asteroids.csc

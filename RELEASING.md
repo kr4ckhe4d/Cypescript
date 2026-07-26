@@ -162,7 +162,7 @@ publisher account + `vsce publish` — not set up yet.)
 - [ ] `brew install cypescript` works on a clean machine
 - [ ] `.deb` installs and `cscript -r` compiles a hello program
 - [ ] README badges show the new version
-- [ ] progress.md / SHIPPING_BLOCKERS.md updated
+- [ ] progress.md / ROADMAP.md updated
 
 ## Quick reference: v1.0.0 values
 

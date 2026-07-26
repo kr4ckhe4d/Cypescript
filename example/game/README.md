@@ -142,7 +142,7 @@ function takeBullet(pool: Bullet[]): Bullet {
 ```
 
 `removeAt()` and `clear()` still exist and are the right tool when entity churn is not in
-the hot path. See [GAME_ROADMAP.md](../../GAME_ROADMAP.md) Phase 4 for the measurements.
+the hot path. See [ROADMAP.md](../../ROADMAP.md) Phase 4 for the measurements.
 
 ## Bringing your own C
 
