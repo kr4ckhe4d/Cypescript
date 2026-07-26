@@ -302,6 +302,10 @@ void CodeGen::visit(ProgramNode *node)
         templateOwner[entry.second->objectTemplate.get()] = entry.second;
     }
 
+    // Which hierarchies need virtual dispatch — decided before layouts, because
+    // a polymorphic class carries a hidden vtable pointer as its first field.
+    computeVirtualDispatch();
+
     // Class struct layouts are computed from declared field types before any
     // code is generated, so a class-typed value knows its layout no matter
     // where it came from
@@ -2287,7 +2291,11 @@ llvm::Value *CodeGen::visit(ObjectLiteralNode *node)
     // PHASE 1 OPTIMIZATION: Use optimized object creation with direct struct access
     // This replaces hash map storage with native LLVM structs for 10-50x speedup
     
-    if (node->properties.empty()) {
+    // A class template always gets a real allocation, even with an empty body:
+    // it may still have inherited members and a vtable pointer. Only a literal
+    // `{}` takes the empty path — which yields a null pointer, so an empty class
+    // used to produce a null instance that crashed the moment anything touched it.
+    if (node->properties.empty() && !templateOwner.count(node)) {
         // Empty object {} - create an empty object structure
         return createEmptyObject();
     }
@@ -2538,6 +2546,148 @@ void CodeGen::resolveClassInheritance(ClassDeclarationNode *cls, std::set<std::s
     }
 }
 
+
+// =============================================================================
+// Virtual dispatch
+// =============================================================================
+// A method call is only made indirect when it has to be: the hierarchy it
+// belongs to must actually override something. Classes that are never
+// subclassed, and hierarchies where nobody overrides, keep their direct calls.
+// That is deliberate — it means a program using no polymorphism generates
+// exactly the code it did before.
+
+// Reverse of objectKeyForTypeName: which class a layout key belongs to, "" if none
+std::string CodeGen::classNameForObjectKey(const std::string &objectKey) const
+{
+    for (const auto &entry : classes) {
+        if (!entry.second->objectTemplate) continue;
+        std::string key = "opt_obj_" +
+            std::to_string(reinterpret_cast<uintptr_t>(entry.second->objectTemplate.get()));
+        if (key == objectKey) return entry.first;
+    }
+    return "";
+}
+
+bool CodeGen::isPolymorphicClass(const std::string &className) const
+{
+    return vtableLayouts.count(className) > 0;
+}
+
+void CodeGen::computeVirtualDispatch()
+{
+    vtableLayouts.clear();
+    vtableGlobals.clear();
+
+    // Children of each class, and the roots of every chain
+    std::map<std::string, std::vector<std::string>> children;
+    std::vector<std::string> roots;
+    for (const auto &entry : classes) {
+        const std::string &parent = entry.second->parentClass;
+        if (!parent.empty() && classes.count(parent)) {
+            children[parent].push_back(entry.first);
+        } else {
+            roots.push_back(entry.first);
+        }
+    }
+    // Deterministic vtable slots regardless of map iteration order
+    for (auto &entry : children) std::sort(entry.second.begin(), entry.second.end());
+    std::sort(roots.begin(), roots.end());
+
+    // Method names a class declares itself (not inherited). The constructor is
+    // never virtual — it is always called on a statically known class.
+    auto ownMethods = [&](const std::string &className) {
+        std::vector<std::string> names;
+        auto it = classes.find(className);
+        if (it == classes.end()) return names;
+        for (const auto &prop : it->second->objectTemplate->properties) {
+            if (prop.method && prop.key != "constructor") names.push_back(prop.key);
+        }
+        return names;
+    };
+
+    for (const std::string &root : roots) {
+        // Walk the hierarchy breadth-first, so a parent's methods take the
+        // lower slots and a subclass's additions come after.
+        std::vector<std::string> ordered;
+        std::vector<std::string> queue{root};
+        while (!queue.empty()) {
+            std::string current = queue.front();
+            queue.erase(queue.begin());
+            ordered.push_back(current);
+            auto childIt = children.find(current);
+            if (childIt != children.end()) {
+                for (const auto &child : childIt->second) queue.push_back(child);
+            }
+        }
+        if (ordered.size() < 2) continue;   // no subclasses: nothing to dispatch
+
+        // Polymorphic only if some method is declared in more than one class here
+        std::map<std::string, int> declarationCount;
+        for (const auto &className : ordered) {
+            for (const auto &name : ownMethods(className)) declarationCount[name]++;
+        }
+        bool overridesSomething = false;
+        for (const auto &entry : declarationCount) {
+            if (entry.second > 1) { overridesSomething = true; break; }
+        }
+        if (!overridesSomething) continue;
+
+        // One slot assignment shared by the whole hierarchy
+        VTableLayout layout;
+        for (const auto &className : ordered) {
+            for (const auto &name : ownMethods(className)) {
+                if (layout.slotOfMethod.count(name)) continue;
+                layout.slotOfMethod[name] = layout.slots.size();
+                layout.slots.push_back(name);
+            }
+        }
+        for (const auto &className : ordered) vtableLayouts[className] = layout;
+    }
+}
+
+llvm::GlobalVariable *CodeGen::getOrCreateVTable(const std::string &className)
+{
+    auto cached = vtableGlobals.find(className);
+    if (cached != vtableGlobals.end()) return cached->second;
+
+    auto layoutIt = vtableLayouts.find(className);
+    if (layoutIt == vtableLayouts.end()) return nullptr;
+    const VTableLayout &layout = layoutIt->second;
+
+    llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+    llvm::ArrayType *tableType = llvm::ArrayType::get(charPtr, layout.slots.size());
+
+    // Registered before the method bodies are generated: a method may construct
+    // its own class, which would otherwise recurse into here forever.
+    auto *table = new llvm::GlobalVariable(
+        *m_module, tableType, /*isConstant=*/true, llvm::GlobalValue::InternalLinkage,
+        llvm::ConstantAggregateZero::get(tableType), className + "_vtable");
+    vtableGlobals[className] = table;
+
+    auto classIt = classes.find(className);
+    if (classIt == classes.end()) return table;
+    std::string objectKey = objectKeyForTypeName(className);
+
+    std::vector<llvm::Constant *> entries;
+    entries.reserve(layout.slots.size());
+    for (const auto &methodName : layout.slots) {
+        // A slot a class does not implement stays null; the static types mean it
+        // can never be called through this class.
+        auto methodsIt = objectMethods.find(objectKey);
+        bool hasMethod = methodsIt != objectMethods.end() &&
+                         methodsIt->second.count(methodName) > 0;
+        if (!hasMethod) {
+            entries.push_back(llvm::ConstantPointerNull::get(
+                llvm::cast<llvm::PointerType>(charPtr)));
+            continue;
+        }
+        llvm::Function *fn = getOrCreateMethodFunction(objectKey, methodName);
+        entries.push_back(fn);
+    }
+    table->setInitializer(llvm::ConstantArray::get(tableType, entries));
+    return table;
+}
+
 void CodeGen::registerClassLayout(ClassDeclarationNode *cls)
 {
     if (!cls || !cls->objectTemplate) return;
@@ -2545,13 +2695,19 @@ void CodeGen::registerClassLayout(ClassDeclarationNode *cls)
     std::string objectKey = "opt_obj_" + std::to_string(reinterpret_cast<uintptr_t>(tmpl));
     if (objectLayouts.count(objectKey)) return;
 
+    std::vector<std::pair<std::string, std::string>> leadingFields;
+    if (isPolymorphicClass(cls->className)) {
+        // Hidden vtable pointer, first so every class in the hierarchy agrees
+        leadingFields.push_back({vtableFieldName(), "ptr"});
+    }
+
     // Inherited members are laid out first, so a subclass and its parent share a
     // struct prefix and the same property offsets.
     std::vector<const ObjectLiteralNode::Property *> members;
     for (const auto *inherited : cls->inheritedProperties) members.push_back(inherited);
     for (const auto &prop : tmpl->properties) members.push_back(&prop);
 
-    std::vector<std::pair<std::string, std::string>> propertyInfo;
+    std::vector<std::pair<std::string, std::string>> propertyInfo = leadingFields;
     for (const auto *member : members) {
         const auto &prop = *member;
         if (prop.method) {
@@ -2609,6 +2765,15 @@ llvm::Value *CodeGen::createOptimizedObjectWithProperties(ObjectLiteralNode *nod
     // Extract property information for layout creation
     std::vector<std::pair<std::string, std::string>> propertyInfo;
     std::vector<llvm::Value*> propertyValues;
+
+    // A polymorphic class reserves slot 0 for its vtable pointer. It is filled
+    // in by visit(NewExpressionNode) once the object exists.
+    if (ownerIt != templateOwner.end() && isPolymorphicClass(ownerIt->second->className)) {
+        llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+        propertyInfo.push_back({vtableFieldName(), "ptr"});
+        propertyValues.push_back(llvm::ConstantPointerNull::get(
+            llvm::cast<llvm::PointerType>(charPtr)));
+    }
 
     for (const auto* memberPtr : members) {
         const auto& prop = *memberPtr;
@@ -2939,6 +3104,46 @@ llvm::Value *CodeGen::visit(MethodCallNode *node)
                     argIndex++;
                 }
 
+                // Virtual dispatch: when the static type belongs to a hierarchy
+                // that overrides this method, the implementation is chosen by the
+                // object's own vtable rather than by the type at the call site.
+                // The signature comes from the static declaration, so every
+                // override in the hierarchy must agree on it.
+                std::string staticClass = classNameForObjectKey(methodObjectKey);
+                auto layoutIt = vtableLayouts.find(staticClass);
+                if (layoutIt != vtableLayouts.end()) {
+                    auto slotIt = layoutIt->second.slotOfMethod.find(node->methodName);
+                    auto classLayoutIt = objectLayouts.find(methodObjectKey);
+                    if (slotIt != layoutIt->second.slotOfMethod.end() &&
+                        classLayoutIt != objectLayouts.end()) {
+                        llvm::Type *charPtr =
+                            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
+
+                        // this->__vptr
+                        llvm::Value *structPtr = m_builder.CreateBitCast(
+                            objectValue,
+                            llvm::PointerType::get(classLayoutIt->second.structType, 0),
+                            "vcall_obj");
+                        llvm::Value *vptrSlot = m_builder.CreateStructGEP(
+                            classLayoutIt->second.structType, structPtr, 0, "vptr_addr");
+                        llvm::Value *vptr = m_builder.CreateLoad(charPtr, vptrSlot, "vptr");
+
+                        // vtable[slot]
+                        llvm::ArrayType *tableType = llvm::ArrayType::get(
+                            charPtr, layoutIt->second.slots.size());
+                        llvm::Value *entry = m_builder.CreateConstInBoundsGEP2_64(
+                            tableType, vptr, 0, slotIt->second, "vslot");
+                        llvm::Value *target = m_builder.CreateLoad(charPtr, entry, "vfn");
+
+                        llvm::FunctionCallee callee(methodFn->getFunctionType(), target);
+                        if (methodFn->getReturnType()->isVoidTy()) {
+                            m_builder.CreateCall(callee, args);
+                            return nullptr;
+                        }
+                        return m_builder.CreateCall(callee, args, node->methodName + "_vcall");
+                    }
+                }
+
                 if (methodFn->getReturnType()->isVoidTy()) {
                     m_builder.CreateCall(methodFn, args);
                     return nullptr;
@@ -3110,6 +3315,24 @@ llvm::Value *CodeGen::visit(NewExpressionNode *node)
         allocateObjectsOnHeap = previousHeapMode;
         llvm::Type *charPtr = llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0);
         llvm::Value *rawPtr = m_builder.CreateBitCast(objectPtr, charPtr, node->className + "_instance");
+
+        // Install the vtable before the constructor runs, so a constructor that
+        // calls a virtual method of its own class dispatches correctly.
+        if (isPolymorphicClass(node->className)) {
+            llvm::GlobalVariable *table = getOrCreateVTable(node->className);
+            if (table) {
+                std::string layoutKey = objectKeyForTypeName(node->className);
+                auto layoutIt = objectLayouts.find(layoutKey);
+                if (layoutIt != objectLayouts.end()) {
+                    llvm::Value *structPtr = m_builder.CreateBitCast(
+                        rawPtr, llvm::PointerType::get(layoutIt->second.structType, 0),
+                        "vptr_cast");
+                    llvm::Value *slot = m_builder.CreateStructGEP(
+                        layoutIt->second.structType, structPtr, 0, "vptr_slot");
+                    m_builder.CreateStore(table, slot);
+                }
+            }
+        }
 
         if (cls->hasConstructor) {
             std::string objectKey = "opt_obj_" +

@@ -279,6 +279,29 @@ private:
     // Walks `extends` and fills in inheritedProperties, parent-first. Detects
     // unknown parents and inheritance cycles.
     void resolveClassInheritance(ClassDeclarationNode *cls, std::set<std::string> &visiting);
+
+    // --- Virtual dispatch ---
+    // Only hierarchies that actually override a method get vtables. A class that
+    // is never subclassed keeps its direct calls, so programs that use no
+    // polymorphism pay nothing for it — which is what keeps the benchmarks flat.
+    struct VTableLayout {
+        std::vector<std::string> slots;             // slot index -> method name
+        std::map<std::string, size_t> slotOfMethod; // method name -> slot index
+    };
+    // Every class in a polymorphic hierarchy shares one slot assignment, so the
+    // same method sits at the same index in a parent's and a child's vtable.
+    std::map<std::string, VTableLayout> vtableLayouts;   // class name -> its hierarchy's
+    std::map<std::string, llvm::GlobalVariable *> vtableGlobals;
+
+    // Decides which hierarchies are polymorphic and assigns their slots
+    void computeVirtualDispatch();
+    bool isPolymorphicClass(const std::string &className) const;
+    // Which class an object layout key belongs to ("" if none)
+    std::string classNameForObjectKey(const std::string &objectKey) const;
+    // Emits (once) the vtable for a class, forcing its methods to be generated
+    llvm::GlobalVariable *getOrCreateVTable(const std::string &className);
+    // Name of the hidden vtable-pointer field, laid out at slot 0
+    static const char *vtableFieldName() { return "__vptr"; }
     // Which class an object template belongs to, so inherited members can be
     // found when instantiating it
     std::map<const ObjectLiteralNode *, ClassDeclarationNode *> templateOwner;

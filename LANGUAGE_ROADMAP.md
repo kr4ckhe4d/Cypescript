@@ -16,7 +16,7 @@ where Cypescript accepts a program it should reject.
 | 7.1 | Compound assignment evaluates its target once | ✅ **DONE** |
 | 7.2 | Frictionless C/C++ interop (`link source`) | ✅ **DONE** |
 | 7.3 | A real type checker | 🔶 **Core landed** — see below |
-| 7.4 | `class extends` | 🔶 **Inheritance landed; dispatch is static** |
+| 7.4 | `class extends`, with virtual dispatch | ✅ **DONE** |
 | 7.5 | Property access on call results (`f().prop`) | ✅ **DONE** |
 | 7.6 | Enums, 2D arrays, typed buffers | ⬜ **NEXT** |
 | 7.7 | Windows validation | ⬜ |
@@ -176,45 +176,59 @@ inherits its parent's. Unknown parents and inheritance cycles are rejected.
 The semantic pass folds each ancestor's fields into its subclasses, so a field's declared
 type is checked through the whole chain.
 
-### The limitation: dispatch is static, not virtual
+### Virtual dispatch
 
-**There are no vtables.** The method chosen depends on the type the compiler knows at the
-call site, not on the object's runtime class:
+Dispatch follows the object's **runtime** class, not the type at the call site:
 
 ```ts
-class Base    { tag(): void { println("base"); } }
-class Derived extends Base { tag(): void { println("derived"); } }
+class Shape  { area(): f64 { return 0.0; } }
+class Circle extends Shape { area(): f64 { return 3.14159 * this.r * this.r; } }
+class Square extends Shape { area(): f64 { return this.side * this.side; } }
 
-let d: Derived = new Derived();
-d.tag();                                  // derived  ✓
+let shapes: Shape[] = [];
+shapes.push(new Circle(2.0));
+shapes.push(new Square(3.0));
 
-let viaSlot: Base = new Derived();
-viaSlot.tag();                            // derived  — the declaration tracks the
-                                          //   initializer's concrete class
-
-let arr: Base[] = [];  arr.push(new Derived());
-let fromArray: Base = arr[0];
-fromArray.tag();                          // base     ✗ not virtual
-
-function callIt(b: Base): void { b.tag(); }
-callIt(new Derived());                    // base     ✗ not virtual
+for (const s of shapes) { println(s.area()); }   // 12.5664, 9
 ```
 
-So `extends` buys **code reuse and overriding**, not polymorphism. It is genuinely useful
-when the concrete type is visible, and it is exactly wrong if you expect a `Shape[]` to
-dispatch to each element's own `area()`. `tests/test_inheritance.csc` pins this behaviour
-down deliberately so it cannot drift unnoticed.
+It works through parent-typed array elements, `for...of` bindings, parameters and locals,
+and through a method inherited from the parent that calls an overridden one
+(`describe()` calling `this.area()` resolves per subclass).
 
-Real virtual dispatch needs a vtable pointer in the struct layout, built per class and
-stored at construction, with method calls going indirect when the static type has
-subclasses. That is a substantial change and it would put an indirect call in a path the
-benchmarks measure, so it is its own piece of work rather than a follow-on tweak.
+**Only hierarchies that actually override something get vtables.** `computeVirtualDispatch`
+walks each chain and marks it polymorphic only if some method name is declared in more than
+one class in it. Everything else — including every class in the benchmarks — keeps a direct
+call and generates exactly the code it did before:
 
-### Also still missing
+```llvm
+; class with no subclasses
+%get_call = call i32 @opt_obj_4386780832_get(ptr %obj_ptr_load)
 
-`super` — a subclass constructor cannot call its parent's. It can assign the inherited
-fields directly (`this.name = ...`), since they are in its layout, which covers most of
-what `super()` would do.
+; polymorphic hierarchy
+@B_vtable = internal constant [1 x ptr] [ptr @opt_obj_4326782944_get]
+%vptr = load ptr, ptr %vptr_addr
+%vfn  = load ptr, ptr %vslot
+```
+
+Mechanically: a polymorphic class carries a hidden `__vptr` as field 0, so parent and child
+still share a struct prefix; every class in a hierarchy shares one slot assignment, so the
+same method sits at the same index everywhere; the vtable is installed by `new` *before*
+the constructor runs, so a constructor calling a virtual method dispatches correctly. The
+constructor itself is never virtual. Vtables are emitted lazily and registered before their
+method bodies are generated, so a method that constructs its own class does not recurse
+forever. Benchmarks unchanged at 0.051s / 0.025s.
+
+A bug this surfaced: an **empty class body produced a null instance**, because an object
+template with no properties took the `{}` fast path. It was harmless only while nothing
+dereferenced it — storing a vtable into it crashed immediately. A class template now always
+gets a real allocation.
+
+### Still missing
+
+`super` — a subclass constructor cannot call its parent's, nor can an override call the
+implementation it replaced. It can assign inherited fields directly (`this.name = ...`),
+since they are in its layout, which covers most of what `super()` would do.
 
 ## 7.5 Property access on call results ✅ DONE
 

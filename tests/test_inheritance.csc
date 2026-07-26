@@ -51,9 +51,14 @@ println(shapes.length);
 println(shapes[0].label);
 println(shapes[1].sides);
 
-// --- DISPATCH IS STATIC, NOT VIRTUAL ---
-// The method chosen depends on the type the compiler knows at the call site,
-// not on the object's runtime class. There are no vtables. Reaching a Square
-// through a `Shape`-typed slot therefore runs Shape's area(), not Square's.
+// --- DISPATCH IS VIRTUAL ---
+// The method chosen follows the object's runtime class, not the type at the
+// call site. Reaching a Square through a `Shape`-typed slot runs Square's
+// area(). (This test previously asserted the opposite — the limitation it
+// pinned down was removed when virtual dispatch landed.)
+// shapes[0] is a Square that kept the default size of 2.0
 let viaParent: Shape = shapes[0];
-println(viaParent.area());   // 0 — Shape's area, even though it is a Square
+println(viaParent.area());   // 4 — Square's area, reached through a Shape slot
+
+function areaOf(s: Shape): f64 { return s.area(); }
+println(areaOf(new Square("x", 4)));   // 4 — dispatches through a parameter too
