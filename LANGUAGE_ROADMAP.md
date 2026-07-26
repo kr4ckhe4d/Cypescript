@@ -144,34 +144,6 @@ test valid and watching it fail.
   would reject it; tightening this needs a survey of existing code first.
 - **Method call results** are unknown types, so nothing downstream of them is checked.
 
-Two related symptoms:
-
-- **Type errors surface at codegen, without positions.** `println(obj.missing)` gives
-  *"Codegen Error: Object properties not found for variable 'obj'"* — right diagnosis,
-  wrong message, and no line or column. Parser errors carry positions; codegen errors
-  do not.
-- **Codegen throws where a checker should have spoken.** Most `Codegen Error` messages
-  are really type errors that escaped.
-
-### Shape of the work
-
-1. **A type representation.** Types are currently canonical strings (`"i32"`, `"Rock[]"`,
-   `"closure(i32)=>i32"`). A small `Type` struct with a kind, name and element type would
-   be clearer, but strings are workable and far less invasive — decide this first, because
-   everything else builds on it.
-2. **A checking pass between Semantic and CodeGen**, reusing the position plumbing
-   `SemanticAnalyzer` already has. It annotates each expression with its type and reports
-   mismatches at assignment, `return`, call arguments and property access.
-3. **Delete the guesswork in CodeGen.** Much of `visit(VariableDeclarationNode)` is
-   inference-by-inspection (`initVal->getType()->isPointerTy() ? "string" : ...`). With a
-   checked AST, codegen reads types instead of re-deriving them.
-
-### Why it is worth the disruption
-
-It closes blocker #6 (positions on all errors), removes most `Codegen Error` crashes, and
-is the prerequisite for both `extends` and union types — neither can be checked without
-knowing type relationships.
-
 ## 7.4 `class extends` ⬜
 
 ```ts
@@ -211,6 +183,8 @@ break it are written on the job in `.github/workflows/ci.yml`.
 
 ## Suggested order
 
-**7.3 first.** 7.4 depends on it, 7.5 is small enough to slot in anywhere, and 7.6 is
-optional polish. Nothing else changes what the language will *accept* — and accepting
-`let bad: i32 = someString` is the most surprising thing Cypescript currently does.
+**7.4 next.** The type checker's core is in, and the two things it cannot yet do —
+class-to-class assignability, and knowing an object literal's shape — both want the type
+relationships that `extends` forces you to build anyway. 7.5 is small and self-contained
+enough to slot in whenever it gets annoying; 7.6 is optional polish; 7.7 needs hardware
+nobody in this loop has.
