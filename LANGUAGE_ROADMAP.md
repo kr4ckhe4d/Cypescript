@@ -17,8 +17,8 @@ where Cypescript accepts a program it should reject.
 | 7.2 | Frictionless C/C++ interop (`link source`) | ✅ **DONE** |
 | 7.3 | A real type checker | 🔶 **Core landed** — see below |
 | 7.4 | `class extends` | 🔶 **Inheritance landed; dispatch is static** |
-| 7.5 | Property access on call results (`f().prop`) | ⬜ **NEXT** |
-| 7.6 | Enums, 2D arrays, typed buffers | ⬜ |
+| 7.5 | Property access on call results (`f().prop`) | ✅ **DONE** |
+| 7.6 | Enums, 2D arrays, typed buffers | ⬜ **NEXT** |
 | 7.7 | Windows validation | ⬜ |
 
 ---
@@ -216,16 +216,30 @@ benchmarks measure, so it is its own piece of work rather than a follow-on tweak
 fields directly (`this.name = ...`), since they are in its layout, which covers most of
 what `super()` would do.
 
-## 7.5 Property access on call results ⬜
+## 7.5 Property access on call results ✅ DONE
 
 ```ts
-findBox(box).hits += 5;
-// Parse Error: Expected ';' after statement. Found DOT
+println(make(41).value);      // was: Parse Error: Expected ';'. Found DOT
+println(new Box(7).value);
+pick(c).hits += 5;
 ```
 
-A call result cannot be indexed or have a property read. `parseVariableExpression` handles
-calls but does not chain into `parseArrayOrObjectAccess`. Small, self-contained, and it
-removes a surprising papercut — it was hit while writing the compound-assignment tests.
+The cause was narrower than "call results are special": **only the plain-variable path
+chained into `parseArrayOrObjectAccess`**. Every other producer — calls, `new`, array and
+object literals, parenthesised expressions — returned straight out and stopped dead at the
+following dot.
+
+So the fix is one chaining loop at the end of `parsePrimaryExpression` rather than a patch
+at each of the five call sites. It interleaves with the non-null assertion, so
+`map.get(k)!.length` parses as well as `queue.shift()!`.
+
+Nothing was needed in codegen: `visit(ObjectAccessNode)` already falls back to visiting an
+arbitrary base expression, and `getExpressionObjectKey` already resolves a call's declared
+return type — both from Phase 3.
+
+`tests/test_postfix_chaining.csc` covers calls, `new`, literals, parenthesised expressions,
+`!` interleaving, and — closing a loop from 7.1 — `pick(c).hits += 5`, which needs *both*
+this and the evaluate-the-target-once fix to be right. It reports one call, not two.
 
 ## 7.6 Enums, 2D arrays, typed buffers ⬜
 

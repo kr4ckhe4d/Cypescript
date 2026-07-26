@@ -847,7 +847,16 @@ std::unique_ptr<ExpressionNode> Parser::parsePrimaryExpression()
     else throw std::runtime_error("Parsing failed: Expected an expression, found " +
                                   std::string(tokenTypeToString(peek().type)) + " ('" + peek().value + "')" +
                                   tokenPosition(peek()));
-    while (peek().type == TOK_BANG) advance();
+    // Anything can be followed by `.prop`, `[i]` or `.method()`. Chaining here
+    // rather than in each producer means it works uniformly for call results,
+    // `new` expressions, literals and parenthesised expressions — `f().prop`
+    // used to be a parse error because only the plain-variable path chained.
+    // The loop interleaves with `!` so `map.get(k)!.length` parses too.
+    while (true) {
+        expr = parseArrayOrObjectAccess(std::move(expr));
+        if (peek().type == TOK_BANG) { advance(); continue; }
+        break;
+    }
     return expr;
 }
 
