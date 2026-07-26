@@ -676,12 +676,13 @@ public:
 //     link linux "GL";
 //     link windows "opengl32";
 // `link source "mylib.c";` compiles a C/C++ file alongside the program, so using
-// your own native code needs no separate build step or library.
+// your own native code needs no separate build step or library, and
+// `link include "vendor/include";` puts a directory on its header search path.
 // Collected by the driver and turned into flags on the final clang++ invocation.
 class LinkDirectiveNode : public StatementNode
 {
 public:
-    enum class Kind { Library, Framework, SearchPath, Source };
+    enum class Kind { Library, Framework, SearchPath, Source, IncludePath };
     enum class Platform { Any, MacOS, Linux, Windows };
 
     Kind kind;
@@ -696,7 +697,8 @@ public:
         printIndent(os, indent);
         const char *kindName = kind == Kind::Library ? "library"
                              : kind == Kind::Framework ? "framework"
-                             : kind == Kind::Source ? "source" : "path";
+                             : kind == Kind::Source ? "source"
+                             : kind == Kind::IncludePath ? "include" : "path";
         const char *platformName = platform == Platform::Any ? ""
                                  : platform == Platform::MacOS ? "macos "
                                  : platform == Platform::Linux ? "linux " : "windows ";

@@ -153,6 +153,21 @@ else
     FAIL=$((FAIL + 1))
 fi
 
+# --- 03_native_extension: a game bringing its own C via `link source` ---
+compile_game "$ROOT_DIR/example/game/03_native_extension.csc" "$BIN_DIR/native_ext" || exit 1
+out=$(CYPS_HEADLESS=1 CYPS_FRAMES=300 "$BIN_DIR/native_ext" 2>&1) || true
+check "03_native_extension runs" "$out" "Native extension ended"
+
+emitted=$(echo "$out" | sed -n 's/.*— \([0-9]*\) particles emitted.*/\1/p')
+printf "  %-32s" "03 drives its C simulation"
+if [[ -n "$emitted" && "$emitted" -gt 0 ]]; then
+    echo -e "${GREEN}✅ PASS${NC} (${emitted} particles)"
+    PASS=$((PASS + 1))
+else
+    echo -e "${RED}❌ FAIL${NC} (emitted: '${emitted}', expected > 0)"
+    FAIL=$((FAIL + 1))
+fi
+
 # --- Memory: a long run must not grow -----------------------------------------
 # The whole point of Phase 4. Peak RSS is sampled at a short and a long run; a
 # leak shows up as the long run using materially more memory than the short one.

@@ -1274,6 +1274,7 @@ bool Parser::isLinkDirectiveAhead() const
 
     auto isQualifier = [](const std::string &word) {
         return word == "framework" || word == "path" || word == "source" ||
+               word == "include" ||
                word == "macos" || word == "linux" || word == "windows";
     };
     if (!isQualifier(peek(1).value)) return false;
@@ -1333,6 +1334,7 @@ std::unique_ptr<StatementNode> Parser::parseLinkDirective()
         if (word == "framework")      kind = LinkDirectiveNode::Kind::Framework;
         else if (word == "path")      kind = LinkDirectiveNode::Kind::SearchPath;
         else if (word == "source")    kind = LinkDirectiveNode::Kind::Source;
+        else if (word == "include")   kind = LinkDirectiveNode::Kind::IncludePath;
         else if (word == "macos")     platform = LinkDirectiveNode::Platform::MacOS;
         else if (word == "linux")     platform = LinkDirectiveNode::Platform::Linux;
         else if (word == "windows")   platform = LinkDirectiveNode::Platform::Windows;

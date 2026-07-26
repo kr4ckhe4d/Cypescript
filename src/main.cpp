@@ -300,7 +300,8 @@ std::string shellQuote(const std::string& arg) {
 // step, no library to produce first.
 std::vector<std::string> collectLinkFlags(const ProgramNode* astRoot,
                                           const fs::path& sourceDir = fs::path(),
-                                          std::vector<std::string>* nativeSources = nullptr) {
+                                          std::vector<std::string>* nativeSources = nullptr,
+                                          std::vector<std::string>* includeDirs = nullptr) {
     std::vector<std::string> flags;
     if (!astRoot) return flags;
 
@@ -330,6 +331,16 @@ std::vector<std::string> collectLinkFlags(const ProgramNode* astRoot,
             case LinkDirectiveNode::Kind::SearchPath:
                 flags.push_back("-L" + link->value);
                 break;
+            case LinkDirectiveNode::Kind::IncludePath: {
+                // Header search path for the native sources, resolved like them
+                fs::path candidate = link->value;
+                if (candidate.is_relative() && !sourceDir.empty()) {
+                    fs::path beside = sourceDir / candidate;
+                    if (fs::is_directory(beside)) candidate = beside;
+                }
+                if (includeDirs) includeDirs->push_back(candidate.string());
+                break;
+            }
             case LinkDirectiveNode::Kind::Source: {
                 // Relative to the program being compiled, so a project keeps its
                 // native sources beside its .csc files; falls back to the cwd.
@@ -434,7 +445,9 @@ fs::path createBundle(const fs::path& executable, const fs::path& sourceFile,
 // own invocation because a single clang++ command cannot give a .c file C rules
 // and a .cpp file C++17 at the same time — mixing them is how `link source` used
 // to fail on ordinary C like `char *p = malloc(n);`.
-std::string compileNativeSource(const std::string& source, bool verbose) {
+std::string compileNativeSource(const std::string& source,
+                                const std::vector<std::string>& includeDirs,
+                                bool verbose) {
     fs::path path(source);
     std::string extension = path.extension().string();
     for (char& c : extension) c = static_cast<char>(std::tolower(c));
@@ -448,8 +461,11 @@ std::string compileNativeSource(const std::string& source, bool verbose) {
                       (path.stem().string() + "_" +
                        std::to_string(std::hash<std::string>{}(source)) + ".o");
 
-    std::string command = driver + " -O2 -c " + shellQuote(source) +
-                          standard + " -o " + shellQuote(object.string());
+    std::string command = driver + " -O2 -c " + shellQuote(source) + standard;
+    for (const std::string& directory : includeDirs) {
+        command += " " + shellQuote("-I" + directory);
+    }
+    command += " -o " + shellQuote(object.string());
     if (verbose) {
         llvm::outs() << "Compiling native source: " << Colors::CYAN << command
                      << Colors::RESET << "\n";
@@ -771,14 +787,15 @@ int main(int argc, char** argv) {
             // Libraries the program asked for itself via `link "raylib";`, followed
             // by anything passed on the command line (which therefore wins).
             std::vector<std::string> nativeSources;
+            std::vector<std::string> includeDirs;
             std::vector<std::string> sourceLinkFlags =
                 collectLinkFlags(astRoot.get(), fs::path(opts.inputFile).parent_path(),
-                                 &nativeSources);
+                                 &nativeSources, &includeDirs);
 
             // `link source "x.c";` — compile each one first, then link the objects
             std::vector<std::string> nativeObjects;
             for (const std::string& source : nativeSources) {
-                nativeObjects.push_back(compileNativeSource(source, opts.verbose));
+                nativeObjects.push_back(compileNativeSource(source, includeDirs, opts.verbose));
             }
             for (const std::string& object : nativeObjects) {
                 compileCmd += " " + shellQuote(object);

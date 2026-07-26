@@ -45,11 +45,13 @@ and the full language test suite work either way.
 | `00_window.csc` | Opening a window, the frame loop, text, colors |
 | `01_breakout.csc` | A complete game: paddle, ball physics, brick field, scoring, lives, sound |
 | `02_asteroids.csc` | Entity objects — classes in arrays, spawned and despawned at runtime |
+| `03_native_extension.csc` | Bringing your own C into a game with `link source` |
 
 ```bash
 ./build/cscript -r example/game/00_window.csc
 ./build/cscript -r example/game/01_breakout.csc
 ./build/cscript -r example/game/02_asteroids.csc
+./build/cscript -r example/game/03_native_extension.csc
 ```
 
 **Breakout controls:** LEFT/RIGHT or A/D to move, SPACE to launch, R to restart, ESC to quit.
@@ -141,6 +143,24 @@ function takeBullet(pool: Bullet[]): Bullet {
 
 `removeAt()` and `clear()` still exist and are the right tool when entity churn is not in
 the hot path. See [GAME_ROADMAP.md](../../GAME_ROADMAP.md) Phase 4 for the measurements.
+
+## Bringing your own C
+
+The game runtime is itself nothing but `declare` bindings over a C shim — and you can do
+the same in your own project without touching the compiler's build:
+
+```ts
+link source "native/particles.c";      // compiled with your program
+link include "vendor/include";         // if that C needs third-party headers
+
+declare function particles_step(field: ptr, dt: f64): void;
+```
+
+`03_native_extension.csc` runs a particle simulation entirely in C and draws it from
+Cypescript — the hot loop in C, the presentation in Cypescript, with an opaque `ptr` as the
+only thing crossing between them.
+
+![Particles simulated in C, drawn from Cypescript](../../docs/images/native_extension.png)
 
 ## Assets and shipping
 
