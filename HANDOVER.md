@@ -6,7 +6,7 @@ machine. Written for picking this up cold.
 - [ROADMAP.md](ROADMAP.md) — what is done and what is next
 - [STEERING.md](STEERING.md) — the rules that shouldn't change
 
-**Head:** `b5b0f4b` on `main`. **CI: green on macOS and Linux** as of `d1b9a5c`.
+**Head:** `48bf840` on `main`. **CI: green on macOS and Linux** as of `d1b9a5c`.
 **v1.1.0 is released** — the tag contains the LLVM linkage fix (`97dcb55`), the
 `.deb` dependency fix (`cd4fe07`) and the CI guard (`d1b9a5c`), so the published
 tarball is not the one that failed on Arch.
@@ -37,7 +37,7 @@ gh run view <run-id> --log | grep "LLVM Linkage"
 | Benchmarks at parity | ✅ local | ✅ CI (single run) | ❌ **not run** | ❌ never |
 | `.deb` builds and installs | — | ✅ CI | — | — |
 | Game runtime vs **system** raylib | ❌ never | ❌ never | ✅ local (raylib 6.0) | ❌ never |
-| A game in a **real window** | ✅ local | ❌ **never** | ❌ never | ❌ never |
+| A game in a **real window** | ✅ local | ❌ **never** | ✅ local (Wayland) | ❌ never |
 | `--bundle` output | ✅ local (`.app`) | ✅ CI (directory) | ✅ local (directory) | ❌ never |
 
 Counts as of `c714dfe`: **66** language tests (42 positive with output fixtures, 24
@@ -54,10 +54,17 @@ check. This was the trap STEERING.md names — the script skips cleanly rather t
 failing, so 12/12 green was not 14/14 green. Read the "⏭ SKIP" lines before calling
 it a pass.
 
-Two gaps still open: **no Linux run has ever opened a window** — every Linux run so
-far is headless, which exercises the loop, physics and scoring but never
-X11/Wayland, GL context creation or audio. And **no benchmark has run on Arch**, so
-rule 2's parity claim rests on macOS local plus a single Ubuntu CI run.
+**Linux has now opened a window.** `02_asteroids` ran windowed on Arch under a
+Wayland session (`XDG_SESSION_TYPE=wayland`, XWayland at `DISPLAY=:0`), against the
+**vendored raylib 5.5**, and its synthesised audio played. That is the first Linux
+exercise of window creation, the GL context and the audio path — everything before
+it was headless, which covers the loop, physics and scoring and none of those three.
+Note `00_window.csc` cannot stand in for this: it makes no sound at all, so a
+windowed run of it says nothing about audio.
+
+Still open: **no benchmark has run on Arch**, so rule 2's parity claim rests on macOS
+local plus a single Ubuntu CI run. And no *CI* run has opened a window on any
+platform — the Linux coverage above is local only.
 
 The `--bundle` row is corrected from an earlier version of this file, which said the
 non-Apple branch had never executed. It had: `tests/run_game_tests.sh:243` has an
@@ -269,6 +276,11 @@ CMake**, so it needs those headers rather than a raylib package. Do not skip `ti
    Watch for: a window that actually appears, 60 fps in the HUD, keyboard input
    (arrows/A-D, SPACE, R, ESC), and audio — every sound is **synthesised**, so
    silence means the audio path is broken, not that an asset is missing.
+
+   `02_asteroids` is confirmed working this way on Arch under Wayland/XWayland.
+   What that does *not* cover: a session running X11 proper rather than XWayland,
+   a different GPU driver, and every other distro. `CYPS_FRAMES=180` bounds a
+   windowed run so it ends on its own if you don't want it interactive.
 3. **The non-Apple bundle branch on a real game.** The branch itself is covered by
    `run_game_tests.sh`, but only against a synthetic probe:
    ```bash
