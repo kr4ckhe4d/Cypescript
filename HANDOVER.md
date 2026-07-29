@@ -6,8 +6,17 @@ machine. Written for picking this up cold.
 - [ROADMAP.md](ROADMAP.md) — what is done and what is next
 - [STEERING.md](STEERING.md) — the rules that shouldn't change
 
-**Head:** `97dcb55` on `main`. **CI: green on macOS and Linux** as of `c714dfe`;
-`97dcb55` changes how `cscript` links to LLVM and has not been through CI yet.
+**Head:** `cd4fe07` on `main`. **CI: green on macOS and Linux** as of `ce76bc9`,
+which is the first run carrying the LLVM linkage change. `cd4fe07` follows it and
+has not been through CI yet.
+
+Reading CI logs needs admin on the repo — the REST API returns `403 Must have admin
+rights` — so use `gh`, not `curl`:
+
+```bash
+gh run list --limit 5
+gh run view <run-id> --log | grep "LLVM Linkage"
+```
 
 ---
 
@@ -62,9 +71,9 @@ over how LLVM is packaged — details below.
 
 | Commit | What |
 |---|---|
+| `cd4fe07` | Declare the LLVM runtime dep the `.deb` actually has; keep the install rpath |
 | `97dcb55` | **The Arch build fix** — link the LLVM dylib where components aren't shipped |
 | `c714dfe` | Remove the superseded C++ workflow; bring the README current |
-| `f825d68` | Compile every README snippet in CI |
 
 Older but still load-bearing: `2218efa` was the Linux CI fix — `println` of a null
 string emitted a bare `puts`, which segfaults on glibc and prints `(null)` on
@@ -90,35 +99,54 @@ always defines — and links the single `LLVM` dylib when it is `ON`, falling ba
 the mapped component archives otherwise. An undefined variable falls through to the
 archives, so the fallback is the old behaviour exactly.
 
-**The part that needs someone else's machine.** This is a platform branch, and per
-rule 8 neither arm is compiled everywhere: Arch takes the dylib arm, and nothing
-here can compile the archive arm. So the configure step now **prints which arm it
-took**:
+**Which arm each platform takes — measured, not assumed.** The configure step
+prints it, because rule 8 says a branch nobody compiles is not portable code:
 
 ```
 -- LLVM Linkage: shared (libLLVM)      # or: static components
 ```
 
-Read that line on macOS and in the Ubuntu CI log. What it tells you:
+Run `ce76bc9` answered it for all three, and the answer was *not* the expected one:
 
-- `static components` — that platform is on the pre-existing path, unaffected by
-  the change, and there is nothing further to check.
-- `shared (libLLVM)` — that platform just moved onto a path it has not used before,
-  and two things deserve a look. First, `cscript` is installed with no
-  `INSTALL_RPATH` and no `CMAKE_INSTALL_RPATH_USE_LINK_PATH`, so if the dylib has an
-  `@rpath`-style install name the binary can run from `build/` and fail once
-  installed — **test the installed binary, not the build-tree one**. Adding
-  `INSTALL_RPATH_USE_LINK_PATH TRUE` to the target fixes that and is a no-op in the
-  static case. Second, packaging: `packaging/cypescript.rb` already has a runtime
-  `depends_on "llvm"`, but `packaging/build-deb.sh` declares only `Depends: clang`,
-  with no `libllvm`. That likely resolves transitively, but it would be implicit,
-  and CI cannot catch it because the runner already has `llvm-dev` installed.
+| | LLVM | arm |
+|---|---|---|
+| Arch (local) | 22.1.6 | shared |
+| macOS (Homebrew) | 22.1.8 | shared |
+| Ubuntu CI | 18.1.3 | shared |
 
-Ubuntu CI is green today on the archive path, which is good evidence that
-`llvm-dev` ships usable archives. Whether it *also* sets `DYLIB=ON` was not
-measured — the printed line answers it on the next run. Do not assume Fedora,
-Homebrew or Debian match Arch here; that assumption was made once while writing
-this fix and was wrong.
+**Every platform we build on is `DYLIB=ON`.** So this was not an Arch quirk — it
+moved macOS and Ubuntu off the archives too, and both stayed green. The visible
+effect is size: the macOS artifact went 3,253,749 → 304,881 bytes and the `.deb`
+2,797,706 → 1,266,525, which is LLVM leaving the binary. Artifact sizes are
+readable without admin (`gh run view`, or the public artifacts API) and are a decent
+proxy for this if you ever need to check it again without log access.
+
+Two consequences, both now fixed in `cd4fe07`:
+
+1. **The `.deb` had an undeclared dependency.** `readelf -d` on the shipped
+   artifact showed `NEEDED libLLVM.so.18.1` and `RUNPATH /usr/lib/llvm-18/lib`
+   against a control file saying only `Depends: clang`. `clang` is unversioned, so
+   on a release where it resolves to a different LLVM major the package installs
+   and then fails to start. `build-deb.sh` now computes the dependency from the
+   binary with `dpkg-shlibdeps`. **CI structurally cannot catch this class of
+   bug** — the machine that builds the package always has `llvm-dev` on it — so
+   check the control file of the artifact, not the smoke test's exit code.
+2. **`cmake --install` could drop the rpath.** Fixed with
+   `INSTALL_RPATH_USE_LINK_PATH`. Worth knowing that this never affected shipping:
+   `packaging/cypescript.rb` and `packaging/build-deb.sh` both *copy*
+   `build/cscript`, rpath intact, and nothing anywhere runs `cmake --install`. The
+   `install(TARGETS ...)` rules matter only to someone installing by hand.
+
+**What is now unexercised.** With every platform on the dylib arm, the
+`static components` fallback is compiled by nobody — the situation rule 8 exists to
+flag. It is not speculative code (it was CI-green until `97dcb55`), but it will rot
+silently. It stays because a stock source-built LLVM defaults to `DYLIB=OFF` and
+would need it. If you ever build against one, that is the configuration to report
+back on.
+
+Do not assume Fedora, Homebrew or Debian match each other here. That assumption was
+made once while writing this fix, about Debian, and was wrong in the other
+direction — the printed line is there so nobody has to guess again.
 
 ---
 
