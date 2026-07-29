@@ -8,17 +8,29 @@ pkgdesc="TypeScript-style language that compiles to native code via LLVM"
 arch=('x86_64' 'aarch64')
 url="https://github.com/kr4ckhe4d/Cypescript"
 license=('MIT')
-# clang is needed at runtime: cscript invokes clang++ to link executables
-depends=('clang' 'llvm-libs')
+# clang is needed at runtime: cscript invokes clang++ to link executables.
+# llvm-libs provides the libLLVM.so that cscript itself links against.
+# raylib is needed whenever a compiled program imports the game module, and at
+# build time for the runtime shim — see the VENDOR_RAYLIB note in build().
+depends=('clang' 'llvm-libs' 'raylib')
 makedepends=('cmake' 'llvm')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/kr4ckhe4d/Cypescript/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('fe97686d62da0f1efac33b2b5a91620b2ceb13a6ffb1061c89342707f594faf4')
 
 build() {
     cd "Cypescript-$pkgver"
+    # Link the system raylib rather than the default, which fetches raylib 5.5
+    # from GitHub while building. That download is not covered by sha256sums and
+    # needs network from build(), which Arch's guidelines disallow — Homebrew
+    # rejects the same thing outright.
+    #
+    # This makes the raylib dependency load-bearing: when raylib is missing CMake
+    # skips the game runtime with a status message instead of failing, so a
+    # dropped dependency would quietly ship a package that cannot compile games.
     cmake -B build \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX=/usr
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCYPESCRIPT_VENDOR_RAYLIB=OFF
     cmake --build build
 }
 
