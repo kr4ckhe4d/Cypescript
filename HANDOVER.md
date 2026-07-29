@@ -128,9 +128,13 @@ Two consequences, both now fixed in `cd4fe07`:
    against a control file saying only `Depends: clang`. `clang` is unversioned, so
    on a release where it resolves to a different LLVM major the package installs
    and then fails to start. `build-deb.sh` now computes the dependency from the
-   binary with `dpkg-shlibdeps`. **CI structurally cannot catch this class of
-   bug** — the machine that builds the package always has `llvm-dev` on it — so
-   check the control file of the artifact, not the smoke test's exit code.
+   binary with `dpkg-shlibdeps`. The smoke test cannot catch this class of bug —
+   the machine that builds the package always has `llvm-dev` on it, so `cscript`
+   starts either way — so a **"Check the .deb declares what the binary needs"**
+   step now asserts the control file against the binary's own `NEEDED` entries,
+   via `readelf` and `dpkg -S`. It deliberately does *not* rerun the
+   `dpkg-shlibdeps` call that produced the list, because a check that reruns the
+   producer passes vacuously whenever the producer silently does nothing.
 2. **`cmake --install` could drop the rpath.** Fixed with
    `INSTALL_RPATH_USE_LINK_PATH`. Worth knowing that this never affected shipping:
    `packaging/cypescript.rb` and `packaging/build-deb.sh` both *copy*

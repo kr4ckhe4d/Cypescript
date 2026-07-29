@@ -118,6 +118,49 @@ jobs:
       - name: Build .deb package
         run: bash packaging/build-deb.sh
 
+      # The smoke test below cannot catch a missing dependency: this runner has
+      # llvm-dev installed, so cscript starts whether or not the package declares
+      # what it links against. A .deb that shipped `Depends: clang` alone while the
+      # binary needed libLLVM.so.18 passed CI green and would have failed on a
+      # user's machine. So assert the control file against the binary itself,
+      # deriving the answer from readelf and dpkg rather than from the same
+      # dpkg-shlibdeps call build-deb.sh makes — a check that reruns the producer
+      # passes vacuously when the producer silently does nothing.
+      - name: Check the .deb declares what the binary needs
+        run: |
+          set -uo pipefail
+          deb=$(ls cypescript_*_*.deb)
+          depends=$(dpkg-deb -f "$deb" Depends)
+          echo "Depends: $depends"
+          names=$(echo "$depends" | tr ',' '\n' | sed 's/(.*)//' | tr -d ' ')
+
+          rm -rf /tmp/debroot && dpkg-deb -x "$deb" /tmp/debroot
+          bin=/tmp/debroot/usr/bin/cscript
+          missing=0
+
+          for soname in $(readelf -d "$bin" | sed -n 's/.*NEEDED.*\[\(.*\)\]/\1/p'); do
+            path=$(ldd "$bin" | awk -v s="$soname" '$1 == s { print $3 }')
+            if [ -z "$path" ]; then
+              echo "  ?  $soname — could not resolve, skipping"
+              continue
+            fi
+            pkg=$(dpkg -S "$path" 2>/dev/null || dpkg -S "$(realpath "$path")" 2>/dev/null)
+            pkg=$(echo "$pkg" | head -1 | cut -d: -f1)
+            if [ -z "$pkg" ]; then
+              echo "  ?  $soname — no owning package, skipping"
+            elif echo "$names" | grep -Fqx "$pkg"; then
+              echo "  ok $soname -> $pkg"
+            else
+              echo "::error::$soname is provided by '$pkg', which Depends does not name"
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            echo "The package would fail to start on a machine without the build dependencies."
+            exit 1
+          fi
+
       - name: Install and smoke-test the .deb
         run: |
           sudo apt install -y ./cypescript_*_*.deb
