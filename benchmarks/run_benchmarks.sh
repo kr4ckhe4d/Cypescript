@@ -29,7 +29,11 @@ echo -e "${BOLD}  Runs per benchmark: $RUNS${NC}"
 echo -e "${BOLD}============================================${NC}"
 echo ""
 
-# Compile all Cypescript benchmarks
+# Compile all Cypescript benchmarks. Every binary that lands is recorded, so the
+# cleanup at the bottom removes exactly what this loop created — a hardcoded list
+# there silently leaked whichever benchmark was added last.
+declare -a COMPILED=()
+
 echo -e "${CYAN}Compiling Cypescript benchmarks...${NC}"
 for csc_file in "$SCRIPT_DIR"/bench_*.csc "$SCRIPT_DIR"/benchmark_*.csc; do
     [[ -f "$csc_file" ]] || continue
@@ -38,7 +42,11 @@ for csc_file in "$SCRIPT_DIR"/bench_*.csc "$SCRIPT_DIR"/benchmark_*.csc; do
     [[ -f "$ts_file" ]] || continue  # skip if no matching .ts file
     rel_csc="benchmarks/$(basename "$csc_file")"
     rel_out="benchmarks/$name"
-    (cd "$ROOT_DIR" && "$COMPILER" "$rel_csc" -o "$rel_out" 2>/dev/null) || echo "  ⚠ Skipping $name (compile failed)"
+    if (cd "$ROOT_DIR" && "$COMPILER" "$rel_csc" -o "$rel_out" 2>/dev/null); then
+        COMPILED+=("$SCRIPT_DIR/$name")
+    else
+        echo "  ⚠ Skipping $name (compile failed)"
+    fi
 done
 echo ""
 
@@ -48,6 +56,7 @@ declare -a BENCHMARKS=(
     "Fibonacci (10M calls):bench_fibonacci"
     "Matrix Mult (300^3):bench_matrix"
     "Prime Sieve (500K):bench_primes"
+    "BFS (1K traversals):benchmark_bfs"
 )
 
 printf "${BOLD}%-28s %15s %15s %10s${NC}\n" "Benchmark" "Cypescript" "Node.js" "Speedup"
@@ -89,5 +98,8 @@ done
 echo ""
 echo -e "${GREEN}✅ Benchmark complete. Cypescript compiled with -O2 optimizations.${NC}"
 
-# Cleanup binaries
-rm -f "$SCRIPT_DIR"/benchmark_simple "$SCRIPT_DIR"/bench_fibonacci "$SCRIPT_DIR"/bench_matrix "$SCRIPT_DIR"/bench_primes
+# Cleanup binaries — exactly the ones compiled above, so adding a benchmark never
+# leaves one behind in `git status` again
+for bin in "${COMPILED[@]}"; do
+    rm -f "$bin"
+done
