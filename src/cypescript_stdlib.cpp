@@ -147,14 +147,95 @@ unsigned long long cyps_arena_frames() { return g_arena.framesReset; }
 
 } // extern "C"
 
+// One storage lane of a dynamic array.
+//
+// `head` is the index of the first live element. shift() advances it instead of
+// erasing from the front, which used to move every remaining element on every
+// call — O(n) per shift and quadratic across a drain, which is the whole reason
+// benchmark_bfs lost to Node by 10x.
+//
+// The dead prefix is reclaimed in one bulk erase once it has grown to at least
+// the size of the live region. That bounds the waste at roughly twice what is
+// live, and pays for the copy with the shifts that created it: the erase moves
+// `live` elements and only runs when `head >= live`, so each shift carries O(1)
+// amortised. A drain of n elements costs O(n) in total rather than O(n^2).
+//
+// All indices crossing this boundary are element positions, not vector
+// positions; the offset is added here and nowhere else, so no caller can
+// forget it.
+template <typename T>
+class Lane {
+public:
+    std::vector<T> data;
+    size_t head = 0;
+
+    size_t size() const { return data.size() - head; }
+    bool empty() const { return data.size() == head; }
+
+    // Null rather than a reference, so out-of-range keeps returning the
+    // callers' documented defaults (0 / nullptr) instead of reading past the end
+    T* at(int32_t index) {
+        if (index < 0) return nullptr;
+        size_t real = head + static_cast<size_t>(index);
+        if (real >= data.size()) return nullptr;
+        return &data[real];
+    }
+
+    void push(const T& value) { data.push_back(value); }
+
+    // Growing on write is the existing behaviour of array_set_*: assigning past
+    // the end extends the array rather than failing
+    void set(int32_t index, const T& value) {
+        if (index < 0) return;
+        size_t real = head + static_cast<size_t>(index);
+        if (real >= data.size()) data.resize(real + 1);
+        data[real] = value;
+    }
+
+    bool pop(T& out) {
+        if (empty()) return false;
+        out = data.back();
+        data.pop_back();
+        return true;
+    }
+
+    bool shift(T& out) {
+        if (empty()) return false;
+        out = data[head];
+        ++head;
+        reclaim();
+        return true;
+    }
+
+    void removeAt(int32_t index) {
+        if (index < 0 || static_cast<size_t>(index) >= size()) return;
+        data.erase(data.begin() + head + index);
+    }
+
+    void clear() {
+        std::vector<T>().swap(data);
+        head = 0;
+    }
+
+private:
+    void reclaim() {
+        // The floor keeps short-lived queues from copying at all; past it, the
+        // prefix is only dropped once it is no smaller than what remains.
+        if (head >= 32 && head >= data.size() - head) {
+            data.erase(data.begin(), data.begin() + head);
+            head = 0;
+        }
+    }
+};
+
 class DynamicArray {
 public:
     enum class Type { I32, F64, String, Object };
     Type type;
-    std::vector<int32_t> i32_data;
-    std::vector<double> f64_data;
-    std::vector<std::string> string_data;
-    std::vector<void*> object_data;
+    Lane<int32_t> i32_data;
+    Lane<double> f64_data;
+    Lane<std::string> string_data;
+    Lane<void*> object_data;
 
     DynamicArray(Type t) : type(t) {}
 };
@@ -236,6 +317,7 @@ extern "C" {
     int32_t array_length(void* arr_ptr) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
         if (!arr) return 0;
+        // Live counts: a lane's dead prefix is not part of the array
         return std::max({arr->i32_data.size(), arr->f64_data.size(),
                          arr->string_data.size(), arr->object_data.size()});
     }
@@ -243,35 +325,32 @@ extern "C" {
     // --- f64 arrays ---
     void array_push_f64(void* arr_ptr, double val) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
-        if (arr) arr->f64_data.push_back(val);
+        if (arr) arr->f64_data.push(val);
     }
 
     double array_get_f64(void* arr_ptr, int32_t index) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
-        if (!arr || index < 0 || index >= (int32_t)arr->f64_data.size()) return 0.0;
-        return arr->f64_data[index];
+        if (!arr) return 0.0;
+        double* slot = arr->f64_data.at(index);
+        return slot ? *slot : 0.0;
     }
 
     void array_set_f64(void* arr_ptr, int32_t index, double val) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
-        if (!arr || index < 0) return;
-        if (index >= (int32_t)arr->f64_data.size()) arr->f64_data.resize(index + 1);
-        arr->f64_data[index] = val;
+        if (arr) arr->f64_data.set(index, val);
     }
 
     double array_shift_f64(void* arr_ptr) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
-        if (!arr || arr->f64_data.empty()) return 0.0;
-        double val = arr->f64_data.front();
-        arr->f64_data.erase(arr->f64_data.begin());
+        double val = 0.0;
+        if (arr) arr->f64_data.shift(val);
         return val;
     }
 
     double array_pop_f64(void* arr_ptr) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
-        if (!arr || arr->f64_data.empty()) return 0.0;
-        double val = arr->f64_data.back();
-        arr->f64_data.pop_back();
+        double val = 0.0;
+        if (arr) arr->f64_data.pop(val);
         return val;
     }
 
@@ -281,24 +360,27 @@ extern "C" {
             if (arr->i32_data.empty() && arr->string_data.empty() && arr->object_data.empty()) {
                 arr->type = DynamicArray::Type::I32;
             }
-            arr->i32_data.push_back(val);
+            arr->i32_data.push(val);
         }
     }
 
     int32_t array_pop_i32(void* arr_ptr) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
-        if (!arr || arr->i32_data.empty()) return 0;
-        int32_t val = arr->i32_data.back();
-        arr->i32_data.pop_back();
+        int32_t val = 0;
+        if (arr) arr->i32_data.pop(val);
         return val;
     }
 
+    // Text is handed back as a fresh copy the caller owns, here and in
+    // array_get_string / array_shift_string: the lane's own std::string can be
+    // moved or freed by a later reclaim, so returning a pointer into it would
+    // dangle.
     const char* array_pop_string(void* arr_ptr) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
-        if (!arr || arr->string_data.empty()) return nullptr;
-        std::string* result = new std::string(arr->string_data.back());
-        arr->string_data.pop_back();
-        return result->c_str();
+        if (!arr) return nullptr;
+        std::string val;
+        if (!arr->string_data.pop(val)) return nullptr;
+        return (new std::string(val))->c_str();
     }
 
     void array_push_string(void* arr_ptr, const char* val) {
@@ -307,52 +389,47 @@ extern "C" {
             if (arr->i32_data.empty() && arr->string_data.empty() && arr->object_data.empty()) {
                 arr->type = DynamicArray::Type::String;
             }
-            arr->string_data.push_back(val);
+            arr->string_data.push(val);
         }
     }
 
     int32_t array_shift_i32(void* arr_ptr) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
-        if (!arr || arr->i32_data.empty()) return 0;
-        int32_t val = arr->i32_data.front();
-        arr->i32_data.erase(arr->i32_data.begin());
+        int32_t val = 0;
+        if (arr) arr->i32_data.shift(val);
         return val;
     }
-    
+
     const char* array_shift_string(void* arr_ptr) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
-        if (!arr || arr->string_data.empty()) return nullptr;
-        std::string val = arr->string_data.front();
-        arr->string_data.erase(arr->string_data.begin());
-        std::string* result = new std::string(val);
-        return result->c_str();
+        if (!arr) return nullptr;
+        std::string val;
+        if (!arr->string_data.shift(val)) return nullptr;
+        return (new std::string(val))->c_str();
     }
 
     int32_t array_get_i32(void* arr_ptr, int32_t index) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
-        if (!arr || index < 0 || index >= arr->i32_data.size()) return 0;
-        return arr->i32_data[index];
+        if (!arr) return 0;
+        int32_t* slot = arr->i32_data.at(index);
+        return slot ? *slot : 0;
     }
-    
+
     const char* array_get_string(void* arr_ptr, int32_t index) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
-        if (!arr || index < 0 || index >= arr->string_data.size()) return nullptr;
-        std::string* result = new std::string(arr->string_data[index]);
-        return result->c_str();
+        if (!arr) return nullptr;
+        std::string* slot = arr->string_data.at(index);
+        return slot ? (new std::string(*slot))->c_str() : nullptr;
     }
 
     void array_set_i32(void* arr_ptr, int32_t index, int32_t val) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
-        if (!arr || index < 0) return;
-        if (index >= arr->i32_data.size()) arr->i32_data.resize(index + 1);
-        arr->i32_data[index] = val;
+        if (arr) arr->i32_data.set(index, val);
     }
-    
+
     void array_set_string(void* arr_ptr, int32_t index, const char* val) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
-        if (!arr || index < 0 || !val) return;
-        if (index >= arr->string_data.size()) arr->string_data.resize(index + 1);
-        arr->string_data[index] = val;
+        if (arr && val) arr->string_data.set(index, val);
     }
 
     // --- Object arrays -------------------------------------------------------
@@ -366,35 +443,32 @@ extern "C" {
         if (arr->i32_data.empty() && arr->string_data.empty() && arr->object_data.empty()) {
             arr->type = DynamicArray::Type::Object;
         }
-        arr->object_data.push_back(val);
+        arr->object_data.push(val);
     }
 
     void* array_get_object(void* arr_ptr, int32_t index) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
-        if (!arr || index < 0 || index >= static_cast<int32_t>(arr->object_data.size())) return nullptr;
-        return arr->object_data[index];
+        if (!arr) return nullptr;
+        void** slot = arr->object_data.at(index);
+        return slot ? *slot : nullptr;
     }
 
     void array_set_object(void* arr_ptr, int32_t index, void* val) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
-        if (!arr || index < 0) return;
-        if (index >= static_cast<int32_t>(arr->object_data.size())) arr->object_data.resize(index + 1);
-        arr->object_data[index] = val;
+        if (arr) arr->object_data.set(index, val);
     }
 
     void* array_pop_object(void* arr_ptr) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
-        if (!arr || arr->object_data.empty()) return nullptr;
-        void* val = arr->object_data.back();
-        arr->object_data.pop_back();
+        void* val = nullptr;
+        if (arr) arr->object_data.pop(val);
         return val;
     }
 
     void* array_shift_object(void* arr_ptr) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
-        if (!arr || arr->object_data.empty()) return nullptr;
-        void* val = arr->object_data.front();
-        arr->object_data.erase(arr->object_data.begin());
+        void* val = nullptr;
+        if (arr) arr->object_data.shift(val);
         return val;
     }
 
@@ -404,10 +478,10 @@ extern "C" {
     void array_clear(void* arr_ptr) {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
         if (!arr) return;
-        std::vector<int32_t>().swap(arr->i32_data);
-        std::vector<double>().swap(arr->f64_data);
-        std::vector<std::string>().swap(arr->string_data);
-        std::vector<void*>().swap(arr->object_data);
+        arr->i32_data.clear();
+        arr->f64_data.clear();
+        arr->string_data.clear();
+        arr->object_data.clear();
     }
 
     // Removing an element is what makes despawning possible in a game loop.
@@ -415,13 +489,13 @@ extern "C" {
         auto* arr = static_cast<DynamicArray*>(arr_ptr);
         if (!arr || index < 0) return;
         if (index < static_cast<int32_t>(arr->object_data.size()))
-            arr->object_data.erase(arr->object_data.begin() + index);
+            arr->object_data.removeAt(index);
         else if (index < static_cast<int32_t>(arr->i32_data.size()))
-            arr->i32_data.erase(arr->i32_data.begin() + index);
+            arr->i32_data.removeAt(index);
         else if (index < static_cast<int32_t>(arr->f64_data.size()))
-            arr->f64_data.erase(arr->f64_data.begin() + index);
+            arr->f64_data.removeAt(index);
         else if (index < static_cast<int32_t>(arr->string_data.size()))
-            arr->string_data.erase(arr->string_data.begin() + index);
+            arr->string_data.removeAt(index);
     }
 
     // ===================

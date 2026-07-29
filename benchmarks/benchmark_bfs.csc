@@ -6,10 +6,12 @@
 // was pure measurement noise. The checksum below is printed so both languages can
 // be shown to do identical work, and so the loop cannot be optimised away.
 //
-// `queue.shift()` is O(n) in both languages, so a large share of the time here is
-// the queue rather than the traversal. That is a fair comparison — both sides run
-// the same algorithm — but it is why the graph is 5,000 nodes and not 500,000:
-// past a point this stops measuring BFS and starts measuring memmove.
+// This benchmark is what exposed `shift()` erasing from the front of a vector:
+// at this size it took 0.79s against Node's 0.08s, ~91% of it in the queue. The
+// runtime now advances a head offset instead, and the same 200,000 visits take
+// 0.06s. Keep the graph around this size — large enough that the traversal is
+// the subject, small enough that a regression shows up as time rather than as
+// the machine swapping.
 
 type Graph<T> = Map<T, T[]>;
 
