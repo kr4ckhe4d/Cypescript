@@ -614,9 +614,49 @@ println(assetPath("levels/01.txt"));</code></pre>
         <tr><td>Fibonacci fib(35), recursive</td><td><strong>0.025s</strong></td><td>0.125s</td><td>0.621s</td><td>0.026s</td></tr>
       </tbody>
     </table>
+    <p>
+      That parity reproduces on a second architecture. On x86-64 (Ryzen 9 5950X,
+      Arch Linux) primes is <strong>0.086s</strong> against Rust's 0.088s, and
+      <code>fib(35)</code> is <strong>0.023s</strong> against 0.023s. The absolute
+      times differ from the Apple Silicon ones above — different machine, different
+      architecture — so it is the ratio to Rust that carries across, not the seconds.
+    </p>
     <div class="code-example">
       <div class="example-header"><span>Reproduce it</span></div>
       <pre><code>bash benchmarks/cross/run_cross_benchmarks.sh</code></pre>
+    </div>
+
+    <h2 id="perf-node">Against Node.js</h2>
+    <p>
+      Best of 3 per benchmark, on an AMD Ryzen 9 5950X (Arch Linux x86-64, Node v26):
+    </p>
+    <table>
+      <thead><tr><th>Benchmark</th><th>Cypescript</th><th>Node.js</th><th>Speedup</th></tr></thead>
+      <tbody>
+        <tr><td>Simple Loop (100M)</td><td><strong>0.023s</strong></td><td>0.142s</td><td>6.2×</td></tr>
+        <tr><td>Fibonacci (10M calls)</td><td><strong>0.053s</strong></td><td>0.154s</td><td>2.9×</td></tr>
+        <tr><td>Matrix Mult (300³)</td><td><strong>0.012s</strong></td><td>0.066s</td><td>5.5×</td></tr>
+        <tr><td>Prime Sieve (500K)</td><td><strong>0.019s</strong></td><td>0.057s</td><td>3.0×</td></tr>
+        <tr><td>BFS (5K nodes ×40)</td><td><strong>0.064s</strong></td><td>0.072s</td><td>1.1×</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Treat these as approximate: across three consecutive runs the speedups moved
+      by up to 1× either way (Matrix Mult ranged 5.3–6.5×), so the shape — several
+      times faster on compute, roughly level on the graph traversal — is the claim,
+      not the decimals.
+    </p>
+    <div class="notecard note">
+      <p><strong>Why BFS is in there:</strong> every other benchmark above is a loop
+      over numbers, and a language can look excellent at those while a
+      data-structure path is quadratic. That is not hypothetical — this benchmark is
+      what caught <code>shift()</code> erasing from the front of a vector, which cost
+      0.79s against Node's 0.08s until the runtime started advancing a head offset
+      instead.</p>
+    </div>
+    <div class="code-example">
+      <div class="example-header"><span>Reproduce it</span></div>
+      <pre><code>./benchmarks/run_benchmarks.sh</code></pre>
     </div>
 
     <h2 id="perf-why">Why it's fast</h2>
@@ -1843,7 +1883,10 @@ array[index] = value      // write</code></pre>
       <dt><code>arr.pop()</code></dt>
       <dd>Removes and returns the last element.</dd>
       <dt><code>arr.shift()</code></dt>
-      <dd>Removes and returns the first element (queue-style).</dd>
+      <dd>Removes and returns the first element (queue-style). Amortised
+      <em>O(1)</em> — it advances a head offset rather than moving the remaining
+      elements down, so draining a queue costs <em>O(n)</em> in total rather than
+      <em>O(n²)</em>.</dd>
       <dt><code>arr.map(callback)</code></dt>
       <dd>Returns a new array of <code>callback(element)</code> results. The
       result's element type follows the callback's return type — mapping
