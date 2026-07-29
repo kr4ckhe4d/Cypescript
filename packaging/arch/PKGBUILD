@@ -2,7 +2,7 @@
 # Build & install:  makepkg -si
 # Publish to AUR:   makepkg --printsrcinfo > .SRCINFO, push to the AUR repo
 pkgname=cypescript
-pkgver=1.0.0
+pkgver=1.1.0
 pkgrel=1
 pkgdesc="TypeScript-style language that compiles to native code via LLVM"
 arch=('x86_64' 'aarch64')
@@ -12,7 +12,8 @@ license=('MIT')
 depends=('clang' 'llvm-libs')
 makedepends=('cmake' 'llvm')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/kr4ckhe4d/Cypescript/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('d4279bbd9abf39c413e62bfbff660765603c6683e14eeedc94eaab9697f4fa6d')
+# Filled in from the published tarball — RELEASING.md step 4
+sha256sums=('SKIP')
 
 build() {
     cd "Cypescript-$pkgver"

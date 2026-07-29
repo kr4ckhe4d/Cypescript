@@ -1,7 +1,7 @@
 # Homebrew formula template for Cypescript.
 #
 # To publish:
-#   1. Create a GitHub release with a source tarball (git tag v1.0.0 && push)
+#   1. Create a GitHub release with a source tarball (git tag v<x.y.z> && push)
 #   2. Fill in `url` and `sha256` below (shasum -a 256 <tarball>)
 #   3. Put this file in a tap repo: github.com/kr4ckhe4d/homebrew-cypescript
 #      as Formula/cypescript.rb
@@ -9,8 +9,8 @@
 class Cypescript < Formula
   desc "TypeScript-style language that compiles to native code via LLVM"
   homepage "https://github.com/kr4ckhe4d/Cypescript"
-  url "https://github.com/kr4ckhe4d/Cypescript/archive/refs/tags/v1.0.0.tar.gz"
-  sha256 "d4279bbd9abf39c413e62bfbff660765603c6683e14eeedc94eaab9697f4fa6d"
+  url "https://github.com/kr4ckhe4d/Cypescript/archive/refs/tags/v1.1.0.tar.gz"
+  sha256 "PENDING — filled in from the published tarball, see RELEASING.md step 4"
   license "MIT"
 
   depends_on "cmake" => :build
