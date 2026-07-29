@@ -6,9 +6,10 @@ machine. Written for picking this up cold.
 - [ROADMAP.md](ROADMAP.md) — what is done and what is next
 - [STEERING.md](STEERING.md) — the rules that shouldn't change
 
-**Head:** `cd4fe07` on `main`. **CI: green on macOS and Linux** as of `ce76bc9`,
-which is the first run carrying the LLVM linkage change. `cd4fe07` follows it and
-has not been through CI yet.
+**Head:** `cd788fa` on `main`. **CI: green on macOS and Linux** as of `d1b9a5c`.
+**v1.1.0 is released** — the tag contains the LLVM linkage fix (`97dcb55`), the
+`.deb` dependency fix (`cd4fe07`) and the CI guard (`d1b9a5c`), so the published
+tarball is not the one that failed on Arch.
 
 Reading CI logs needs admin on the repo — the REST API returns `403 Must have admin
 rights` — so use `gh`, not `curl`:
@@ -71,9 +72,11 @@ over how LLVM is packaged — details below.
 
 | Commit | What |
 |---|---|
+| `cd788fa` | The Homebrew formula could not build 1.1.0 — depend on raylib, install the game runtime |
+| `7a658cb` | **Release v1.1.0** |
+| `d1b9a5c` | CI asserts the `.deb` declares what the binary links against |
 | `cd4fe07` | Declare the LLVM runtime dep the `.deb` actually has; keep the install rpath |
 | `97dcb55` | **The Arch build fix** — link the LLVM dylib where components aren't shipped |
-| `c714dfe` | Remove the superseded C++ workflow; bring the README current |
 
 Older but still load-bearing: `2218efa` was the Linux CI fix — `println` of a null
 string emitted a bare `puts`, which segfaults on glibc and prints `(null)` on
@@ -136,10 +139,13 @@ Two consequences, both now fixed in `cd4fe07`:
    `dpkg-shlibdeps` call that produced the list, because a check that reruns the
    producer passes vacuously whenever the producer silently does nothing.
 2. **`cmake --install` could drop the rpath.** Fixed with
-   `INSTALL_RPATH_USE_LINK_PATH`. Worth knowing that this never affected shipping:
-   `packaging/cypescript.rb` and `packaging/build-deb.sh` both *copy*
-   `build/cscript`, rpath intact, and nothing anywhere runs `cmake --install`. The
-   `install(TARGETS ...)` rules matter only to someone installing by hand.
+   `INSTALL_RPATH_USE_LINK_PATH`. Which packaging path this matters to was stated
+   wrongly at first, so to be exact: `packaging/cypescript.rb` and
+   `packaging/build-deb.sh` both *copy* `build/cscript` with its rpath intact and
+   never needed it, while **`packaging/arch/PKGBUILD` does run `cmake --install`**.
+   It is a no-op on Arch regardless — `libLLVM.so` is in `/usr/lib`, and CMake
+   omits rpath entries for default search paths — but the `install(TARGETS ...)`
+   rules are a real shipping path, not just a convenience for hand-installers.
 
 **What is now unexercised.** With every platform on the dylib arm, the
 `static components` fallback is compiled by nobody — the situation rule 8 exists to
