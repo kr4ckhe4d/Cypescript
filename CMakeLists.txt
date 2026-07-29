@@ -212,6 +212,16 @@ endif()
 # Link our compiler executable against the LLVM libraries
 target_link_libraries(cscript PRIVATE ${LLVM_LIBS})
 
+# Keep libLLVM findable after `cmake --install`. CMake drops build-tree rpaths on
+# install, and a Homebrew or /usr/lib/llvm-N dylib is not on the default search
+# path, so without this an installed cscript can fail to start while the one in
+# build/ runs fine. No-op when LLVM was linked statically.
+#
+# Neither shipping path relies on this — packaging/cypescript.rb and
+# packaging/build-deb.sh both copy build/cscript directly, rpath intact — so it is
+# here for people who install with CMake rather than a package.
+set_target_properties(cscript PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 # Add LLVM compile flags if available
 if(LLVM_CXXFLAGS)
     target_compile_options(cscript PRIVATE ${LLVM_CXXFLAGS})
