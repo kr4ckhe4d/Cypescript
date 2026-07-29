@@ -6,7 +6,7 @@ machine. Written for picking this up cold.
 - [ROADMAP.md](ROADMAP.md) — what is done and what is next
 - [STEERING.md](STEERING.md) — the rules that shouldn't change
 
-**Head:** `cd788fa` on `main`. **CI: green on macOS and Linux** as of `d1b9a5c`.
+**Head:** `b5b0f4b` on `main`. **CI: green on macOS and Linux** as of `d1b9a5c`.
 **v1.1.0 is released** — the tag contains the LLVM linkage fix (`97dcb55`), the
 `.deb` dependency fix (`cd4fe07`) and the CI guard (`d1b9a5c`), so the published
 tarball is not the one that failed on Arch.
@@ -30,12 +30,13 @@ gh run view <run-id> --log | grep "LLVM Linkage"
 |---|---|---|---|---|
 | Compiler builds | ✅ local + CI | ✅ CI | ✅ local, **after the LLVM fix** | ❌ **never** |
 | 66 language tests | ✅ local + CI | ✅ CI | ✅ local | ❌ never |
-| 14 game tests (headless) | ✅ local + CI | ✅ CI | ⚠️ 12 pass, **2 skip** | ❌ never |
+| 14 game tests (headless) | ✅ local + CI | ✅ CI | ✅ local, **14/14** | ❌ never |
 | 23 examples compile and run | ✅ local + CI | ✅ CI | ✅ local | ❌ never |
 | C and C++ interop | ✅ local + CI | ✅ CI | ✅ local (suites) | ❌ never |
 | README snippets compile | ✅ CI | ✅ CI | ✅ local | ❌ never |
 | Benchmarks at parity | ✅ local | ✅ CI (single run) | ❌ **not run** | ❌ never |
 | `.deb` builds and installs | — | ✅ CI | — | — |
+| Game runtime vs **system** raylib | ❌ never | ❌ never | ✅ local (raylib 6.0) | ❌ never |
 | A game in a **real window** | ✅ local | ❌ **never** | ❌ never | ❌ never |
 | `--bundle` output | ✅ local (`.app`) | ✅ CI (directory) | ✅ local (directory) | ❌ never |
 
@@ -44,11 +45,14 @@ negative), **14** game tests, **46** README snippets (39 compiled, 7 illustrativ
 **23** examples. The README numbers moved in `f825d68`/`c714dfe`; if a suite reports
 fewer than these, something regressed rather than the docs being stale.
 
-The 2 game skips are the RSS checks, and they skip because **GNU `time` is not
-installed** — `/usr/bin/time`, not the shell builtin. `pacman -S time`, or
-`apt-get install time`, and they run. This is the trap STEERING.md names: the script
-skips cleanly rather than failing, so 12/12 green is not 14/14 green. Read the
-"⏭ SKIP" lines before calling it a pass.
+Arch previously reported 12 pass and 2 skip; the 2 were the RSS checks, skipping
+because **GNU `time` was not installed** — `/usr/bin/time`, not the shell builtin.
+`pacman -S time` (or `apt-get install time`) was enough, and they now pass: breakout
+5.48 MB at 2k frames against 5.46 MB at 60k, asteroids 5.84 against 5.80. The header
+line now reads `/usr/bin/time: present (RSS checks enabled)`, which is the thing to
+check. This was the trap STEERING.md names — the script skips cleanly rather than
+failing, so 12/12 green was not 14/14 green. Read the "⏭ SKIP" lines before calling
+it a pass.
 
 Two gaps still open: **no Linux run has ever opened a window** — every Linux run so
 far is headless, which exercises the loop, physics and scoring but never
@@ -68,10 +72,13 @@ over how LLVM is packaged — details below.
 
 ---
 
-## Recent work (last three commits)
+## Recent work
 
 | Commit | What |
 |---|---|
+| `b5b0f4b` | Warn, naming raylib, when a program imports `"game"` without the runtime built |
+| `bfd95db` | Correct which packaging path runs `cmake --install` |
+| `1e7db29` | Link the system raylib in the Arch package — **now verified, see below** |
 | `cd788fa` | The Homebrew formula could not build 1.1.0 — depend on raylib, install the game runtime |
 | `7a658cb` | **Release v1.1.0** |
 | `d1b9a5c` | CI asserts the `.deb` declares what the binary links against |
@@ -157,6 +164,40 @@ back on.
 Do not assume Fedora, Homebrew or Debian match each other here. That assumption was
 made once while writing this fix, about Debian, and was wrong in the other
 direction — the printed line is there so nobody has to guess again.
+
+### The system-raylib path, now verified
+
+`1e7db29` made the Arch package pass `-DCYPESCRIPT_VENDOR_RAYLIB=OFF` and depend on
+`raylib`, but shipped with only the CMake branch confirmed — the machine had no
+raylib. That mattered more than it sounds: **when raylib is missing CMake skips the
+game runtime with a status message instead of failing**, so "it configured" proves
+nothing about whether games work. It is now confirmed end to end against Arch's
+**raylib 6.0**: `libcypescript_game.a` builds, `-lraylib` resolves to
+`/usr/lib/libraylib.so`, and all 14 game tests pass. So the package builds a
+compiler that can actually compile games, which is the claim the dependency exists
+to make.
+
+**One trap when you re-run this.** A `build/` that previously vendored raylib still
+has `build/libraylib.a` sitting in it, and `cscript` adds a `-L` pointing at exactly
+that directory — so the link silently picks up the **vendored** archive and the test
+proves nothing. Delete it before believing a system-raylib result:
+
+```bash
+rm -f build/libraylib.a
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCYPESCRIPT_VENDOR_RAYLIB=OFF
+cmake --build build --parallel
+```
+
+A correct system-raylib build stages **no** `libraylib.a` at all; if one is there,
+it is left over. Note this cuts the other way for the vendored build, where staging
+that archive next to the runtime is the whole mechanism (`CMakeLists.txt:147`).
+
+`b5b0f4b` covers the failure this leaves behind: a program that imports `"game"`
+built by a `cscript` with no game runtime used to fail with `cannot find
+-lcypescript_game`, naming our artifact rather than the missing package. It now
+warns first, names raylib, and gives both ways out. The warning searches any `-L`
+the caller passed as well as the runtime dir, so a runtime built elsewhere is not
+warned at.
 
 ---
 
