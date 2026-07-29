@@ -164,10 +164,20 @@ publisher account + `vsce publish` — not set up yet.)
 - [ ] README badges show the new version
 - [ ] progress.md / ROADMAP.md updated
 
-## Quick reference: v1.0.0 values
+## Quick reference: published values
 
-| What | Value |
+| Version | sha256 of the tag tarball |
 |---|---|
-| Tag | `v1.0.0` |
-| Tarball | `https://github.com/kr4ckhe4d/Cypescript/archive/refs/tags/v1.0.0.tar.gz` |
-| sha256 | `d4279bbd9abf39c413e62bfbff660765603c6683e14eeedc94eaab9697f4fa6d` |
+| v1.0.0 | `d4279bbd9abf39c413e62bfbff660765603c6683e14eeedc94eaab9697f4fa6d` |
+| v1.1.0 | `fe97686d62da0f1efac33b2b5a91620b2ceb13a6ffb1061c89342707f594faf4` |
+
+Tarballs are at
+`https://github.com/kr4ckhe4d/Cypescript/archive/refs/tags/v<x.y.z>.tar.gz`.
+
+Two things worth doing that the steps above do not spell out. Download the
+tarball **twice** and confirm the hash matches before publishing it — a truncated
+download otherwise becomes a checksum no package manager can ever satisfy, and
+the tag cannot be moved to fix it. And leave `sha256sums=('SKIP')` in the
+PKGBUILD between step 1 and step 4 rather than an invented string: `SKIP` is a
+value makepkg understands, so the file stays parseable in the window where the
+real hash does not exist yet.

@@ -10,7 +10,7 @@ class Cypescript < Formula
   desc "TypeScript-style language that compiles to native code via LLVM"
   homepage "https://github.com/kr4ckhe4d/Cypescript"
   url "https://github.com/kr4ckhe4d/Cypescript/archive/refs/tags/v1.1.0.tar.gz"
-  sha256 "PENDING — filled in from the published tarball, see RELEASING.md step 4"
+  sha256 "fe97686d62da0f1efac33b2b5a91620b2ceb13a6ffb1061c89342707f594faf4"
   license "MIT"
 
   depends_on "cmake" => :build

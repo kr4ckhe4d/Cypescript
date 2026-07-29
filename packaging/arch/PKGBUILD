@@ -12,8 +12,7 @@ license=('MIT')
 depends=('clang' 'llvm-libs')
 makedepends=('cmake' 'llvm')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/kr4ckhe4d/Cypescript/archive/refs/tags/v$pkgver.tar.gz")
-# Filled in from the published tarball — RELEASING.md step 4
-sha256sums=('SKIP')
+sha256sums=('fe97686d62da0f1efac33b2b5a91620b2ceb13a6ffb1061c89342707f594faf4')
 
 build() {
     cd "Cypescript-$pkgver"
