@@ -1335,7 +1335,7 @@ Cypescript/
 ├── lib/game.csc              # The game API, as `declare` bindings
 ├── runtime/game/             # The raylib C shim behind those bindings
 ├── tests/
-│   ├── run_tests.sh          # 66 language tests
+│   ├── run_tests.sh          # 67 language tests
 │   ├── run_game_tests.sh     # 14 headless game tests
 │   ├── run_readme_tests.sh   # Compiles every README snippet
 │   ├── test_*.csc            # Positive tests, output asserted against

@@ -29,7 +29,7 @@ gh run view <run-id> --log | grep "LLVM Linkage"
 | | macOS (arm64) | Ubuntu CI (x86-64) | Arch (x86-64) | Windows |
 |---|---|---|---|---|
 | Compiler builds | ✅ local + CI | ✅ CI | ✅ local, **after the LLVM fix** | ❌ **never** |
-| 66 language tests | ✅ local + CI | ✅ CI | ✅ local | ❌ never |
+| 67 language tests | ✅ local + CI | ✅ CI | ✅ local | ❌ never |
 | 14 game tests (headless) | ✅ local + CI | ✅ CI | ✅ local, **14/14** | ❌ never |
 | 23 examples compile and run | ✅ local + CI | ✅ CI | ✅ local | ❌ never |
 | C and C++ interop | ✅ local + CI | ✅ CI | ✅ local (suites) | ❌ never |
@@ -40,7 +40,7 @@ gh run view <run-id> --log | grep "LLVM Linkage"
 | A game in a **real window** | ✅ local | ❌ **never** | ✅ local (Wayland) | ❌ never |
 | `--bundle` output | ✅ local (`.app`) | ✅ CI (directory) | ✅ local (directory) | ❌ never |
 
-Counts as of `c714dfe`: **66** language tests (42 positive with output fixtures, 24
+Counts as of `b5b0f4b`: **67** language tests (43 positive with output fixtures, 24
 negative), **14** game tests, **46** README snippets (39 compiled, 7 illustrative),
 **23** examples. The README numbers moved in `f825d68`/`c714dfe`; if a suite reports
 fewer than these, something regressed rather than the docs being stale.
@@ -229,7 +229,7 @@ cmake --build build --parallel
 ```
 
 ```bash
-bash tests/run_tests.sh          # 66: 42 positive with output fixtures, 24 negative
+bash tests/run_tests.sh          # 67: 43 positive with output fixtures, 24 negative
 bash tests/run_game_tests.sh     # 14, headless — skips cleanly if raylib isn't built
 bash tests/run_readme_tests.sh   # 46 snippets: 39 compiled, 7 marked illustrative
 bash benchmarks/cross/run_cross_benchmarks.sh 3
