@@ -190,8 +190,24 @@ set(LLVM_COMPONENTS
     MC
 )
 
-# Map components to library names
-llvm_map_components_to_libnames(LLVM_LIBS ${LLVM_COMPONENTS})
+# Map components to library names.
+#
+# Distros differ in how they ship LLVM. Arch (measured: 22.1.6) builds it with
+# LLVM_LINK_LLVM_DYLIB=ON, so every component lives in one libLLVM.so and the
+# per-component archives are not installed — and the few that survive are LTO
+# bitcode that ld.bfd rejects with "file format not recognized". Other packagings
+# ship usable archives. Ask LLVM which shape this is; LLVMConfig.cmake always
+# defines the variable, and an undefined one falls through to the archives.
+#
+# Which arm a platform takes is printed below rather than left to inference:
+# neither arm is exercised everywhere, which is STEERING.md rule 8.
+if(LLVM_LINK_LLVM_DYLIB)
+    set(LLVM_LIBS LLVM)
+    set(LLVM_LINKAGE "shared (libLLVM)")
+else()
+    llvm_map_components_to_libnames(LLVM_LIBS ${LLVM_COMPONENTS})
+    set(LLVM_LINKAGE "static components")
+endif()
 
 # Link our compiler executable against the LLVM libraries
 target_link_libraries(cscript PRIVATE ${LLVM_LIBS})
@@ -220,6 +236,7 @@ message(STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}
 message(STATUS "LLVM Version: ${LLVM_PACKAGE_VERSION}")
 message(STATUS "LLVM Include Dirs: ${LLVM_INCLUDE_DIRS}")
 message(STATUS "LLVM Components: ${LLVM_COMPONENTS}")
+message(STATUS "LLVM Linkage: ${LLVM_LINKAGE}")
 message(STATUS "Target: cscript")
 message(STATUS "=====================================")
 
