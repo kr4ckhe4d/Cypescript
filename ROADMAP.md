@@ -23,6 +23,12 @@ verified on which platform and how to test Linux and Windows.
 | 1 | **Windows validation** | The only platform never verified. CI job exists, `workflow_dispatch`-only. Needs a Windows machine. | Unknown |
 | 2 | **By-reference closure captures** | Captures are by-value snapshots; mutating a captured primitive doesn't propagate | Medium |
 | 3 | **Mixed-representation unions** | `string \| i32` needs a tagged value and `typeof` narrowing | Large |
+| 4 | **`arr[i]` on a `T[]` in a generic** | Silently yields an unusable value — no error, no crash, just wrong results. Arguably belongs above everything else here: the others are missing features, this one is a wrong answer | Unknown |
+| 5 | **O(1) `shift()`** | The only benchmark Cypescript loses, and it loses 10x. Needs a head offset in `DynamicArray` rather than erasing from the front | Medium |
+
+Items 4 and 5 both came out of sizing `benchmark_bfs` up to where its numbers meant
+something — see the "Known limitations" table for the measured detail. Neither was
+visible while that benchmark ran in under a millisecond on a six-node graph.
 
 ### Windows — what is known
 
@@ -123,6 +129,8 @@ These are decisions, not omissions.
 | Generic functions over scalars | `id<i32>(5)` fails LLVM verification; generics work with pointer-shaped types |
 | `Map`/`Set` values | Only pointer-shaped values; `Map<string, i32>` fails |
 | Enums declare-before-use | Members fold at parse time, like a C enum |
+| `shift()` is O(n) | `array_shift_*` erases from the front of a `std::vector`, copying the tail and leaking a `std::string` per call. V8's is amortised O(1), which is why `benchmark_bfs` loses to Node 0.10x — measured at ~91% of that benchmark's runtime |
+| Indexing `T[]` in a generic | Inside `function f<T>()`, `arr[i]` on a `T[]` yields a value that is silently unusable — pushing it appends nothing. `arr.shift()` returns a working value, and indexing a concrete `string[]` is fine. No error is reported |
 
 ## TypeScript compatibility
 
