@@ -815,6 +815,42 @@ int main(int argc, char** argv) {
                 compileCmd += " " + shellQuote(flag);
             }
 
+            // The game runtime is optional: CMake skips it when raylib is missing,
+            // saying so once at configure time and then building a `cscript` that
+            // is fine for everything except games. The only sign left at this point
+            // is a missing archive, which the linker reports as `cannot find
+            // -lcypescript_game` — true, but it names our artifact rather than the
+            // package that is actually absent. Say what it means while we still know.
+            bool wantsGameRuntime = false;
+            for (const std::string& flag : sourceLinkFlags) {
+                if (flag == "-lcypescript_game") { wantsGameRuntime = true; break; }
+            }
+            if (wantsGameRuntime) {
+                // Wherever the linker could find it: our own runtime dir, plus any
+                // -L the caller added, so a runtime built elsewhere isn't warned at.
+                std::vector<fs::path> searchDirs{fs::path(stdlibPath).parent_path()};
+                for (const std::string& flag : opts.linkFlags) {
+                    if (flag.rfind("-L", 0) == 0) searchDirs.push_back(flag.substr(2));
+                }
+                bool found = false;
+                for (const fs::path& dir : searchDirs) {
+                    if (dir.empty()) continue;
+                    for (const char* name : {"libcypescript_game.a", "cypescript_game.lib"}) {
+                        std::error_code ec;
+                        if (fs::exists(dir / name, ec)) { found = true; break; }
+                    }
+                    if (found) break;
+                }
+                if (!found) {
+                    printWarning(
+                        "this program imports \"game\", but the game runtime was not built.\n"
+                        "  CMake builds it only when raylib is available, so the link below "
+                        "will fail.\n"
+                        "  Install raylib and rebuild, or configure with "
+                        "-DCYPESCRIPT_VENDOR_RAYLIB=ON to bundle it.");
+                }
+            }
+
             // The runtime archive goes LAST. GNU ld scans archives strictly
             // left-to-right and discards one once it has passed it, so a library
             // listed earlier cannot satisfy a symbol needed by a later one — and
