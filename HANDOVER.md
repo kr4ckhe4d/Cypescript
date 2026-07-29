@@ -74,6 +74,7 @@ cmake --build build --parallel
 ```bash
 bash tests/run_tests.sh          # 66: 42 positive with output fixtures, 24 negative
 bash tests/run_game_tests.sh     # 14, headless — skips cleanly if raylib isn't built
+bash tests/run_readme_tests.sh   # 47 README snippets compiled, 10 marked illustrative
 bash benchmarks/cross/run_cross_benchmarks.sh 3
 ```
 

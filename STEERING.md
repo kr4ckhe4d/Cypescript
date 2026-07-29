@@ -132,9 +132,22 @@ In order. Skipping a row is how a feature ends up half-implemented.
 
 - `bash tests/run_tests.sh` — all green, and the count went **up**
 - `bash tests/run_game_tests.sh` — all green
+- `bash tests/run_readme_tests.sh` — every README snippet compiles
 - Every example compiles and runs
 - `bash benchmarks/cross/run_cross_benchmarks.sh 3` — unchanged
 - Docs updated in both places; roadmap reflects reality
+
+**A README snippet is code, and it is compiled.** If a snippet cannot stand alone
+— an FFI fragment naming a symbol that does not exist, an `import` needing a
+sibling module — it opts out with an HTML comment above its fence that names the
+example backing it:
+
+```
+<!-- snippet: illustrative — runnable version in example/21_c_interop.csc -->
+```
+
+The named path is checked for existence, so opting out is not a way to avoid
+having an example; it is how a snippet declares which one it has.
 
 A feature that is documented but not tested, or tested but not documented, is not
 done. Both have happened here.

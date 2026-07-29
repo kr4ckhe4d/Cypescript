@@ -39,6 +39,11 @@ jobs:
       - name: Run test suite
         run: bash tests/run_tests.sh
 
+      # Every Cypescript snippet in README.md must compile, or name the example
+      # that backs it. A snippet nobody has run is how the `super()` bug shipped.
+      - name: Check README snippets
+        run: bash tests/run_readme_tests.sh
+
       # Runs the games headless (no window, no drawing) and asserts that the
       # simulation actually progresses — see tests/run_game_tests.sh
       - name: Run game tests (headless)
@@ -91,6 +96,11 @@ jobs:
 
       - name: Run test suite
         run: bash tests/run_tests.sh
+
+      # Every Cypescript snippet in README.md must compile, or name the example
+      # that backs it. A snippet nobody has run is how the `super()` bug shipped.
+      - name: Check README snippets
+        run: bash tests/run_readme_tests.sh
 
       # Headless: no display needed, the game loop still runs and is asserted
       - name: Run game tests (headless)

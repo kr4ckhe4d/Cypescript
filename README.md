@@ -105,6 +105,7 @@ free(block);
 Point at a C or C++ file and `cscript` compiles it with your program. No library
 to build first, no headers to write, no makefile, no wrapper script:
 
+<!-- snippet: illustrative — runnable version in example/21_c_interop.csc -->
 ```ts
 link source "native/stats.c";        // path is relative to this .csc file
 link include "vendor/include";       // where that C finds <tinyclamp/tinyclamp.h>
@@ -129,6 +130,7 @@ over C actually pays.
 
 Bind a C-style API under a name that reads well, and ask for a system library:
 
+<!-- snippet: illustrative — runnable version in lib/game.csc -->
 ```ts
 link "raylib";
 declare function drawCircle(x: f64, y: f64, r: f64, color: i32): void = "cyps_circle";
@@ -136,6 +138,7 @@ declare function drawCircle(x: f64, y: f64, r: f64, color: i32): void = "cyps_ci
 
 Link directives can be platform-qualified, so one file describes every OS:
 
+<!-- snippet: illustrative — runnable version in lib/game.csc -->
 ```ts
 link macos framework "Cocoa";
 link linux "GL";
@@ -290,6 +293,7 @@ function bfs<T>(graph: Graph<T>, start: T): T[] {
 
 **Exceptions, destructuring, template literals and modules:**
 
+<!-- snippet: illustrative — runnable version in example/14_modules/main.csc -->
 ```ts
 import { square } from "./math_utils";
 
@@ -340,6 +344,9 @@ for (const s of shapes) { println(s.area()); }   // 12.5664
 runtime, which also lets LLVM vectorise:
 
 ```ts
+let width: i32 = 64;
+let height: i32 = 32;
+
 let tiles = new Buffer<i32>(width * height);
 tiles[0] = 42;
 tiles[5] += 1;
@@ -358,6 +365,8 @@ class Sprite implements Drawable {     // verified, not just documentation
     x: f64 = 0.0;
     draw(): void { println("drawing"); }
 }
+
+class Node { value: i32 = 7; }
 
 function find(key: string): Node | null {
     return null;
@@ -447,6 +456,7 @@ opaque handle to foreign memory), and `void`.
 
 Libraries are requested from source, so a program is self-contained:
 
+<!-- snippet: illustrative — runnable version in lib/game.csc -->
 ```ts
 link path "/opt/homebrew/lib";
 link "raylib";
@@ -458,6 +468,7 @@ link framework "Cocoa";        // macOS
 An optional `= "symbol"` clause binds a natural name to a C symbol, so an API can read
 like TypeScript without a wrapper layer:
 
+<!-- snippet: illustrative — runnable version in example/21_c_interop.csc -->
 ```ts
 declare function drawRect(x: f64, y: f64, w: f64, h: f64, color: i32): void = "cyps_rect";
 ```
@@ -908,6 +919,7 @@ switch (day) {
 }
 
 // Also works with string conditions
+let command: string = "start";
 switch (command) {
     case "start": println("starting"); break;
     case "stop":  println("stopping"); break;
@@ -940,13 +952,17 @@ x++;      // 3
 x--;      // 2
 
 // Works on object properties too
+let counter = { value: 0 };
 counter.value += 10;
+println(counter.value);   // 10
 ```
 
 `++` and `--` are expressions, not just statements — they yield a value, so the
 classic index-and-step forms work:
 
 ```typescript
+let src: i32[] = [1, 2, 3];
+let dst: i32[] = [0, 0, 0];
 let s: i32 = 0;
 let d: i32 = 0;
 while (s < 3) { dst[d++] = src[s++]; }   // two cursors, one statement
@@ -954,7 +970,8 @@ while (s < 3) { dst[d++] = src[s++]; }   // two cursors, one statement
 let n: i32 = 3;
 while (n-- > 0) { println(n); }          // 2, 1, 0
 
-println(arr[k++]);                       // read, then step k
+let k: i32 = 0;
+println(src[k++]);                       // read, then step k
 ```
 
 Postfix (`i++`) yields the value before the step, prefix (`++i`) the value
@@ -1032,6 +1049,7 @@ try {
 
 ### Modules (import / export)
 
+<!-- snippet: illustrative — runnable version in example/14_modules/main.csc -->
 ```typescript
 // math_utils.csc
 export function square(x: i32): i32 {
@@ -1143,7 +1161,8 @@ for (let i: i32 = 0; i < numbers.length; i = i + 1) {
 ### Built-in Functions
 
 ```typescript
-print("Hello, World!");  // Output without newline
+let message: string = "and a variable";
+print("Hello, World!");   // Output without newline
 println("Hello, World!"); // Output with newline
 print(42);
 println(message);
@@ -1521,6 +1540,7 @@ extern "C" {
 ```
 
 **Use in Cypescript:**
+<!-- snippet: illustrative — runnable version in example/21_c_interop.csc -->
 ```typescript
 let gcd_result: i32 = math_gcd(48, 18);  // Returns 6
 let fib_10: i32 = math_fibonacci(10);    // Returns 55
@@ -1603,6 +1623,7 @@ extern "C" {
 }
 ```
 
+<!-- snippet: illustrative — runnable version in example/21_c_interop.csc -->
 ```typescript
 // In Cypescript
 let result: i32 = my_function(21); // Returns 42
@@ -1806,6 +1827,7 @@ extern "C" {
 ```
 
 **Use in Cypescript:**
+<!-- snippet: illustrative — runnable version in example/21_c_interop.csc -->
 ```typescript
 let gcd_result: i32 = math_gcd(48, 18);  // Returns 6
 let fib_10: i32 = math_fibonacci(10);    // Returns 55
