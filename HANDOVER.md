@@ -6,7 +6,7 @@ machine. Written for picking this up cold.
 - [ROADMAP.md](ROADMAP.md) — what is done and what is next
 - [STEERING.md](STEERING.md) — the rules that shouldn't change
 
-**Head:** `48bf840` on `main`. **CI: green on macOS and Linux** as of `d1b9a5c`.
+**Head:** `0afe2a5` on `main`. **CI: green on macOS and Linux** as of `d1b9a5c`.
 **v1.1.0 is released** — the tag contains the LLVM linkage fix (`97dcb55`), the
 `.deb` dependency fix (`cd4fe07`) and the CI guard (`d1b9a5c`), so the published
 tarball is not the one that failed on Arch.
@@ -34,7 +34,7 @@ gh run view <run-id> --log | grep "LLVM Linkage"
 | 23 examples compile and run | ✅ local + CI | ✅ CI | ✅ local | ❌ never |
 | C and C++ interop | ✅ local + CI | ✅ CI | ✅ local (suites) | ❌ never |
 | README snippets compile | ✅ CI | ✅ CI | ✅ local | ❌ never |
-| Benchmarks at parity | ✅ local | ✅ CI (single run) | ❌ **not run** | ❌ never |
+| Benchmarks at parity | ✅ local | ✅ CI (single run) | ✅ local (best of 3) | ❌ never |
 | `.deb` builds and installs | — | ✅ CI | — | — |
 | Game runtime vs **system** raylib | ❌ never | ❌ never | ✅ local (raylib 6.0) | ❌ never |
 | A game in a **real window** | ✅ local | ❌ **never** | ✅ local (Wayland) | ❌ never |
@@ -62,9 +62,21 @@ it was headless, which covers the loop, physics and scoring and none of those th
 Note `00_window.csc` cannot stand in for this: it makes no sound at all, so a
 windowed run of it says nothing about audio.
 
-Still open: **no benchmark has run on Arch**, so rule 2's parity claim rests on macOS
-local plus a single Ubuntu CI run. And no *CI* run has opened a window on any
-platform — the Linux coverage above is local only.
+**Benchmarks have now run on Arch too**, best of 3, so rule 2's parity claim no
+longer rests on macOS plus a single Ubuntu CI run:
+
+| | Cypescript | Rust | Node | Python |
+|---|---|---|---|---|
+| Primes <1M | **0.088s** | 0.090s | 0.130s | 3.069s |
+| `fib(35)` | **0.023s** | 0.023s | 0.115s | 0.738s |
+
+Parity holds — dead level on `fib`, a hair ahead on primes. Do **not** read these
+against the Apple Silicon numbers in ROADMAP.md (0.051s / 0.025s) as a regression:
+different machine, different architecture, so only the Cypescript-to-Rust ratio
+carries across. That ratio is the claim; the absolute seconds are not.
+
+Still open: no *CI* run has opened a window on any platform — the Linux coverage
+above is local only.
 
 The `--bundle` row is corrected from an earlier version of this file, which said the
 non-Apple branch had never executed. It had: `tests/run_game_tests.sh:243` has an

@@ -143,6 +143,11 @@ Best-of-3 on Apple Silicon, all at `-O2`:
 | Primes < 1M | **0.051s** | 0.051s | 0.150s | 1.78s |
 | `fib(35)` | **0.025s** | 0.025s | 0.126s | 0.634s |
 
+Confirmed on a second platform: on Arch x86-64, primes is 0.088s against Rust's
+0.090s and `fib(35)` is 0.023s against 0.023s. Different machine and architecture,
+so the absolute seconds are not comparable with the table above — the parity with
+Rust is what reproduces, and it does.
+
 ### `Buffer<T>` vs `T[]`
 
 1.6 billion element updates, identical output from both, best of 3:
