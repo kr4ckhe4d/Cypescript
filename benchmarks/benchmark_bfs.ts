@@ -1,3 +1,7 @@
+// The Node reference for benchmark_bfs.csc. Keep the algorithm, the graph shape
+// and the sizes identical to the .csc — the checksum both files print is what
+// proves they did the same work.
+
 function breadthFirstSearch(graph, startNode) {
     const visited = new Set();
     const queue = [];
@@ -23,22 +27,28 @@ function breadthFirstSearch(graph, startNode) {
     return traversalOrder;
 }
 
-const graph = new Map();
-graph.set("A", ["B", "C"]);
-graph.set("B", ["D", "E"]);
-graph.set("C", ["F"]);
-graph.set("D", []);
-graph.set("E", ["F"]);
-graph.set("F", []);
+const nodes = 5000;
+const iterations = 40;
 
-const iterations = 1000;
-console.log("Starting TypeScript/Node.js BFS benchmark (1,000 iterations)...");
+const graph = new Map();
+for (let i = 0; i < nodes; i++) {
+    const neighbors = [];
+    neighbors.push("N" + ((i * 2 + 1) % nodes));
+    neighbors.push("N" + ((i * 2 + 2) % nodes));
+    neighbors.push("N" + ((i + 7) % nodes));
+    graph.set("N" + i, neighbors);
+}
+
+console.log("Starting TypeScript/Node.js BFS benchmark (5,000 nodes, 40 traversals)...");
 
 const start = Date.now();
+let checksum = 0;
 for (let i = 0; i < iterations; i++) {
-    const result = breadthFirstSearch(graph, "A");
+    const result = breadthFirstSearch(graph, "N0");
+    checksum += result.length;
 }
 const end = Date.now();
 
 console.log("Benchmark completed!");
+console.log(`Checksum (nodes visited): ${checksum}`);
 console.log(`Execution time: ${end - start}ms`);

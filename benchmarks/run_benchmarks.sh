@@ -56,7 +56,7 @@ declare -a BENCHMARKS=(
     "Fibonacci (10M calls):bench_fibonacci"
     "Matrix Mult (300^3):bench_matrix"
     "Prime Sieve (500K):bench_primes"
-    "BFS (1K traversals):benchmark_bfs"
+    "BFS (5K nodes x40):benchmark_bfs"
 )
 
 printf "${BOLD}%-28s %15s %15s %10s${NC}\n" "Benchmark" "Cypescript" "Node.js" "Speedup"
@@ -86,7 +86,10 @@ for bench in "${BENCHMARKS[@]}"; do
     
     # Calculate speedup
     if (( $(echo "$best_csc > 0" | bc -l) )); then
-        speedup=$(echo "scale=1; $best_node / $best_csc" | bc -l)
+        # Two decimals via awk rather than bc: a benchmark Cypescript loses lands
+        # under 1.0, where bc's scale=1 truncates 0.09 to a bare "0" that reads as
+        # a broken run, and bc prints ".09" with no leading zero even at scale=2.
+        speedup=$(awk -v n="$best_node" -v c="$best_csc" 'BEGIN { printf "%.2f", n / c }')
         speedup_str="${speedup}x"
     else
         speedup_str="∞"
