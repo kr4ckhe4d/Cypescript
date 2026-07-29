@@ -9,6 +9,10 @@ One place to see what is done, what is next, and what is deliberately not being 
 **Current state:** 66/66 language tests, 14/14 game tests, 23 examples, benchmarks at
 Rust parity (0.051s primes, 0.025s fib(35)). CI green on macOS and Linux.
 
+Two companion documents: [STEERING.md](STEERING.md) for the rules that shouldn't
+change and where a new feature lands, and [HANDOVER.md](HANDOVER.md) for what is
+verified on which platform and how to test Linux and Windows.
+
 ---
 
 ## Next

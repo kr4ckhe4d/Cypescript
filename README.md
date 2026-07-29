@@ -1925,23 +1925,28 @@ println("JSON: " + json_prettify(user));
       function arity) with line/column positions
 
 ### 🚧 Planned Features
-- [ ] Class inheritance (`extends` between classes) and `instanceof`
-- [ ] Union types (`string | i32`) and type guards
-- [ ] By-reference closure captures (currently by-value; capture an object for shared state)
-- [ ] Full type checker (property/type mismatches currently surface at codegen without positions)
-- [ ] Reference-counted heap objects (escape-safe object returns)
-- [ ] JIT compilation and profile-guided runtime optimization (see OPTIMIZATION_ROADMAP.md)
+
+Kept in one place rather than two — see the **Next** table in
+[ROADMAP.md](ROADMAP.md), which also records what is deliberately *not* being
+built and why.
+
+Currently: Windows validation, by-reference closure captures, and
+mixed-representation unions (`string | i32`, which needs a tagged value and
+`typeof` narrowing).
 
 ## Contributing
 
-This is a learning project, but contributions are welcome! Areas that need work:
+This is a learning project, but contributions are welcome.
 
-1. **Language features** - Implement planned features (`break`/`continue`, `else if`, `switch`, interfaces)
-2. **Standard library** - Add more built-in functions
-3. **Optimization** - Improve LLVM IR generation
-4. **Error messages** - Better error reporting with line numbers
-5. **Documentation** - Expand examples and tutorials
-6. **Testing** - Add comprehensive test suite
+- [ROADMAP.md](ROADMAP.md) — what to pick up next
+- [STEERING.md](STEERING.md) — the architectural rules, where a new feature lands
+  in the pipeline, and the definition of done
+- [HANDOVER.md](HANDOVER.md) — what is verified on which platform, and how to test
+  on Linux or Windows
+
+A feature is done when it has a positive test with an output fixture, a negative
+test per error message, documentation in **both** the README and `docs/index.html`,
+and benchmarks that haven't moved.
 
 ## License
 
