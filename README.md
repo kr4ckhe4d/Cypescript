@@ -424,7 +424,7 @@ plus the two games. Run any of them with `cscript -r example/09_objects.csc`.
 - **Built-in functions** (`print` and `println`)
 - **Comments** (single-line `//` and multi-line `/* */`)
 - **AST optimizer**: compile-time constant folding and dead-branch elimination (disable with `--no-fold`)
-- **LLVM -O2 native compilation** (3–17x faster than Node.js)
+- **LLVM -O2 native compilation** (roughly 3–6x faster than Node.js on compute)
 - **C++ integration** with 30+ stdlib functions (strings, arrays, file I/O, JSON, random)
 - **Foreign function interface**: `declare function` binds any C symbol, `link "raylib";`
   controls the linker — see [FFI](#foreign-function-interface-ffi)
@@ -644,20 +644,29 @@ clang++ -O2 output.ll src/cypescript_stdlib.cpp -o my_program -std=c++17
 
 ### Against Node.js
 
-- **Simple loops:** 8x faster
-- **Function-heavy code (Fibonacci):** 3x faster
-- **Nested loops (Matrix):** 17x faster
-- **Branch-heavy code (Primes):** 7x faster
+Best of 3 per benchmark, on an AMD Ryzen 9 5950X (Arch Linux x86-64, Node v26):
 
-**Benchmark Results (Cypescript -O2 vs Node.js v22):**
 ```
 Benchmark                    Cypescript     Node.js     Speedup
 ─────────────────────────────────────────────────────────────────
-Simple Loop (100M)              17ms        142ms       8.3x 🔥
-Fibonacci (10M calls)           63ms        189ms       3.0x 🔥
-Matrix Multiply (300³)           6ms        101ms      16.8x 🔥
-Prime Sieve (500K)              13ms         87ms       6.6x 🔥
+Simple Loop (100M)             0.023s       0.142s       6.2x
+Fibonacci (10M calls)          0.053s       0.154s       2.9x
+Matrix Mult (300³)             0.012s       0.066s       5.5x
+Prime Sieve (500K)             0.019s       0.057s       3.0x
+BFS (5K nodes ×40)             0.064s       0.072s       1.1x
 ```
+
+Treat these as approximate: across three consecutive runs the speedups moved by up
+to 1x either way (Matrix Mult ranged 5.3–6.5x), so the shape — several times faster
+on compute, roughly level on the graph traversal — is the claim, not the decimals.
+Node itself has moved too; an earlier version of this table measured against v22 and
+reported larger multiples.
+
+**BFS is deliberately unlike the others.** The rest are loops over numbers, and a
+language can look excellent at those while a data-structure path is quadratic. That
+is not hypothetical here: this benchmark is what caught `shift()` erasing from the
+front of a vector, which cost 0.79s against Node's 0.08s until the runtime started
+advancing a head offset instead.
 
 Run benchmarks yourself:
 ```bash
@@ -679,6 +688,12 @@ Fibonacci fib(35) recursive      0.025s      0.125s      0.621s     0.026s
 
 **Cypescript runs within ~2% of Rust, 2.9–5x faster than Node.js on the
 identical TypeScript source, and 25–35x faster than Python.**
+
+That parity reproduces on a second architecture: on x86-64 (Ryzen 9 5950X, Arch
+Linux) primes is 0.086s against Rust's 0.088s and `fib(35)` is 0.023s against
+0.023s. The absolute times differ from the Apple Silicon ones above — different
+machine, different architecture — so it is the ratio to Rust that carries across,
+not the seconds.
 
 ```bash
 bash benchmarks/cross/run_cross_benchmarks.sh   # reproduce (best of 3)
@@ -1511,7 +1526,7 @@ You do not register anything with the compiler and there is no build script.
 - [x] Module system (`import { x } from "./file"` / `export`, compile-time inlining)
 - [x] AST constant folding and dead-branch elimination (`--no-fold` to disable)
 - [x] LLVM IR code generation with `-O2` optimizations
-- [x] Native executable compilation (3–17x faster than Node.js)
+- [x] Native executable compilation (roughly 3–6x faster than Node.js on compute)
 - [x] Built-in runtime library: strings, arrays, files, random, math, JSON
 - [x] Comprehensive error handling and reporting
 - [x] Documentation site with a searchable reference and a JS playground
