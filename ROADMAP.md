@@ -6,7 +6,7 @@ One place to see what is done, what is next, and what is deliberately not being 
 > `SHIPPING_BLOCKERS.md`, `progress.md`, `NATIVE_OBJECTS_ROADMAP.md` and
 > `OPTIMIZATION_ROADMAP.md`. Their full text is in git history.
 
-**Current state:** 67/67 language tests, 14/14 game tests, 23 examples, 39 of 46
+**Current state:** 68/68 language tests, 14/14 game tests, 23 examples, 39 of 46
 README snippets compiled in CI (the other 7 are illustrative), benchmarks at Rust
 parity (0.051s primes, 0.025s fib(35)). CI green on macOS and Linux.
 
@@ -23,13 +23,13 @@ verified on which platform and how to test Linux and Windows.
 | 1 | **Windows validation** | The only platform never verified. CI job exists, `workflow_dispatch`-only. Needs a Windows machine. | Unknown |
 | 2 | **By-reference closure captures** | Captures are by-value snapshots; mutating a captured primitive doesn't propagate | Medium |
 | 3 | **Mixed-representation unions** | `string \| i32` needs a tagged value and `typeof` narrowing | Large |
-| 4 | **O(1) `shift()`** | The only benchmark Cypescript loses, and it loses 10x. Needs a head offset in `DynamicArray` rather than erasing from the front | Medium |
 
-Item 4 came out of sizing `benchmark_bfs` up to where its numbers meant something —
-see the "Known limitations" table for the measured detail. It was not visible while
-that benchmark ran in under a millisecond on a six-node graph, and neither was
-indexing a `T[]` inside a generic function, which silently read the wrong storage
-vector and is now **fixed** with `tests/test_generic_arrays.csc` guarding it.
+Two items that briefly sat here came out of sizing `benchmark_bfs` up to where its
+numbers meant something, and both are now **fixed**: indexing a `T[]` inside a
+generic function read the wrong storage vector, and `shift()` erased from the front
+of a vector. Neither was visible while that benchmark ran in under a millisecond on
+a six-node graph. `tests/test_generic_arrays.csc` and `tests/test_array_shift.csc`
+guard them.
 
 ### Windows — what is known
 
@@ -130,7 +130,6 @@ These are decisions, not omissions.
 | Generic functions over scalars | `id<i32>(5)` fails LLVM verification; generics work with pointer-shaped types |
 | `Map`/`Set` values | Only pointer-shaped values; `Map<string, i32>` fails |
 | Enums declare-before-use | Members fold at parse time, like a C enum |
-| `shift()` is O(n) | `array_shift_*` erases from the front of a `std::vector`, copying the tail and leaking a `std::string` per call. V8's is amortised O(1), which is why `benchmark_bfs` loses to Node 0.10x — measured at ~91% of that benchmark's runtime |
 
 ## TypeScript compatibility
 
@@ -169,6 +168,21 @@ Rust is what reproduces, and it does.
 and a load. The bigger half of the win is second-order — LLVM can vectorise a loop over
 plain memory, and cannot see through an opaque call at all. Use `T[]` when you want a
 growable list, `Buffer<T>` for a fixed-size block you index in a hot loop.
+
+### Data structures, not just arithmetic
+
+The benchmarks above are compute. `benchmarks/benchmark_bfs.csc` is the counterweight —
+a BFS over a 5,000-node graph exercising `Map`, `Set` and an array queue, traversed 40
+times, with both languages printing a checksum so they can be shown to do identical
+work. It is the benchmark that found `shift()` erasing from the front of a vector:
+
+| | Cypescript | Node |
+|---|---|---|
+| Before the head offset | 0.79s | 0.08s |
+| After | **0.059s** | 0.073s |
+
+Keep something like it in the suite. Every other benchmark here is a loop over numbers,
+and a language can look excellent at those while a data-structure path is quadratic.
 
 `benchmarks/cross/run_cross_benchmarks.sh 3` — always best-of-3, a single run is too noisy
 to conclude from. **This is a regression gate**: two changes that could have cost it were
