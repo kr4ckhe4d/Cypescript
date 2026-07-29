@@ -71,7 +71,7 @@ longer rests on macOS plus a single Ubuntu CI run:
 | `fib(35)` | **0.023s** | 0.023s | 0.115s | 0.738s |
 
 Parity holds — dead level on `fib`, a hair ahead on primes. Do **not** read these
-against the Apple Silicon numbers in ROADMAP.md (0.051s / 0.025s) as a regression:
+against the Apple M3 numbers in ROADMAP.md (0.051s / 0.025s) as a regression:
 different machine, different architecture, so only the Cypescript-to-Rust ratio
 carries across. That ratio is the claim; the absolute seconds are not.
 

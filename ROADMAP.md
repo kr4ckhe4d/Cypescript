@@ -143,12 +143,17 @@ objects are structs, so property access is one instruction rather than a hash lo
 
 ## Performance
 
-Best-of-3 on Apple Silicon, all at `-O2`:
+Best-of-3 on an Apple M3, all at `-O2`:
 
 | Benchmark | Cypescript | Rust | Node (TS) | Python |
 |---|---|---|---|---|
-| Primes < 1M | **0.051s** | 0.051s | 0.150s | 1.78s |
-| `fib(35)` | **0.025s** | 0.025s | 0.126s | 0.634s |
+| Primes < 1M | **0.051s** | 0.051s | 0.155s | 1.796s |
+| `fib(35)` | **0.025s** | 0.026s | 0.133s | 0.636s |
+
+Against Node on the same machine, across the wider suite: Simple Loop 9.4x, Matrix
+Mult 16.7x, Prime Sieve 7.3x, Fibonacci 3.0x, BFS 2.7x. Those ratios are
+machine-dependent — see the README, where the same suite on x86-64 puts Matrix Mult
+at 5.5x — so treat the ordering as the claim rather than the multiples.
 
 Confirmed on a second platform: on Arch x86-64, primes is 0.088s against Rust's
 0.090s and `fib(35)` is 0.023s against 0.023s. Different machine and architecture,

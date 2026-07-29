@@ -149,12 +149,12 @@ link windows "opengl32";
 
 ## It's fast
 
-Best-of-3 on an M-series Mac. Same algorithms, same output, all compiled or run at `-O2`.
+Best-of-3 on an Apple M3. Same algorithms, same output, all compiled or run at `-O2`.
 
 | Benchmark | Cypescript | Rust | Node (TS) | Python |
 |---|---|---|---|---|
-| Primes < 1M (trial division) | **0.051s** | 0.051s | 0.150s | 1.78s |
-| `fib(35)` recursive | **0.025s** | 0.025s | 0.126s | 0.634s |
+| Primes < 1M (trial division) | **0.051s** | 0.051s | 0.155s | 1.796s |
+| `fib(35)` recursive | **0.025s** | 0.026s | 0.133s | 0.636s |
 
 Objects are LLVM structs, so property access is a single instruction rather than a hash
 lookup. Reproduce with `bash benchmarks/cross/run_cross_benchmarks.sh 3`.
@@ -644,7 +644,19 @@ clang++ -O2 output.ll src/cypescript_stdlib.cpp -o my_program -std=c++17
 
 ### Against Node.js
 
-Best of 3 per benchmark, on an AMD Ryzen 9 5950X (Arch Linux x86-64, Node v26):
+Best of 3 per benchmark, on an Apple M3 (macOS 26.5, Node v26):
+
+```
+Benchmark                    Cypescript     Node.js     Speedup
+─────────────────────────────────────────────────────────────────
+Simple Loop (100M)             0.016s       0.151s       9.4x
+Fibonacci (10M calls)          0.065s       0.192s       3.0x
+Matrix Mult (300³)             0.006s       0.100s      16.7x
+Prime Sieve (500K)             0.013s       0.095s       7.3x
+BFS (5K nodes ×40)             0.041s       0.111s       2.7x
+```
+
+And on an AMD Ryzen 9 5950X (Arch Linux x86-64, Node v26):
 
 ```
 Benchmark                    Cypescript     Node.js     Speedup
@@ -656,11 +668,14 @@ Prime Sieve (500K)             0.019s       0.057s       3.0x
 BFS (5K nodes ×40)             0.064s       0.072s       1.1x
 ```
 
-Treat these as approximate: across three consecutive runs the speedups moved by up
-to 1x either way (Matrix Mult ranged 5.3–6.5x), so the shape — several times faster
-on compute, roughly level on the graph traversal — is the claim, not the decimals.
-Node itself has moved too; an earlier version of this table measured against v22 and
-reported larger multiples.
+**Read the shape, not the decimals.** The two machines disagree by more than
+run-to-run noise does: Matrix Mult is 16.7x on the M3 and 5.5x on the Ryzen, BFS
+2.7x against 1.1x. Repeating the whole suite three times on one machine moves each
+figure much less than that (M3 ranges: Simple Loop 8.7–9.4x, Fibonacci 2.9–3.0x,
+Matrix Mult 16.7–17.2x, Prime Sieve 7.2–8.6x, BFS 2.5–2.7x), so the spread is the
+hardware and Node's JIT on it, not measurement error. What survives both machines
+is the ordering: several times faster on compute, least far ahead on the graph
+traversal. Node itself has moved too — an earlier table measured against v22.
 
 **BFS is deliberately unlike the others.** The rest are loops over numbers, and a
 language can look excellent at those while a data-structure path is quadratic. That
@@ -676,22 +691,23 @@ Run benchmarks yourself:
 ### Cross-language benchmarks
 
 The same algorithm implemented identically in all four languages
-(`benchmarks/cross/`), best of 3 wall-clock runs on Apple Silicon
-(Node v26, Python 3.14, rustc 1.89):
+(`benchmarks/cross/`), best of 3 wall-clock runs on an Apple M3
+(Node v26.3, Python 3.14.6, rustc 1.89):
 
 ```
 Benchmark                     Cypescript   Node (TS)     Python       Rust
 ──────────────────────────────────────────────────────────────────────────
-Primes < 1M (trial division)     0.051s      0.146s      1.777s     0.050s
-Fibonacci fib(35) recursive      0.025s      0.125s      0.621s     0.026s
+Primes < 1M (trial division)     0.051s      0.155s      1.796s     0.051s
+Fibonacci fib(35) recursive      0.025s      0.133s      0.636s     0.026s
 ```
 
-**Cypescript runs within ~2% of Rust, 2.9–5x faster than Node.js on the
-identical TypeScript source, and 25–35x faster than Python.**
+**Cypescript runs level with Rust — identical on primes, a hair ahead on `fib` —
+3.0–5.3x faster than Node.js on the identical TypeScript source, and 25–35x faster
+than Python.**
 
 That parity reproduces on a second architecture: on x86-64 (Ryzen 9 5950X, Arch
 Linux) primes is 0.086s against Rust's 0.088s and `fib(35)` is 0.023s against
-0.023s. The absolute times differ from the Apple Silicon ones above — different
+0.023s. The absolute times differ from the Apple M3 ones above — different
 machine, different architecture — so it is the ratio to Rust that carries across,
 not the seconds.
 
