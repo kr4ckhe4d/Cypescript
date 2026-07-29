@@ -200,23 +200,18 @@ Linux support is CI-validated; macOS is the primary development platform.
 To build from source on any platform, see [Quick Start](#quick-start).
 Maintainers: the full release process is documented in [RELEASING.md](RELEASING.md).
 
-## 📖 Interactive Documentation
+## Documentation
 
-**NEW!** Cypescript now features comprehensive web-based documentation with runnable examples and interactive performance charts:
+A searchable reference site covering every language feature:
 
 ```bash
-# Launch interactive documentation
 ./launch-docs.sh
 ```
 
-The web documentation includes:
-- 🚀 **Runnable Examples** - Execute Cypescript code directly in your browser
-- 🎮 **Interactive Playground** - Write and test your own code
-- 📊 **Performance Benchmarks** - Interactive charts comparing Cypescript vs JavaScript
-- 📱 **Mobile-Friendly** - Works on all devices
-- 🔍 **Searchable** - Find what you need quickly
-- 📚 **Complete Reference** - All language features documented
-- 📈 **Visual Performance Analysis** - Charts showing optimization impact and scaling
+It also has a playground with a Run button. **That playground is a simplified
+interpreter written in JavaScript** ([docs/cypescript-interpreter.js](docs/cypescript-interpreter.js)),
+not the compiler — it covers the basics for a quick try in the browser and can
+diverge from real behaviour. For anything you intend to rely on, run `cscript`.
 
 ## A tour in code
 
@@ -571,7 +566,7 @@ This will install:
 ./launch-docs.sh
 ```
 
-### 5. Install VSCode Extension (Optional)
+### 6. Install VSCode Extension (Optional)
 
 For the best development experience, install the Cypescript VSCode extension:
 
@@ -588,7 +583,7 @@ This provides:
 - **Error diagnostics** and hover documentation
 - **Function support** with syntax highlighting and completion
 
-### 6. Manual Usage
+### 7. Manual Usage
 
 #### Basic Compilation
 
@@ -642,73 +637,17 @@ clang++ -O2 output.ll src/cypescript_stdlib.cpp -o my_program -std=c++17
 ./my_program
 ```
 
-#### C++ Integration (Advanced)
+## Performance
 
-For programs that need additional functionality, Cypescript provides seamless C++ integration:
+`cscript` compiles at `-O2` by default; there is nothing to turn on.
 
-```bash
-# One-command compilation with C++ integration
-./compile-with-cpp.sh example/17_cpp_stdlib.csc my_program
 
-# Then run the program
-./my_program
-```
+### Against Node.js
 
-The C++ integration provides access to:
-- **String functions**: `string_reverse()`, `string_upper()`, `string_lower()`
-- **Array functions**: `array_sum_i32()`, `array_max_i32()`, `array_min_i32()`
-- **File I/O**: `file_read()`, `file_write()`, `file_exists()`
-- **JSON functions**: `json_create_object()`, `json_add_string()`, `json_get_string()`
-- **Utilities**: `random_int()`, `random_seed()`
-
-See the [C++ Integration](#c-integration) section for complete details.
-
-## ⚡ Performance Optimizations
-
-Cypescript now includes multiple optimization levels for different use cases:
-
-### **Advanced Multi-Stage Optimization**
-```bash
-# Six-stage optimization pipeline with 25.8% performance improvement
-./compile-advanced.sh my_program.csc advanced_program
-
-# Results: 25.8% faster execution, 59% smaller binaries, production-ready
-```
-
-### **Profile-Guided Optimization (PGO)**
-```bash
-# Three-stage PGO workflow for 20-30% additional improvement
-./compile-pgo.sh profile my_program.csc instrumented_program
-./instrumented_program  # Collect runtime profile data
-./compile-pgo.sh optimize my_program.csc optimized_program profile.profdata
-
-# Results: Hot path optimization, runtime behavior analysis
-```
-
-### **NEON SIMD Optimization**
-```bash
-# ARM NEON vectorization for 4x parallel array processing
-./compile-with-custom-cpp.sh my_program.csc neon_program src/neon_optimized_lib.cpp
-
-# Results: 4x parallel processing on Apple Silicon, validated correctness
-```
-
-### **Process Pooling (Development)**
-```bash
-# Eliminate compilation overhead for repeated execution
-./cypescript-pool.sh cache my_program.csc cached_program
-./cypescript-pool.sh exec cached_program  # Instant execution!
-
-# Results: 15% faster execution, zero compilation overhead
-```
-
-### **Performance Characteristics**
-- **vs JavaScript (Node.js):** Cypescript is **3x–17x faster** with `-O2` optimizations
-- **Simple loops:** 8x faster than Node.js
-- **Function-heavy code (Fibonacci):** 3x faster than Node.js
-- **Nested loops (Matrix):** 17x faster than Node.js
-- **Branch-heavy code (Primes):** 7x faster than Node.js
-- **NEON SIMD:** 4x parallel processing validated on Apple Silicon
+- **Simple loops:** 8x faster
+- **Function-heavy code (Fibonacci):** 3x faster
+- **Nested loops (Matrix):** 17x faster
+- **Branch-heavy code (Primes):** 7x faster
 
 **Benchmark Results (Cypescript -O2 vs Node.js v22):**
 ```
@@ -725,7 +664,7 @@ Run benchmarks yourself:
 ./benchmarks/run_benchmarks.sh
 ```
 
-### **Cross-Language Benchmarks (Cypescript vs TypeScript vs Python vs Rust)**
+### Cross-language benchmarks
 
 The same algorithm implemented identically in all four languages
 (`benchmarks/cross/`), best of 3 wall-clock runs on Apple Silicon
@@ -1192,7 +1131,10 @@ minute changes. The following TypeScript constructs work **as-is**:
 - `Math.sqrt`, `Math.pow`, `Math.abs`, `Math.floor`, `Math.sin`, `Math.cos`, `Math.log`, `Math.exp`
 - `let` / `const`, type annotations, `number` (compiles to `f64`), `string`, `boolean`
 - Interfaces, generics, type aliases, template literals, destructuring
-- `Map` / `Set`, arrays with `.push()` / `.pop()` / `.shift()` / `.length`, `for...of`
+- `Map` / `Set` with explicit type arguments (`new Map<string, string>()` — a bare
+  `new Map()` is not inferred, and values must be pointer-shaped, so
+  `Map<string, i32>` does not work), arrays with `.push()` / `.pop()` / `.shift()` /
+  `.length`, `for...of`
 - `try` / `catch` / `finally` / `throw`, `switch`, `break` / `continue`
 - Object literals with methods and `this`
 
@@ -1200,12 +1142,12 @@ minute changes. The following TypeScript constructs work **as-is**:
   `.find`/`.forEach` with arrow callbacks — note: captures are **by-value snapshots**
   (capture an object to share mutable state, e.g. `let s = {n: 0}; () => s.n += 1`)
 
-Typical minute changes when porting a `.ts` file:
-
 - Classes with fields, constructors, and methods (`class Point { ... }`, `new Point(3, 4)`)
 - Function-type parameters (`function apply(f: (i32) => i32, x: i32)`)
 - Class inheritance (`extends`) with virtual dispatch and `super`
 - Enums, nested arrays (`i32[][]`), bitwise operators
+
+Typical minute changes when porting a `.ts` file:
 
 | TypeScript | Cypescript |
 |---|---|
@@ -1342,9 +1284,9 @@ print("Max: "); println(max);     // Max: 42
 print("Length: "); println(numbers.length); // Length: 5
 ```
 
-### C++ Integration Example
+### Built-in library demo
 ```typescript
-// Advanced functionality with C++ integration
+// The runtime's own functions — no declare, no linking
 println("=== C++ Integration Demo ===");
 
 // String processing
@@ -1380,68 +1322,39 @@ println("JSON: " + json_prettify(user));
 
 ```
 Cypescript/
-├── src/
-│   ├── main.cpp      # Compiler entry point + module resolution
-│   ├── Lexer.cpp/h   # Lexical analysis (incl. template literals)
-│   ├── Parser.cpp/h  # Syntax analysis
-│   ├── AST.h         # Abstract Syntax Tree
-│   ├── CodeGen.cpp/h # LLVM IR generation
-│   ├── Optimizer.cpp/h # AST constant folding + dead-branch elimination
-│   ├── ObjectOptimizer.cpp/h # Direct struct property access (Phase 1)
-│   ├── Token.h       # Token definitions
-│   └── cypescript_stdlib.cpp # C++ standard library + exception runtime
+├── src/                      # The compiler
+│   ├── main.cpp              # Entry point, module resolution, link line
+│   ├── Lexer.cpp/h           # Tokens, incl. template literals
+│   ├── Parser.cpp/h          # Syntax -> AST
+│   ├── AST.h                 # Node definitions
+│   ├── Semantic.cpp/h        # Scoping, arity, const, types, property names
+│   ├── CodeGen.cpp/h         # LLVM IR generation
+│   ├── Optimizer.cpp/h       # Constant folding, dead-branch elimination
+│   ├── ObjectOptimizer.cpp/h # Objects as structs, direct property access
+│   └── cypescript_stdlib.cpp # Runtime: strings, arrays, JSON, exceptions
+├── lib/game.csc              # The game API, as `declare` bindings
+├── runtime/game/             # The raylib C shim behind those bindings
 ├── tests/
-│   ├── run_tests.sh  # Test suite runner
-│   ├── test_variables.csc    # Variable declarations
-│   ├── test_arithmetic.csc   # Arithmetic operations
-│   ├── test_if_else.csc      # Control flow
-│   ├── test_control_flow.csc # break/continue, else-if, switch
-│   ├── test_for.csc          # For loops
-│   ├── test_while.csc        # While loops
-│   ├── test_do_while.csc     # Do-while loops
-│   ├── test_floats.csc       # f64 arithmetic
-│   ├── test_strings.csc      # Concatenation + template literals
-│   ├── test_compound_assign.csc # +=, -=, ++, --
-│   ├── test_functions.csc    # User-defined functions
-│   ├── test_arrays.csc       # Arrays and array.length
-│   ├── test_objects.csc      # Native objects
-│   ├── test_interfaces.csc   # Interfaces + structural typing
-│   ├── test_methods.csc      # Object methods and `this`
-│   ├── test_destructuring.csc # Object destructuring
-│   ├── test_exceptions.csc   # try/catch/finally/throw
-│   ├── test_modules.csc      # import/export
-│   └── modules/              # Helper modules for module tests
-├── benchmarks/
-│   ├── run_benchmarks.sh     # Benchmark suite runner
-│   ├── benchmark_simple.csc  # Simple loop (100M iterations)
-│   ├── benchmark_simple.ts   # Node.js comparison
-│   ├── bench_fibonacci.csc   # Fibonacci (10M function calls)
-│   ├── bench_fibonacci.ts    # Node.js comparison
-│   ├── bench_matrix.csc      # Matrix multiply (300³ nested loops)
-│   ├── bench_matrix.ts       # Node.js comparison
-│   ├── bench_primes.csc      # Prime sieve (500K)
-│   └── bench_primes.ts       # Node.js comparison
-├── example/          # Guided tour, easiest → most complex
-│   ├── README.md            # How to run + progression table
-│   ├── 01_hello.csc         # print/println/console.log
-│   ├── 02_variables.csc     # types, let/const, inference
-│   ├── ...                  # operators, control flow, loops, functions,
-│   │                        # strings, arrays, objects, interfaces,
-│   │                        # methods/this, destructuring, exceptions
-│   ├── 14_modules/          # import/export (run main.csc)
-│   ├── 15_json.csc          # JSON.stringify/parse
-│   ├── 16_typescript_compat.csc # near-plain TypeScript
-│   ├── 17_cpp_stdlib.csc    # C++ stdlib integration
-│   └── 18_bfs_graph.csc/.ts # capstone: BFS in both languages
-├── docs/             # Web documentation
-├── build.sh          # Build script
-├── test.sh           # Test script (runs tests/run_tests.sh)
-├── setup-macos.sh    # macOS setup script
-├── launch-docs.sh    # Documentation launcher
-├── compile-run.sh    # Basic compilation script
-├── compile-with-cpp.sh # C++ integration compiler
-└── CMakeLists.txt    # CMake configuration
+│   ├── run_tests.sh          # 66 language tests
+│   ├── run_game_tests.sh     # 14 headless game tests
+│   ├── run_readme_tests.sh   # Compiles every README snippet
+│   ├── test_*.csc            # Positive tests, output asserted against
+│   ├── expected/*.out        #   these fixtures
+│   ├── negative/*.csc        # Programs that must be rejected, and why
+│   └── native/               # C and C++ sources for the interop tests
+├── example/                  # Guided tour, easiest -> most complex
+│   ├── 01_hello.csc ... 23_cpp_interop.csc
+│   ├── native/, vendor/      # C/C++ sources and headers the examples link
+│   └── game/                 # Breakout, Asteroids, and a native extension
+├── benchmarks/cross/         # Cypescript vs Rust vs Node vs Python
+├── docs/index.html           # The documentation site
+├── packaging/                # .deb and Arch packaging
+├── ROADMAP.md                # What is done, what is next
+├── STEERING.md               # The rules, and where a feature lands
+├── HANDOVER.md               # What is verified on which platform
+└── CMakeLists.txt
 ```
+
 
 ### Building Manually
 
@@ -1490,400 +1403,66 @@ cscript --version
 A Homebrew formula template lives in `packaging/cypescript.rb` for publishing
 releases, and `.github/workflows/ci.yml` builds and tests every push.
 
-## C++ Integration
+## Built-in library
 
-Cypescript provides seamless integration with C++ through a comprehensive standard library, enabling access to the entire C++ ecosystem while maintaining language safety and simplicity.
+These are compiled into the runtime and need no `declare`, no linking and no
+build step — call them directly.
 
-### Quick Start with C++ Integration
-
-```bash
-# Compile a Cypescript program with C++ functions
-./compile-with-cpp.sh example/17_cpp_stdlib.csc my_program
-
-# Run the compiled program
-./my_program
-```
-
-### Custom C++ Libraries
-
-You can easily extend Cypescript with your own C++ libraries:
-
-```bash
-# Compile with custom C++ libraries
-./compile-with-custom-cpp.sh my_program.csc output src/my_custom_lib.cpp src/another_lib.cpp
-```
-
-**Example Custom Library:**
-```cpp
-// src/my_math_lib.cpp
-extern "C" {
-    int math_gcd(int a, int b) {
-        while (b != 0) {
-            int temp = b;
-            b = a % b;
-            a = temp;
-        }
-        return a;
-    }
-    
-    int math_fibonacci(int n) {
-        if (n <= 1) return n;
-        int a = 0, b = 1;
-        for (int i = 2; i <= n; i++) {
-            int temp = a + b;
-            a = b;
-            b = temp;
-        }
-        return b;
-    }
-}
-```
-
-**Use in Cypescript:**
-<!-- snippet: illustrative — runnable version in example/21_c_interop.csc -->
-```typescript
-let gcd_result: i32 = math_gcd(48, 18);  // Returns 6
-let fib_10: i32 = math_fibonacci(10);    // Returns 55
-```
-
-### Available C++ Functions
-
-#### String Functions
-- `string_reverse(str)` - Reverse a string
-- `string_upper(str)` - Convert to uppercase
-- `string_lower(str)` - Convert to lowercase
-- `string_length(str)` - Get string length
-- `string_substring(str, start, length)` - Extract substring
-- `string_find(str, substr)` - Find substring position
-- `string_concat(str1, str2)` - Concatenate strings
-
-#### Array Functions
-- `array_sum_i32(arr, size)` - Sum array elements
-- `array_max_i32(arr, size)` - Find maximum element
-- `array_min_i32(arr, size)` - Find minimum element
-
-#### File I/O Functions
-- `file_read(filename)` - Read file contents
-- `file_write(filename, content)` - Write to file
-- `file_exists(filename)` - Check if file exists
-
-#### Utility Functions
-- `random_seed(seed)` - Seed random generator
-- `random_int(min, max)` - Generate random integer
-- `random_double()` - Generate random double
-
-### Example Usage
+| Area | Functions |
+|---|---|
+| Strings | `string_reverse`, `string_upper`, `string_lower`, `string_length`, `string_substring(s, start, len)`, `string_find(s, sub)`, `string_concat(a, b)` |
+| Arrays | `array_sum_i32(arr, size)`, `array_max_i32`, `array_min_i32` |
+| Files | `file_read(path)`, `file_write(path, content)`, `file_exists(path)` |
+| Random | `random_seed(n)`, `random_int(min, max)`, `random_double()` |
+| Math | `Math.sqrt`, `Math.pow`, `Math.abs`, `Math.floor`, `Math.sin`, `Math.cos`, `Math.log`, `Math.exp`, `Math.PI` |
+| JSON | `JSON.parse`, `JSON.stringify`, plus the string-based `json_*` helpers below |
 
 ```typescript
-// String processing
 let text: string = "Hello World";
-let reversed: string = string_reverse(text);
-println(reversed); // "dlroW olleH"
+println(string_upper(text));             // HELLO WORLD
+println(string_reverse(text));           // dlroW olleH
+println(string_substring(text, 6, 5));   // World
 
-// Array operations
-let numbers: i32[] = [10, 5, 8, 3, 12];
-let sum: i32 = array_sum_i32(numbers, numbers.length);
-println(sum); // 38
-
-// File operations
-file_write("data.txt", "Hello from Cypescript!");
-let content: string = file_read("data.txt");
-println(content); // "Hello from Cypescript!"
-
-// Random numbers
 random_seed(42);
-let rand: i32 = random_int(1, 100);
-println(rand); // Random number between 1-100
+println(random_int(1, 6));
+
+if (file_exists("README.md")) { println("found it"); }
 ```
 
-### Compilation Process
-
-The C++ integration compilation process:
-
-1. **Compiles C++ standard library** (`src/cypescript_stdlib.cpp`)
-2. **Compiles Cypescript to LLVM IR** (your `.csc` file)
-3. **Links everything together** into a native executable
-4. **Optimizes with LLVM** for maximum performance
-
-### Extending with New Functions
-
-To add new C++ functions:
-
-1. **Add the C++ function** to `src/cypescript_stdlib.cpp` or create a custom library
-2. **Declare it in the parser** (`src/Parser.cpp` - `isKnownFunction`)
-3. **Add LLVM declaration** (`src/CodeGen.cpp` - `getOrDeclareExternalFunction`)
-
-Example:
-```cpp
-// In cypescript_stdlib.cpp or custom library
-extern "C" {
-    int my_function(int x) {
-        return x * 2;
-    }
-}
-```
-
-<!-- snippet: illustrative — runnable version in example/21_c_interop.csc -->
-```typescript
-// In Cypescript
-let result: i32 = my_function(21); // Returns 42
-```
-
-## 🎯 Native TypeScript-Style Objects
-
-Cypescript provides native TypeScript-style object support with property access, just like TypeScript!
-
-### **Object Creation and Property Access**
+JSON is available two ways. `JSON.parse` / `JSON.stringify` read and write
+objects, and a string-based API manipulates a document in place:
 
 ```typescript
-// Create objects with mixed types
-let user = {
-    name: "Alice Johnson",
-    age: 28,
-    role: "Developer",
-    active: true
-};
+let doc: string = json_create_object();
+doc = json_add_string(doc, "name", "Alice");
+doc = json_add_int(doc, "age", 28);
 
-// Access properties directly
-println(user.name);     // "Alice Johnson"
-println(user.age);      // 28
-println(user.role);     // "Developer"
-println(user.active);   // 1 (true)
+println(json_get_string(doc, "name"));   // Alice
+println(json_get_int(doc, "age"));       // 28
+println(json_prettify(doc));
 ```
 
-### **Multiple Objects**
+### Calling your own C or C++
 
-```typescript
-// Create multiple objects
-let config = {
-    appName: "Cypescript IDE",
-    version: "1.0.0",
-    port: 8080,
-    debug: false
-};
+You do not register anything with the compiler and there is no build script.
+`declare` the function, name the source file, and `cscript` compiles it in — see
+[Foreign Function Interface](#foreign-function-interface-ffi),
+[example/21_c_interop.csc](example/21_c_interop.csc) for C, and
+[example/23_cpp_interop.csc](example/23_cpp_interop.csc) for C++.
 
-let settings = {
-    theme: "dark",
-    fontSize: 14,
-    autoSave: true
-};
-
-// Access properties from different objects
-println(config.appName);    // "Cypescript IDE"
-println(config.port);       // 8080
-println(settings.theme);    // "dark"
-println(settings.fontSize); // 14
-```
-
-### **Real-World Example**
-
-```typescript
-// Employee management system
-let employee = {
-    firstName: "Alice",
-    lastName: "Johnson",
-    employeeId: 12345,
-    department: "Engineering",
-    salary: 95000,
-    isActive: true,
-    isRemote: false
-};
-
-// Process employee data
-print("Employee: ");
-print(employee.firstName);
-print(" ");
-println(employee.lastName);
-
-print("ID: ");
-println(employee.employeeId);
-
-print("Department: ");
-println(employee.department);
-
-print("Status: ");
-if (employee.isActive == 1) {
-    println("Active");
-} else {
-    println("Inactive");
-}
-
-print("Work Mode: ");
-if (employee.isRemote == 1) {
-    println("Remote");
-} else {
-    println("On-site");
-}
-```
-
-### **Supported Property Types**
-
-- **Strings**: `name: "Alice Johnson"`
-- **Integers**: `age: 28`, `port: 8080`
-- **Booleans**: `active: true`, `debug: false`
-
-## 🔧 C++ Integration (Advanced)
-
-For programs that need additional functionality beyond native TypeScript features, Cypescript provides seamless C++ integration with 30+ standard library functions.
-
-### **Quick Start with C++ Integration**
-
-```bash
-# Compile a Cypescript program with C++ functions
-./compile-with-cpp.sh example/17_cpp_stdlib.csc my_program
-
-# Run the compiled program
-./my_program
-```
-
-### **Available C++ Functions**
-
-#### String Functions
-```typescript
-let text: string = "Hello World";
-let reversed: string = string_reverse(text);        // "dlroW olleH"
-let upper: string = string_upper(text);             // "HELLO WORLD"
-let lower: string = string_lower(text);             // "hello world"
-let length: i32 = string_length(text);              // 11
-let substr: string = string_substring(text, 0, 5);  // "Hello"
-let pos: i32 = string_find(text, "World");          // 6
-let concat: string = string_concat("Hello", " C++"); // "Hello C++"
-```
-
-#### Array Functions
-```typescript
-let numbers: i32[] = [10, 5, 8, 3, 12, 7];
-let sum: i32 = array_sum_i32(numbers, numbers.length);  // 45
-let max: i32 = array_max_i32(numbers, numbers.length);  // 12
-let min: i32 = array_min_i32(numbers, numbers.length);  // 3
-```
-
-#### File I/O Functions
-```typescript
-let success: i32 = file_write("data.txt", "Hello from Cypescript!");
-let exists: i32 = file_exists("data.txt");           // 1 (true)
-let content: string = file_read("data.txt");         // "Hello from Cypescript!"
-```
-
-#### Utility Functions
-```typescript
-random_seed(42);                                     // Seed random generator
-let rand1: i32 = random_int(1, 100);                // Random number 1-100
-let rand2: i32 = random_int(1, 100);                // Another random number
-```
-
-#### JSON Functions (String-Based)
-```typescript
-// Create and manipulate JSON strings
-let jsonObj: string = json_create_object();         // Creates: {}
-jsonObj = json_add_string(jsonObj, "name", "Alice");
-jsonObj = json_add_int(jsonObj, "age", 28);
-jsonObj = json_add_boolean(jsonObj, "active", 1);
-
-// Retrieve values
-let name: string = json_get_string(jsonObj, "name");        // "Alice"
-let age: i32 = json_get_int(jsonObj, "age");                // 28
-let active: i32 = json_get_boolean(jsonObj, "active");      // 1
-
-// JSON utilities
-let isValid: i32 = json_is_valid(jsonObj);                  // 1 if valid
-let pretty: string = json_prettify(jsonObj);                // Pretty-printed
-let compact: string = json_minify(jsonObj);                 // Minified
-```
-
-### **Custom C++ Libraries**
-
-You can easily extend Cypescript with your own C++ libraries:
-
-```bash
-# Compile with custom C++ libraries
-./compile-with-custom-cpp.sh my_program.csc output src/my_custom_lib.cpp
-```
-
-**Example Custom Library:**
-```cpp
-// src/my_math_lib.cpp
-extern "C" {
-    int math_gcd(int a, int b) {
-        while (b != 0) {
-            int temp = b;
-            b = a % b;
-            a = temp;
-        }
-        return a;
-    }
-    
-    int math_fibonacci(int n) {
-        if (n <= 1) return n;
-        int a = 0, b = 1;
-        for (int i = 2; i <= n; i++) {
-            int temp = a + b;
-            a = b;
-            b = temp;
-        }
-        return b;
-    }
-}
-```
-
-**Use in Cypescript:**
-<!-- snippet: illustrative — runnable version in example/21_c_interop.csc -->
-```typescript
-let gcd_result: i32 = math_gcd(48, 18);  // Returns 6
-let fib_10: i32 = math_fibonacci(10);    // Returns 55
-```
-
-### **C++ Integration Example**
-```typescript
-// Comprehensive C++ Integration Demo
-println("=== C++ Integration Demo ===");
-
-// String processing
-let text: string = "Hello World";
-let reversed: string = string_reverse(text);
-let upper: string = string_upper(text);
-println("Original: " + text);
-println("Reversed: " + reversed);
-println("Uppercase: " + upper);
-
-// Array operations
-let numbers: i32[] = [10, 5, 8, 3, 12, 7];
-let sum: i32 = array_sum_i32(numbers, numbers.length);
-let max: i32 = array_max_i32(numbers, numbers.length);
-println("Array sum: " + sum);
-println("Array max: " + max);
-
-// File I/O
-file_write("data.txt", "Hello from Cypescript!");
-let content: string = file_read("data.txt");
-println("File content: " + content);
-
-// JSON manipulation
-let user: string = json_create_object();
-user = json_add_string(user, "name", "Alice");
-user = json_add_int(user, "age", 28);
-println("JSON: " + json_prettify(user));
-```
-
-### **When to Use C++ Integration**
-
-- **File operations** - Reading/writing files
-- **String processing** - Advanced string manipulation
-- **Mathematical operations** - Complex calculations
-- **JSON interop** - Working with external JSON APIs
-- **Performance-critical code** - Optimized C++ algorithms
-- **Legacy integration** - Using existing C++ libraries
-
-**Note:** For most TypeScript-style development, use native objects. C++ integration is for advanced use cases requiring additional functionality.
 
 ## Language Features Status
 
 ### ✅ Implemented Features
 - [x] Class inheritance (`extends`) with method overriding, virtual dispatch and `super`
+- [x] Union types with a shared representation (`Shape | null`, `i32 | f64`) and `implements` on a class
+- [x] `Buffer<T>` — fixed-size typed blocks indexed inline, with no runtime call
 - [x] Enums with auto-numbered and explicit values
 - [x] Nested arrays (`i32[][]`)
-- [x] Type checking at declarations, assignments, returns and call arguments
-- [x] Foreign function interface (`declare function`, `link`, `link source`)
+- [x] Type checking at declarations, assignments, returns and call arguments, and property
+      names against classes, interfaces and object literals
+- [x] Foreign function interface (`declare function`, `link`, `link source`, `link include`,
+      platform-qualified links)
 - [x] Lexical analysis with comprehensive token support
 - [x] Variable declarations (`let`, `const`) with type annotations
 - [x] Variable assignments with type checking
@@ -1933,10 +1512,11 @@ println("JSON: " + json_prettify(user));
 - [x] AST constant folding and dead-branch elimination (`--no-fold` to disable)
 - [x] LLVM IR code generation with `-O2` optimizations
 - [x] Native executable compilation (3–17x faster than Node.js)
-- [x] C++ integration with 30+ stdlib functions
+- [x] Built-in runtime library: strings, arrays, files, random, math, JSON
 - [x] Comprehensive error handling and reporting
-- [x] Interactive web documentation with runnable examples
-
+- [x] Documentation site with a searchable reference and a JS playground
+- [x] Games: a raylib-backed module, headless mode for CI, and `--bundle` for a
+      double-clickable app
 - [x] Arrow functions and closures (`(x: i32) => x * 2`; captures are by-value snapshots)
 - [x] Function-type parameters (`f: (i32) => i32`) — closures passed to regular functions
 - [x] Classes: fields with defaults, constructors, methods, `new`, class-name type annotations

@@ -328,28 +328,28 @@ println(random_int(1, 100));</code></pre>
     </dl>
 
     <h2 id="cpp-custom">Adding your own functions</h2>
-    <p>Write a C++ function with C linkage, then compile it in:</p>
-    <div class="code-example">
-      <div class="example-header"><span>my_math_lib.cpp</span></div>
-      <pre><code>extern "C" {
-    int math_gcd(int a, int b) {
-        while (b != 0) { int t = b; b = a % b; a = t; }
-        return a;
-    }
-}</code></pre>
-    </div>
-    <div class="code-example">
-      <div class="example-header"><span>Shell</span></div>
-      <pre><code>./compile-with-custom-cpp.sh my_program.csc output src/my_math_lib.cpp</code></pre>
-    </div>
+    <p>
+      The functions above are built in. To call <em>your</em> C or C++, you do not
+      register anything with the compiler — you
+      <a href="#ref-ffi"><code>declare</code></a> it and name the source file:
+    </p>
     <div class="code-example">
       <div class="example-header"><span>Cypescript</span></div>
-      <pre><code>let g: i32 = math_gcd(48, 18);   // 6</code></pre>
+      <pre><code>link source "native/stats.c";
+
+declare function stats_sum(values: ptr, count: i32): i32;
+
+println(stats_sum(data, 3));</code></pre>
     </div>
+    <p>
+      See <a href="#ref-ffi">the FFI reference</a>, and
+      <code>example/21_c_interop.csc</code> / <code>example/23_cpp_interop.csc</code>
+      for working programs.
+    </p>
     <div class="notecard warning">
-      <p><strong>Warning:</strong> <code>extern "C"</code> is required — without it,
-      C++ name mangling prevents the compiled program from finding your function
-      at link time.</p>
+      <p><strong>Warning:</strong> for C++, <code>extern "C"</code> is required —
+      without it, name mangling prevents the program from finding your function at
+      link time.</p>
     </div>
 
     <h2 id="cpp-memory">Memory model</h2>

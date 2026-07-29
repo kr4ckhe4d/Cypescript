@@ -2791,7 +2791,6 @@ void CodeGen::resolveClassInheritance(ClassDeclarationNode *cls, std::set<std::s
     }
 }
 
-
 // =============================================================================
 // Virtual dispatch
 // =============================================================================
@@ -3955,213 +3954,35 @@ llvm::FunctionCallee CodeGen::getOrDeclareExternalFunction(const std::string& na
             llvm::Type::getVoidTy(m_context),
             llvm::Type::getInt32Ty(m_context));
     }
+
     
-    // Custom Math functions - Advanced Math
-    else if (name == "math_gcd") {
-        return m_module->getOrInsertFunction("math_gcd",
-            llvm::Type::getInt32Ty(m_context),
-            llvm::Type::getInt32Ty(m_context),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "math_lcm") {
-        return m_module->getOrInsertFunction("math_lcm",
-            llvm::Type::getInt32Ty(m_context),
-            llvm::Type::getInt32Ty(m_context),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "math_is_prime") {
-        return m_module->getOrInsertFunction("math_is_prime",
-            llvm::Type::getInt32Ty(m_context),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "math_fibonacci") {
-        return m_module->getOrInsertFunction("math_fibonacci",
-            llvm::Type::getInt32Ty(m_context),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "math_factorial") {
-        return m_module->getOrInsertFunction("math_factorial",
-            llvm::Type::getInt32Ty(m_context),
-            llvm::Type::getInt32Ty(m_context));
-    }
+
+    
     
     // Custom Math functions - Statistics (return double, but we'll need f64 support)
-    else if (name == "stats_mean") {
-        return m_module->getOrInsertFunction("stats_mean",
-            llvm::Type::getDoubleTy(m_context),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "stats_median") {
-        return m_module->getOrInsertFunction("stats_median",
-            llvm::Type::getDoubleTy(m_context),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "stats_stddev") {
-        return m_module->getOrInsertFunction("stats_stddev",
-            llvm::Type::getDoubleTy(m_context),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::Type::getInt32Ty(m_context));
-    }
+
+    
     
     // Custom Math functions - Geometry (return double, but we'll need f64 support)
-    else if (name == "geom_distance") {
-        return m_module->getOrInsertFunction("geom_distance",
-            llvm::Type::getDoubleTy(m_context),
-            llvm::Type::getDoubleTy(m_context),
-            llvm::Type::getDoubleTy(m_context),
-            llvm::Type::getDoubleTy(m_context),
-            llvm::Type::getDoubleTy(m_context));
-    }
-    else if (name == "geom_circle_area") {
-        return m_module->getOrInsertFunction("geom_circle_area",
-            llvm::Type::getDoubleTy(m_context),
-            llvm::Type::getDoubleTy(m_context));
-    }
-    else if (name == "geom_rectangle_area") {
-        return m_module->getOrInsertFunction("geom_rectangle_area",
-            llvm::Type::getDoubleTy(m_context),
-            llvm::Type::getDoubleTy(m_context),
-            llvm::Type::getDoubleTy(m_context));
-    }
-    else if (name == "geom_triangle_area") {
-        return m_module->getOrInsertFunction("geom_triangle_area",
-            llvm::Type::getDoubleTy(m_context),
-            llvm::Type::getDoubleTy(m_context),
-            llvm::Type::getDoubleTy(m_context));
-    }
+
     
+
     // SIMD-optimized functions (ARM NEON)
-    else if (name == "neon_array_sum_i32") {
-        return m_module->getOrInsertFunction("neon_array_sum_i32",
-            llvm::Type::getInt32Ty(m_context),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "neon_array_max_i32") {
-        return m_module->getOrInsertFunction("neon_array_max_i32",
-            llvm::Type::getInt32Ty(m_context),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "neon_array_min_i32") {
-        return m_module->getOrInsertFunction("neon_array_min_i32",
-            llvm::Type::getInt32Ty(m_context),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "neon_array_multiply_i32") {
-        return m_module->getOrInsertFunction("neon_array_multiply_i32",
-            llvm::Type::getVoidTy(m_context),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::Type::getInt32Ty(m_context),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "neon_array_add_i32") {
-        return m_module->getOrInsertFunction("neon_array_add_i32",
-            llvm::Type::getVoidTy(m_context),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::Type::getInt32Ty(m_context),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "neon_dot_product_i32") {
-        return m_module->getOrInsertFunction("neon_dot_product_i32",
-            llvm::Type::getInt64Ty(m_context),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "neon_array_count_equal_i32") {
-        return m_module->getOrInsertFunction("neon_array_count_equal_i32",
-            llvm::Type::getInt32Ty(m_context),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::Type::getInt32Ty(m_context),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "neon_performance_ratio") {
-        return m_module->getOrInsertFunction("neon_performance_ratio",
-            llvm::Type::getDoubleTy(m_context));
-    }
-    else if (name == "neon_available") {
-        return m_module->getOrInsertFunction("neon_available",
-            llvm::Type::getInt32Ty(m_context));
-    }
+
     
-    // Memory-optimized functions
-    else if (name == "memory_pool_init") {
-        return m_module->getOrInsertFunction("memory_pool_init",
-            llvm::Type::getVoidTy(m_context),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "memory_pool_alloc") {
-        return m_module->getOrInsertFunction("memory_pool_alloc",
-            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "memory_pool_reset") {
-        return m_module->getOrInsertFunction("memory_pool_reset",
-            llvm::Type::getVoidTy(m_context));
-    }
-    else if (name == "cache_optimized_sum_i32") {
-        return m_module->getOrInsertFunction("cache_optimized_sum_i32",
-            llvm::Type::getInt32Ty(m_context),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "cache_optimized_max_i32") {
-        return m_module->getOrInsertFunction("cache_optimized_max_i32",
-            llvm::Type::getInt32Ty(m_context),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "memory_efficient_copy_i32") {
-        return m_module->getOrInsertFunction("memory_efficient_copy_i32",
-            llvm::Type::getVoidTy(m_context),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "cache_aware_transpose_i32") {
-        return m_module->getOrInsertFunction("cache_aware_transpose_i32",
-            llvm::Type::getVoidTy(m_context),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::Type::getInt32Ty(m_context),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "memory_bandwidth_test_i32") {
-        return m_module->getOrInsertFunction("memory_bandwidth_test_i32",
-            llvm::Type::getVoidTy(m_context),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::Type::getInt32Ty(m_context),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "cache_miss_comparison_i32") {
-        return m_module->getOrInsertFunction("cache_miss_comparison_i32",
-            llvm::Type::getInt64Ty(m_context),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::Type::getInt32Ty(m_context),
-            llvm::Type::getInt32Ty(m_context));
-    }
-    else if (name == "memory_optimized_string_compare") {
-        return m_module->getOrInsertFunction("memory_optimized_string_compare",
-            llvm::Type::getInt32Ty(m_context),
-            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
-            llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
-    }
-    else if (name == "get_memory_stats") {
-        return m_module->getOrInsertFunction("get_memory_stats",
-            llvm::Type::getVoidTy(m_context),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0),
-            llvm::PointerType::get(llvm::Type::getInt32Ty(m_context), 0));
-    }
-    else if (name == "memory_pool_cleanup") {
-        return m_module->getOrInsertFunction("memory_pool_cleanup",
-            llvm::Type::getVoidTy(m_context));
-    }
+
     
+
+    
+
+    
+
+    
+
+    
+
+    
+
     // JSON functions
     else if (name == "json_create_object") {
         return m_module->getOrInsertFunction("json_create_object",
