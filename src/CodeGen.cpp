@@ -1466,7 +1466,7 @@ llvm::Value *CodeGen::emitArrayLoad(llvm::Value *arrayValue, llvm::Value *indexV
     llvm::FunctionCallee getFunc;
     if (isPointerElementType(elemType)) {
         getFunc = m_module->getOrInsertFunction("array_get_object", charPtr, charPtr, i32Ty);
-    } else if (elemType == "string") {
+    } else if (elemType == "string" || isGenericElementType(elemType)) {
         getFunc = m_module->getOrInsertFunction("array_get_string", charPtr, charPtr, i32Ty);
     } else if (elemType == "f64") {
         getFunc = m_module->getOrInsertFunction("array_get_f64",
@@ -1496,7 +1496,7 @@ void CodeGen::emitArrayStore(llvm::Value *arrayValue, llvm::Value *indexValue,
         llvm::FunctionCallee setFunc =
             m_module->getOrInsertFunction("array_set_object", voidTy, charPtr, i32Ty, charPtr);
         m_builder.CreateCall(setFunc, {arrayValue, indexValue, value});
-    } else if (elemType == "string") {
+    } else if (elemType == "string" || isGenericElementType(elemType)) {
         llvm::FunctionCallee setFunc =
             m_module->getOrInsertFunction("array_set_string", voidTy, charPtr, i32Ty, charPtr);
         m_builder.CreateCall(setFunc, {arrayValue, indexValue, value});
@@ -1743,7 +1743,7 @@ void CodeGen::visit(ForOfStatementNode *node)
             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
             llvm::Type::getInt32Ty(m_context));
         element = m_builder.CreateCall(getFunc, {arrPtr, currentIndex}, "iter_element");
-    } else if (elemType == "string" || elemType.length() == 1 || elemType.find('<') != std::string::npos) {
+    } else if (elemType == "string" || isGenericElementType(elemType)) {
         llvm::FunctionCallee getFunc = m_module->getOrInsertFunction("array_get_string",
             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
@@ -2352,7 +2352,11 @@ llvm::Value *CodeGen::visit(ArrayLiteralNode *node)
     llvm::FunctionCallee createFunc;
     if (isPointerElementType(elemType)) {
         createFunc = m_module->getOrInsertFunction("array_create_object", charPtr);
-    } else if (elemType == "string") {
+    } else if (elemType == "string" || isGenericElementType(elemType)) {
+        // Only tags the handle — the runtime dispatches on which vector is
+        // written, never on this — but leaving it saying I32 for an array the
+        // rest of the compiler treats as strings is how the load sites came to
+        // disagree in the first place.
         createFunc = m_module->getOrInsertFunction("array_create_string", charPtr);
     } else if (elemType == "f64") {
         createFunc = m_module->getOrInsertFunction("array_create_f64", charPtr);
@@ -2434,7 +2438,7 @@ llvm::Value *CodeGen::visit(ArrayAccessNode *node)
         llvm::FunctionCallee getFunc = m_module->getOrInsertFunction("array_get_object",
             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0), llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0), llvm::Type::getInt32Ty(m_context));
         return m_builder.CreateCall(getFunc, {arrayValue, indexValue}, "array_element");
-    } else if (elemType == "string") {
+    } else if (elemType == "string" || isGenericElementType(elemType)) {
         llvm::FunctionCallee getFunc = m_module->getOrInsertFunction("array_get_string",
             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
             llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
@@ -2634,6 +2638,16 @@ bool CodeGen::isPointerElementType(const std::string &elemType) {
     if (elemType == "ptr") return true;
     // A nested array: the outer array's elements are array handles
     return elemType.size() > 2 && elemType.compare(elemType.size() - 2, 2, "[]") == 0;
+}
+
+// Mirrors the test getLLVMType uses to make these opaque pointers: a bare type
+// parameter is one character (`T`, `K`, `V`), an instantiation carries angle
+// brackets (`Map<K,V>`). Kept as one predicate because it has to hold for every
+// operation on the same array at once — this was previously spelled out inline
+// at the loop and shift sites and simply missing at the index ones, so a `T[]`
+// was pushed to the string vector and read back from the i32 vector.
+bool CodeGen::isGenericElementType(const std::string &elemType) {
+    return elemType.length() == 1 || elemType.find('<') != std::string::npos;
 }
 
 // True when an expression is a pointer that is NOT text: a class instance, an
@@ -3535,7 +3549,7 @@ llvm::Value *CodeGen::visit(MethodCallNode *node)
                     llvm::Type::getDoubleTy(m_context),
                     llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));
                 return m_builder.CreateCall(popFunc, {objectValue}, "removed_val");
-            } else if (elemType == "string" || elemType.length() == 1 || elemType.find('<') != std::string::npos) {
+            } else if (elemType == "string" || isGenericElementType(elemType)) {
                 llvm::FunctionCallee popFunc = m_module->getOrInsertFunction(runtimeName + "_string",
                     llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0),
                     llvm::PointerType::get(llvm::Type::getInt8Ty(m_context), 0));

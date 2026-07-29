@@ -112,6 +112,14 @@ private:
     // These share the object-array runtime, which stores elements verbatim.
     bool isPointerElementType(const std::string &elemType);
 
+    // True for a generic type parameter (`T`) or a generic instantiation
+    // (`Map<K,V>`), both of which getLLVMType makes opaque pointers. The array
+    // runtime keeps one vector per element shape and `push` sends a pointer to
+    // the string one, so every other operation on such an element has to name
+    // the string one too — a load that picks a different vector reads an empty
+    // one and silently yields nothing.
+    bool isGenericElementType(const std::string &elemType);
+
     // Static type of an expression that yields an array, so `grid[0][1]` knows
     // its inner element type. Resolving only variables meant a nested access
     // fell back to i32 and read a pointer array as integers.
