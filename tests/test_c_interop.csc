@@ -7,7 +7,13 @@
 link source "native/helpers.c";
 link source "native/helpers.cpp";
 
+// A header search path for those sources. helpers.c includes <cyps_scale.h>,
+// which lives in native/include/ rather than beside it, so this line is load
+// bearing — remove it and the C stops compiling.
+link include "native/include";
+
 declare function c_triple(x: i32): i32;
+declare function c_scaled(x: i32): i32;
 declare function c_make_buffer(size: i32): ptr;
 declare function c_buffer_ok(handle: ptr): boolean;
 declare function c_free_buffer(handle: ptr): void;
@@ -16,6 +22,7 @@ declare function cpp_sum_to(n: i32): i32;
 declare function cpp_greet(name: string): string;
 
 println(c_triple(14));
+println(c_scaled(3));      // through the header found via `link include`
 
 let buffer: ptr = c_make_buffer(128);
 if (c_buffer_ok(buffer)) { println("buffer allocated"); }

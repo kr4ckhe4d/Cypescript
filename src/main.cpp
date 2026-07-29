@@ -878,7 +878,13 @@ int main(int argc, char** argv) {
         
         if (opts.run && isExecutable) {
             printStageHeader("Running Program", opts.verbose);
-            std::string runCmd = "./" + executableName;
+            // `./` only for a bare name. With `-o /tmp/app` or `-o build/app`
+            // the path already says where to look, and prefixing it produced
+            // `.//tmp/app`, which does not resolve.
+            fs::path executablePath(executableName);
+            std::string runCmd = executablePath.has_parent_path()
+                                     ? shellQuote(executableName)
+                                     : "./" + executableName;
             if (opts.verbose) {
                 llvm::outs() << "Executing: " << Colors::CYAN << runCmd << Colors::RESET << "\n";
                 llvm::outs() << "----------------------------------------\n";

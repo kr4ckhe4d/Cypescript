@@ -107,7 +107,7 @@ to build first, no headers to write, no makefile, no wrapper script:
 
 ```ts
 link source "native/stats.c";        // path is relative to this .csc file
-link include "vendor/include";       // headers that C file needs
+link include "vendor/include";       // where that C finds <tinyclamp/tinyclamp.h>
 
 declare function stats_sum(values: ptr, count: i32): i32;
 declare function acc_new(): ptr;     // opaque handles need no type on our side

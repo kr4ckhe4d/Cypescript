@@ -1436,8 +1436,20 @@ link include "vendor/include";</code></pre>
       source gets the driver its language needs (<code>clang -std=c11</code> for
       <code>.c</code>, <code>clang++ -std=c++17</code> for <code>.cpp</code>).</dd>
       <dt><code>link include</code></dt>
-      <dd>Adds a header search directory for those sources.</dd>
+      <dd>Adds a header search directory for those sources — a vendored library,
+      or anything not installed system-wide. The path is resolved relative to the
+      <code>.csc</code> file, like <code>link source</code>. See
+      <code>example/21_c_interop.csc</code>, whose C includes
+      <code>&lt;tinyclamp/tinyclamp.h&gt;</code> from
+      <code>example/vendor/include/</code>.</dd>
     </dl>
+    <div class="notecard note">
+      <p><strong>Angle brackets vs quotes.</strong> A header included as
+      <code>"foo.h"</code> is looked for next to the including file first, so it
+      may resolve without <code>link include</code> at all. One in a separate
+      vendor directory, included as <code>&lt;foo.h&gt;</code>, resolves only
+      through the search path.</p>
+    </div>
 
     <h2 id="ffi-types">C ABI types</h2>
     <p>

@@ -8,6 +8,11 @@
 #include <stdio.h>
 #include <string.h>
 
+// Angle brackets, and the header is not in this directory — it is under
+// example/vendor/include/. The only reason this compiles is the
+// `link include "vendor/include";` line in 21_c_interop.csc.
+#include <tinyclamp/tinyclamp.h>
+
 int stats_sum(const int *values, int count) {
     int total = 0;
     for (int i = 0; i < count; i++) total += values[i];
@@ -25,6 +30,10 @@ const char *stats_describe(int count) {
     snprintf(out, 64, "%d sample(s)", count);
     return out;
 }
+
+// Uses the vendored header. Nothing about this is special to Cypescript — it is
+// an ordinary C call into an ordinary third-party inline function.
+int stats_clamped(int value) { return tinyclamp(value, 0, 100); }
 
 // An opaque handle — Cypescript holds it as `ptr` and never looks inside
 typedef struct { int total; int count; } Accumulator;
