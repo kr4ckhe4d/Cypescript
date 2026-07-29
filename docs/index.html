@@ -1441,7 +1441,12 @@ link include "vendor/include";</code></pre>
       <code>.csc</code> file, like <code>link source</code>. See
       <code>example/21_c_interop.csc</code>, whose C includes
       <code>&lt;tinyclamp/tinyclamp.h&gt;</code> from
-      <code>example/vendor/include/</code>.</dd>
+      <code>example/vendor/include/</code>.
+      <br>
+      <strong>Repeatable.</strong> Each one becomes a <code>-I</code>, searched in
+      the order written, and every directive applies to <em>every</em> native
+      source in the program — they are not per-file. A platform qualifier works
+      here too (<code>link linux include "vendor/linux";</code>).</dd>
     </dl>
     <div class="notecard note">
       <p><strong>Angle brackets vs quotes.</strong> A header included as
